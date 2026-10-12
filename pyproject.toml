@@ -5,10 +5,16 @@ description = "MCP memory server that re-checks remembered facts when they are d
 license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "mcp>=2.3,<3",
+]
+
+[project.scripts]
+shelflife-memory = "shelflife.cli:main"
 
 [dependency-groups]
 dev = [
+    "anyio>=4.9",
     "pytest>=9.1",
     "ruff>=0.17",
 ]

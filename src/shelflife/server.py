@@ -1,0 +1,132 @@
+"""MCP server exposing the Shelf Life tools over stdio (design 5.2)."""
+
+from __future__ import annotations
+
+import inspect
+from collections.abc import Callable
+from typing import Any
+
+from mcp.server.context import CallNext, HandlerResult, ServerRequestContext
+from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver.exceptions import ToolError
+from mcp.types import CallToolResult, TextContent
+
+from shelflife.models import CheckMethod, Kind, Volatility
+from shelflife.store import Store
+
+RECALL_LIMIT = 10
+
+# D3 (when remember is called) is open; until the owner decides, only when asked.
+INSTRUCTIONS = """\
+Shelf Life is a memory whose claims carry a source, the date they were observed and a
+schedule for re-checking them. Call remember only when the user asks you to remember
+something. Call recall before answering a question a remembered claim might cover, and
+say how old the claim is (observed_at) when that matters."""
+
+
+def build_server(store: Store) -> MCPServer:
+    """An MCPServer whose tools read and write `store`."""
+    declared: dict[str, set[str]] = {}
+
+    async def reject_unknown_arguments(
+        ctx: ServerRequestContext[Any, Any], call_next: CallNext
+    ) -> HandlerResult:
+        # The SDK silently drops arguments a tool does not declare. A model that sends
+        # status or next_check_at would then believe they were stored, so refuse instead.
+        if ctx.method == "tools/call" and isinstance(ctx.params, dict):
+            name = ctx.params.get("name")
+            arguments = ctx.params.get("arguments") or {}
+            if name in declared and isinstance(arguments, dict):
+                unknown = sorted(set(arguments) - declared[name])
+                if unknown:
+                    text = f"{name} does not accept: {', '.join(unknown)}"
+                    content = [TextContent(type="text", text=text)]
+                    return CallToolResult(content=content, is_error=True)
+        return await call_next(ctx)
+
+    server = MCPServer(
+        "shelflife", instructions=INSTRUCTIONS, middleware=[reject_unknown_arguments]
+    )
+
+    def tool(fn: Callable[..., dict[str, Any]]) -> None:
+        declared[fn.__name__] = set(inspect.signature(fn).parameters)
+        server.add_tool(fn)
+
+    @tool
+    def remember(
+        text: str,
+        kind: Kind,
+        subject: str | None = None,
+        attribute: str | None = None,
+        value: str | None = None,
+        volatility: Volatility | None = None,
+        check_method: CheckMethod | None = None,
+        check_target: str | None = None,
+        source_url: str | None = None,
+        source_quote: str | None = None,
+        observed_at: str | None = None,
+        depends_on: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Store one claim in Shelf Life memory and return it with its id and next_check_at.
+
+        Use only when the user asks you to remember something: a fact about the world
+        (a price, a version, a policy), a decision, a preference or a note. Write one
+        self-contained sentence per claim. Do not store guesses or whole conversations.
+
+        - kind: world_fact, decision, preference or note.
+        - subject, attribute, value: the structured form of a checkable fact, for example
+          "AWS AIP-C01", "exam_fee", "$300".
+        - volatility (fast, medium, slow, none) and check_method (pypi, github_release,
+          web_page, none): leave both empty unless you are confident. Empty ones get a
+          default; a value you give is never overwritten.
+        - check_target: the PyPI package, GitHub owner/repo or URL to check. Required
+          when check_method is set.
+        - source_url, source_quote: where the fact came from, and one line copied
+          verbatim from that source.
+        - observed_at: the date (YYYY-MM-DD) the fact was confirmed true. Defaults to today.
+        - depends_on: decisions only. Ids of the claims the decision rests on; remember
+          those first.
+        """
+        try:
+            claim = store.remember(
+                text,
+                kind,
+                subject=subject,
+                attribute=attribute,
+                value=value,
+                volatility=volatility,
+                check_method=check_method,
+                check_target=check_target,
+                source_url=source_url,
+                source_quote=source_quote,
+                observed_at=observed_at,
+                depends_on=depends_on,
+            )
+        except ValueError as e:
+            raise ToolError(str(e)) from e
+        return claim.to_dict()
+
+    @tool
+    def recall(query: str) -> dict[str, Any]:
+        """Search Shelf Life memory and return the best-matching claims, best first.
+
+        Use before answering a question that a remembered fact or decision might cover.
+        Each claim has a status: fresh, due (past its check date), changed, unverifiable
+        (nothing can check it) or retired. Claims are not re-checked yet, so mention
+        observed_at when the answer depends on how current the claim is.
+        """
+        return {"claims": [c.to_dict() for c in store.recall(query, limit=RECALL_LIMIT)]}
+
+    @tool
+    def due(days: int = 0) -> dict[str, Any]:
+        """List claims whose next check date is today or earlier, or within `days` days.
+
+        Use when the user asks what in their memory needs re-checking. Checks nothing.
+        """
+        try:
+            claims = store.due(days)
+        except ValueError as e:
+            raise ToolError(str(e)) from e
+        return {"claims": [c.to_dict() for c in claims]}
+
+    return server

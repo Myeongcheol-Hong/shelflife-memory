@@ -8,9 +8,9 @@ Items marked **(owner)** are done by the maintainer by hand: ground-truth labels
 - [x] Package skeleton: `uv` package `shelflife-memory`, import name `shelflife`, pytest, ruff, SessionStart hook (`uv sync`)
 - [x] SQLite schema (design 5.1) with FTS5
 - [x] `remember` / `recall` (no verification yet) with unit tests
-- [ ] stdio MCP server exposing `remember`, `recall`, `due`
-- [ ] Integration test that calls the tools through an in-process MCP client
-- [ ] Import `examples/seed_claims.jsonl`
+- [x] stdio MCP server exposing `remember`, `recall`, `due`
+- [x] Integration test that calls the tools through an in-process MCP client
+- [x] Import `examples/seed_claims.jsonl`
 - [ ] **(owner)** D1-D3 recorded in `docs/decisions.md`
 
 ## M2: Volatility and rule-based verifiers
