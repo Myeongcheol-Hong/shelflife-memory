@@ -98,6 +98,7 @@ Claude Code: "This project decided to use library X.
 | `kind` | `world_fact` / `decision` / `preference` / `note` | world_fact |
 | `subject`, `attribute`, `value` | Structured form of a checkable fact (optional) | AIP-C01 / exam_fee / $300 |
 | `volatility` | `fast` / `medium` / `slow` / `none` | fast |
+| `volatility_source`, `check_method_source` | Who set volatility and check_method: `caller` / `default` (later `rule` / `llm`). Rules and the LLM never overwrite a caller's value | caller |
 | `check_method` | `pypi` / `github_release` / `web_page` / `none` | web_page |
 | `check_target` | Package name, owner/repo, or URL | https://aws.amazon.com/certification/... |
 | `source_url`, `source_quote` | Evidence at write time | One verbatim line from the source |
@@ -128,7 +129,7 @@ Every check is recorded in the `checks` table: when, which method, result (same 
 Claude Desktop / Claude Code
         |  MCP (stdio)
         v
-shelflife MCP server (Python, FastMCP)
+shelflife MCP server (Python, MCPServer)
   tools: remember / recall / due / verify / forget / record_check
         |
         v
@@ -150,7 +151,9 @@ CREATE TABLE claims (
   kind          TEXT NOT NULL,          -- world_fact | decision | preference | note
   subject       TEXT, attribute TEXT, value TEXT,
   volatility    TEXT NOT NULL,          -- fast | medium | slow | none
+  volatility_source   TEXT NOT NULL,    -- caller | default | rule | llm
   check_method  TEXT NOT NULL,          -- pypi | github_release | web_page | none
+  check_method_source TEXT NOT NULL,    -- caller | default | rule | llm
   check_target  TEXT,
   source_url    TEXT, source_quote TEXT,
   observed_at   TEXT NOT NULL,          -- ISO 8601
@@ -171,7 +174,7 @@ CREATE VIRTUAL TABLE claims_fts USING fts5(text, subject, content='claims');
 
 | Tool | Input | What it does |
 |---|---|---|
-| `remember` | text, kind, source_url?, depends_on? | Stores a claim. Volatility and check_method come from rules plus the LLM, and the user can correct them |
+| `remember` | text, kind; optional: subject, attribute, value, volatility, check_method, check_target, source_url, source_quote, observed_at, depends_on | Stores a claim. Unknown enum values are rejected, and system-managed fields (id, recorded_at, last_checked_at, next_check_at, status, volatility_source, check_method_source) are never accepted. The model leaves volatility and check_method empty unless it is confident; empty ones get a default, later rules plus the LLM (D4), and the `*_source` columns record who set them. The user can correct them |
 | `recall` | query, verify = auto / never / always | Searches and returns claims. With `auto`, due claims are checked before they are served, and results are annotated with "checked today" or "changed: old -> new" |
 | `due` | days? | Lists claims that are due or changed, and decisions to revisit |
 | `verify` | claim_id | Checks a claim now |

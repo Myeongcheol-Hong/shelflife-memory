@@ -32,7 +32,7 @@ The main contribution is the **eval**, not the feature list. Re-check tools alre
 ## Tech constraints
 
 - Python 3.11+, `uv` for packaging. Distribution name `shelflife-memory`, import name `shelflife`.
-- MCP: official MCP Python SDK (FastMCP), stdio transport.
+- MCP: official MCP Python SDK v2 (`mcp>=2.3,<3`, `MCPServer`, formerly `FastMCP`), stdio transport.
 - Storage: one SQLite file with FTS5. No embeddings, no ORM, no Docker, no Postgres/Redis.
 - DB path comes from `SHELFLIFE_DB`, default `~/.shelflife/shelflife.db`. Never write the DB inside the repo.
 - Prefer the standard library. Ask before adding a dependency.
