@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import inspect
 from collections.abc import Callable
-from typing import Any
+from typing import Any, Literal
 
 from mcp.server.context import CallNext, HandlerResult, ServerRequestContext
 from mcp.server.mcpserver import MCPServer
@@ -21,7 +21,8 @@ INSTRUCTIONS = """\
 Shelf Life is a memory whose claims carry a source, the date they were observed and a
 schedule for re-checking them. Call remember only when the user asks you to remember
 something. Call recall before answering a question a remembered claim might cover, and
-say how old the claim is (observed_at) when that matters."""
+say how old the claim is (observed_at) when that matters. Nothing is re-checked
+automatically yet."""
 
 
 def build_server(store: Store) -> MCPServer:
@@ -36,7 +37,8 @@ def build_server(store: Store) -> MCPServer:
         if ctx.method == "tools/call" and isinstance(ctx.params, dict):
             name = ctx.params.get("name")
             arguments = ctx.params.get("arguments") or {}
-            if name in declared and isinstance(arguments, dict):
+            # Malformed shapes fall through to the SDK's own validation.
+            if isinstance(name, str) and name in declared and isinstance(arguments, dict):
                 unknown = sorted(set(arguments) - declared[name])
                 if unknown:
                     text = f"{name} does not accept: {', '.join(unknown)}"
@@ -59,8 +61,9 @@ def build_server(store: Store) -> MCPServer:
         subject: str | None = None,
         attribute: str | None = None,
         value: str | None = None,
-        volatility: Volatility | None = None,
-        check_method: CheckMethod | None = None,
+        # "" is accepted too, because "leave it empty" can be read as an empty string.
+        volatility: Volatility | Literal[""] | None = None,
+        check_method: CheckMethod | Literal[""] | None = None,
         check_target: str | None = None,
         source_url: str | None = None,
         source_quote: str | None = None,
@@ -78,7 +81,8 @@ def build_server(store: Store) -> MCPServer:
           "AWS AIP-C01", "exam_fee", "$300".
         - volatility (fast, medium, slow, none) and check_method (pypi, github_release,
           web_page, none): leave both empty unless you are confident. Empty ones get a
-          default; a value you give is never overwritten.
+          default; a value you give is never overwritten. Without a check_method, a
+          world fact is stored as unverifiable and is not scheduled for checks yet.
         - check_target: the PyPI package, GitHub owner/repo or URL to check. Required
           when check_method is set.
         - source_url, source_quote: where the fact came from, and one line copied
@@ -111,9 +115,11 @@ def build_server(store: Store) -> MCPServer:
         """Search Shelf Life memory and return the best-matching claims, best first.
 
         Use before answering a question that a remembered fact or decision might cover.
-        Each claim has a status: fresh, due (past its check date), changed, unverifiable
-        (nothing can check it) or retired. Claims are not re-checked yet, so mention
-        observed_at when the answer depends on how current the claim is.
+        Do not use it to find what needs re-checking (use due).
+
+        In this version status is fresh or unverifiable (nothing can check the claim), and
+        nothing re-checks claims or updates their status. A claim whose next_check_at is
+        before today has not been checked since observed_at, so say how old it is.
         """
         return {"claims": [c.to_dict() for c in store.recall(query, limit=RECALL_LIMIT)]}
 
@@ -121,7 +127,9 @@ def build_server(store: Store) -> MCPServer:
     def due(days: int = 0) -> dict[str, Any]:
         """List claims whose next check date is today or earlier, or within `days` days.
 
-        Use when the user asks what in their memory needs re-checking. Checks nothing.
+        Use when the user asks what in their memory needs re-checking. Only claims with a
+        check_method are listed; unverifiable claims never appear here. Do not use it to
+        search for a topic (use recall). It checks and changes nothing.
         """
         try:
             claims = store.due(days)

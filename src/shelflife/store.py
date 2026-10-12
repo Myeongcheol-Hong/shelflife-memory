@@ -191,7 +191,10 @@ class Store:
         seen: set[str] = set()
         for n, record in enumerate(records, start=1):
             fields = dict(record)
-            claim_id = _clean(fields.pop("id", None), "id")
+            try:
+                claim_id = _clean(fields.pop("id", None), "id")
+            except ValueError as e:
+                raise ValueError(f"record {n}: {e}") from None
             if claim_id is None:
                 raise ValueError(f"record {n}: id is required")
             if claim_id in seen:

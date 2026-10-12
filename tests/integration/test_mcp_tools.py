@@ -6,6 +6,7 @@ import pytest
 from mcp import Client
 
 from shelflife.server import build_server
+from shelflife.store import OPTIONAL_FIELDS
 
 pytestmark = pytest.mark.anyio
 
@@ -36,8 +37,36 @@ async def call_error(client, tool, **arguments) -> str:
 async def test_lists_the_m1_tools(client):
     tools = {t.name: t for t in (await client.list_tools()).tools}
     assert set(tools) == {"remember", "recall", "due"}
-    assert set(tools["remember"].input_schema["required"]) == {"text", "kind"}
+    schema = tools["remember"].input_schema
+    assert set(schema["required"]) == {"text", "kind"}
+    assert set(schema["properties"]) == {"text", "kind", *OPTIONAL_FIELDS}
     assert "leave both empty unless you are confident" in tools["remember"].description
+    # D3 is open: until the owner decides, remember is called only when asked.
+    assert "only when the user asks" in tools["remember"].description
+    assert "only when the user asks" in client.instructions
+
+
+async def test_remember_passes_every_optional_field_through(client):
+    given = {
+        "subject": "mcp (PyPI)",
+        "attribute": "latest_version",
+        "value": "2.3.0",
+        "volatility": "medium",
+        "check_method": "pypi",
+        "check_target": "mcp",
+        "source_url": "https://pypi.org/project/mcp/",
+        "source_quote": "mcp 2.3.0",
+        "observed_at": "2026-10-01",
+    }
+    stored = await call(client, "remember", text="mcp is 2.3.0", kind="world_fact", **given)
+    assert {k: stored[k] for k in given} == given
+
+
+async def test_empty_strings_mean_not_given(client):
+    stored = await call(
+        client, "remember", text="A fact", kind="world_fact", volatility="", check_method=""
+    )
+    assert stored["volatility_source"] == stored["check_method_source"] == "default"
 
 
 async def test_remember_then_recall_and_due(client, clock):
@@ -90,3 +119,8 @@ async def test_system_managed_fields_are_refused(client, store):
     )
     assert message == "remember does not accept: id, status"
     assert store.recall("fact") == []
+
+
+async def test_every_tool_refuses_unknown_arguments(client):
+    for tool in (await client.list_tools()).tools:
+        assert await call_error(client, tool.name, bogus=1) == f"{tool.name} does not accept: bogus"

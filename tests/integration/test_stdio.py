@@ -4,6 +4,7 @@ import shutil
 import sys
 from pathlib import Path
 
+import anyio
 import pytest
 from mcp import Client, StdioServerParameters
 
@@ -21,9 +22,10 @@ async def test_server_runs_over_stdio(tmp_path):
         command=shutil.which("shelflife-memory", path=Path(sys.executable).parent),
         env={"SHELFLIFE_DB": str(tmp_path / "stdio.db")},
     )
-    async with Client(params) as client:
-        result = await client.call_tool("remember", {"text": "A note", "kind": "note"})
-        assert not result.is_error
-        found = await client.call_tool("recall", {"query": "note"})
-        assert found.structured_content["claims"][0]["text"] == "A note"
+    with anyio.fail_after(30):  # a server that never answers must not hang CI
+        async with Client(params) as client:
+            result = await client.call_tool("remember", {"text": "A note", "kind": "note"})
+            assert not result.is_error
+            found = await client.call_tool("recall", {"query": "note"})
+            assert found.structured_content["claims"][0]["text"] == "A note"
     assert (tmp_path / "stdio.db").exists()

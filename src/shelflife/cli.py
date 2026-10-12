@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sqlite3
 import sys
 from pathlib import Path
 from typing import Any
@@ -14,8 +15,14 @@ from shelflife.store import Store, default_db_path
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
     """One JSON object per line; blank lines are skipped."""
+    try:
+        text = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError as e:
+        raise ValueError(f"{path}: not UTF-8 ({e.reason})") from None
     records = []
-    for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+    # Split on \n only: splitlines() would also split on U+2028 and similar characters,
+    # which JSON allows inside strings (a copied source_quote can contain them).
+    for lineno, line in enumerate(text.split("\n"), start=1):
         if not line.strip():
             continue
         try:
@@ -42,11 +49,19 @@ def main(argv: list[str] | None = None) -> int:
     import_cmd.add_argument("path", type=Path)
     args = parser.parse_args(argv)
 
-    with Store(default_db_path()) as store:
+    try:
+        # Read the file first, so a mistyped path does not create a database.
+        records = read_jsonl(args.path) if args.command == "import" else []
+        store = Store(default_db_path())
+    except (OSError, ValueError, RuntimeError, sqlite3.DatabaseError) as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+
+    with store:
         if args.command == "import":
             try:
-                imported, skipped = store.import_claims(read_jsonl(args.path))
-            except (OSError, ValueError) as e:
+                imported, skipped = store.import_claims(records)
+            except ValueError as e:
                 print(f"error: {e}", file=sys.stderr)
                 return 1
             print(f"imported {imported} claims, skipped {skipped} already stored")
