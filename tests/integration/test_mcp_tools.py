@@ -222,3 +222,6 @@ async def test_verify_refuses_claims_it_cannot_check(client):
     assert "verify cannot check it yet" in await call_error(client, "verify", claim_id=page["id"])
     assert "has no check_method" in await call_error(client, "verify", claim_id=unverifiable["id"])
     assert "no claim with id 'nope'" in await call_error(client, "verify", claim_id="nope")
+    no_value = await remember_version(client, check_method="pypi", check_target="mcp")
+    message = await call_error(client, "verify", claim_id=no_value["id"])
+    assert "has no value to compare with the source" in message

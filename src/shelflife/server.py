@@ -137,8 +137,8 @@ def build_server(store: Store, fetch: Fetch = http_get) -> MCPServer:
         status is fresh, unverifiable (nothing can check the claim) or changed (the last
         check found a different value at the source; the claim keeps the value it was
         stored with, so tell the user and call verify to see the new value). Claims are
-        checked only when verify is called. A claim whose next_check_at is before today
-        is due: say how old it is (observed_at, last_checked_at).
+        checked only when verify is called. A claim whose next_check_at is today or
+        earlier is due: say how old it is (observed_at, last_checked_at).
         """
         return {"claims": [c.to_dict() for c in store.recall(query, limit=RECALL_LIMIT)]}
 
@@ -162,13 +162,16 @@ def build_server(store: Store, fetch: Fetch = http_get) -> MCPServer:
 
         Use when the user asks whether a remembered fact is still true, or to check a
         claim that due lists. Works for claims whose check_method is pypi or
-        github_release; web_page claims cannot be checked this way yet.
+        github_release and that have a value; web_page claims cannot be checked this way
+        yet.
 
         check.result is same (the source still gives the claim's value), changed (the
         source gives new_value), cannot_tell, or error (evidence says why). The claim keeps
         the value it was stored with: after changed its status is changed, and to adopt
         new_value the user asks you to remember the new sentence.
-        After cannot_tell or error the claim stays due, so tell the user.
+        After cannot_tell or error the claim keeps its next_check_at, so a due claim stays
+        due and is tried again; the third such result in a row moves the next check out
+        by one class interval (see claim.next_check_at). Tell the user either way.
         """
         try:
             claim = store.checkable(claim_id)
@@ -177,6 +180,8 @@ def build_server(store: Store, fetch: Fetch = http_get) -> MCPServer:
                 raise ValueError(
                     f"claim {claim_id!r} is a web_page claim; verify cannot check it yet"
                 )
+            if claim.value is None:
+                raise ValueError(f"claim {claim_id!r} has no value to compare with the source")
             outcome = verifier(claim.check_target or "", claim.value, fetch)
             claim, check = store.add_check(
                 claim.id, outcome.result, outcome.new_value, outcome.evidence
