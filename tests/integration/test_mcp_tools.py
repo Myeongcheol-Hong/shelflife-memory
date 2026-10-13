@@ -1,12 +1,18 @@
 """Call the tools through an in-process MCP client, the way Claude Desktop would."""
 
 from datetime import timedelta
+from pathlib import Path
 
 import pytest
 from mcp import Client
 
 from shelflife.server import build_server
 from shelflife.store import OPTIONAL_FIELDS
+from shelflife.verifiers import FetchError
+
+FIXTURES = Path(__file__).parents[1] / "fixtures"
+PYPI_MCP = "https://pypi.org/pypi/mcp/json"
+GITHUB_GRAPHITI = "https://api.github.com/repos/getzep/graphiti/releases/latest"
 
 pytestmark = pytest.mark.anyio
 
@@ -17,8 +23,20 @@ def anyio_backend():
 
 
 @pytest.fixture
-async def client(store):
-    async with Client(build_server(store)) as c:
+def routes():
+    """URL -> fixture file (or an exception) for the fetches verify makes."""
+    return {}
+
+
+@pytest.fixture
+async def client(store, routes):
+    def fetch(url, headers):
+        route = routes.get(url, FetchError(f"no route for {url}"))
+        if isinstance(route, Exception):
+            raise route
+        return (FIXTURES / route).read_bytes()
+
+    async with Client(build_server(store, fetch=fetch)) as c:
         yield c
 
 
@@ -34,9 +52,9 @@ async def call_error(client, tool, **arguments) -> str:
     return result.content[0].text
 
 
-async def test_lists_the_m1_tools(client):
+async def test_lists_the_tools(client):
     tools = {t.name: t for t in (await client.list_tools()).tools}
-    assert set(tools) == {"remember", "recall", "due"}
+    assert set(tools) == {"remember", "recall", "due", "verify"}
     schema = tools["remember"].input_schema
     assert set(schema["required"]) == {"text", "kind"}
     assert set(schema["properties"]) == {"text", "kind", *OPTIONAL_FIELDS}
@@ -56,6 +74,11 @@ async def test_lists_the_m1_tools(client):
     assert "original spelling (Hindsight, not 힌드사이트)" in recall
     assert "2-5 key words (names and nouns), not a full question" in recall
     assert '("Chatbox 가격", not "Chatbox의 가격은")' in recall
+    # D9 with D3: a check never changes the stored value; adopting a new value is the
+    # user's call.
+    verify = " ".join(tools["verify"].description.split())
+    assert "The claim keeps the value it was stored with" in verify
+    assert "the user asks you to remember the new sentence" in verify
 
 
 async def test_remember_passes_every_optional_field_through(client):
@@ -136,3 +159,69 @@ async def test_system_managed_fields_are_refused(client, store):
 async def test_every_tool_refuses_unknown_arguments(client):
     for tool in (await client.list_tools()).tools:
         assert await call_error(client, tool.name, bogus=1) == f"{tool.name} does not accept: bogus"
+
+
+# --- verify (D9) ----------------------------------------------------------------------
+
+
+async def remember_version(client, **fields):
+    given = {"kind": "world_fact", "observed_at": "2026-10-01", "volatility": "fast"} | fields
+    return await call(client, "remember", text="A latest version", **given)
+
+
+async def test_verify_records_a_same_check_and_reschedules(client, routes):
+    routes[PYPI_MCP] = "pypi/mcp.json"
+    claim = await remember_version(client, check_method="pypi", check_target="mcp", value="2.3.0")
+
+    verified = await call(client, "verify", claim_id=claim["id"])
+    assert verified["check"] == {
+        "result": "same",
+        "old_value": "2.3.0",
+        "new_value": "2.3.0",
+        "evidence": "2.3.0",
+        "checked_at": "2026-10-12T09:30:00+00:00",
+    }
+    assert verified["claim"]["status"] == "fresh"
+    assert verified["claim"]["last_checked_at"] == "2026-10-12T09:30:00+00:00"
+    assert verified["claim"]["next_check_at"] == "2026-10-19"
+    assert (await call(client, "due"))["claims"] == []
+
+
+async def test_verify_reports_a_change_and_keeps_the_value(client, routes):
+    routes[GITHUB_GRAPHITI] = "github/getzep__graphiti.json"
+    claim = await remember_version(
+        client, check_method="github_release", check_target="getzep/graphiti", value="v0.30.1"
+    )
+
+    verified = await call(client, "verify", claim_id=claim["id"])
+    check = verified["check"]
+    assert (check["result"], check["old_value"], check["new_value"]) == (
+        "changed",
+        "v0.30.1",
+        "v0.30.2",
+    )
+    assert (verified["claim"]["status"], verified["claim"]["value"]) == ("changed", "v0.30.1")
+
+
+async def test_verify_error_keeps_the_claim_due(client, routes):
+    routes[PYPI_MCP] = FetchError(f"HTTP 503 from {PYPI_MCP}")
+    claim = await remember_version(client, check_method="pypi", check_target="mcp", value="2.3.0")
+
+    verified = await call(client, "verify", claim_id=claim["id"])
+    assert verified["check"]["result"] == "error"
+    assert verified["check"]["evidence"] == f"HTTP 503 from {PYPI_MCP}"
+    assert verified["claim"]["next_check_at"] == "2026-10-08"
+    assert [c["id"] for c in (await call(client, "due"))["claims"]] == [claim["id"]]
+
+
+async def test_verify_refuses_claims_it_cannot_check(client):
+    page = await remember_version(
+        client, check_method="web_page", check_target="https://example.com/pricing"
+    )
+    unverifiable = await call(client, "remember", text="Seoul has 25 districts", kind="world_fact")
+    assert "verify cannot check it yet" in await call_error(client, "verify", claim_id=page["id"])
+    assert "has no check_method" in await call_error(client, "verify", claim_id=unverifiable["id"])
+    assert "no claim with id 'nope'" in await call_error(client, "verify", claim_id="nope")
+    no_value = await remember_version(client, check_method="pypi", check_target="mcp")
+    message = await call_error(client, "verify", claim_id=no_value["id"])
+    assert "has no value to compare with the source" in message

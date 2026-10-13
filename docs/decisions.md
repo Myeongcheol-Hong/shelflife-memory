@@ -62,6 +62,7 @@ One entry per decision: the options, the option chosen, why, and when to revisit
 - Status: decided by the owner, 2026-10-12
 - Chosen: `next_check_at` = `observed_at` + the per-class interval from design 4.2 (`none` gives no date), as a pure function; the clock is injected. M2 extends it.
 - Why: `due` ships in M1 and needs a date to compare against.
+- Extended (2026-10-13): after a check, D9 sets the next date.
 - Revisit if: M2 adds checks, since this entry covers only M1 and M2 extends it; or the 6.1 replay shows another policy beats the per-class intervals on the held-out test split.
 
 ## D8: Search for Korean claims
@@ -73,3 +74,17 @@ One entry per decision: the options, the option chosen, why, and when to revisit
 - Accepted trade-offs: matching is by substring, so "mcp" also matches "mcpx"; a name written in another script is not found; query words shorter than 3 characters are matched by scanning every claim, which is fine at personal scale; a trigram index is larger than a `unicode61` one.
 - Added (owner, 2026-10-13): where Latin letters meet Hangul in a query word, the word is split there, and the Hangul part is dropped if it is a common particle (은 는 이 가 을 를 의 로 으로 에 에서 와 과 도 만); otherwise both parts are kept ("Chatbox의" gives "Chatbox"; "AI모델" gives "AI" and "모델"). The `recall` description asks for 2-5 key words (names and nouns) without particles, not a full question ("Chatbox 가격", not "Chatbox의 가격은").
 - Revisit if: in daily use, Korean searches miss claims I know are stored (for example a Korean noun searched with a particle the stored text does not have, such as "가격이" against "가격은"); or filler words crowd out the claim I wanted, because ranking counts every matched query word equally, so a full question ("What is the price of Chatbox Pro?") can rank a claim that shares only "the", "is" and "of" first; or substring matches crowd out the claim I wanted; or `recall` gets slow as the store grows into the thousands of claims.
+
+## D9: Checks and their tool interface (M2)
+
+- Status: decided by the owner, 2026-10-13 (answers to five questions Claude asked in the chat, plus the `forget` output)
+- Chosen:
+  1. A check that finds a new value does not change the claim. The claim keeps its value, its status becomes `changed`, and the `checks` row holds the old and new values. To adopt the new value, the user remembers a new claim and forgets the old one. Rejected: updating the value in place, with the history in `checks`.
+  2. `verify` returns `{"claim": {...}, "check": {"result", "old_value", "new_value", "evidence", "checked_at"}}`.
+  3. `due` returns one JSON object with three lists, `{"due": [...], "changed": [...], "needs_check_method": [...]}`, replacing the single `"claims"` list. Each due item shows its last check result, so failures are visible.
+  4. After a check, `same` or `changed` sets `next_check_at` to the check date plus the class interval (design 4.2). `error` or `cannot_tell` leaves `next_check_at` alone, so the claim stays due and is retried; after 3 `error` or `cannot_tell` results in a row, the next check moves out by the class interval instead.
+  5. `recall`'s `verify = auto / never / always` parameter (design 5.2) waits for M4, with the daily due run. `recall` stays read-only in M2.
+  6. `forget` returns `{"claim": {...}}` with status `retired`. Forgetting a claim that is already retired is not an error.
+- Why: a stored claim is a sentence the user approved (D2, D3), so a check never rewrites it; the checks log keeps what each check found. The retry cap keeps a source that stays broken from being retried every day.
+- Follow-up (owner): remember plus forget is tedious for version claims that change often, so M4 adds a one-call "supersede" that stores the new claim and retires the old one. Decisions linked to the old claim stay linked to it and stay flagged for the owner's review.
+- Revisit if (Claude's draft, for the owner to confirm): `changed` claims pile up unadopted in `due`; or the retry cap hides a source that is broken for good (a claim whose every check is `error`).

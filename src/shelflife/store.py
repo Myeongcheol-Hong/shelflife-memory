@@ -9,6 +9,7 @@ import threading
 import time
 import uuid
 from collections.abc import Callable, Iterable, Mapping
+from dataclasses import asdict
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -16,7 +17,9 @@ from typing import Any
 from shelflife import rules, scheduler
 from shelflife.models import (
     DEFAULT_VOLATILITY,
+    Check,
     CheckMethod,
+    CheckResult,
     Claim,
     FieldSource,
     Kind,
@@ -268,6 +271,85 @@ class Store:
                 self._insert_depends_on(claim)
         return len(new), len(claims) - len(new)
 
+    def add_check(
+        self,
+        claim_id: str,
+        result: CheckResult,
+        new_value: str | None = None,
+        evidence: str | None = None,
+    ) -> tuple[Claim, Check]:
+        """Record a check of a claim, update the claim and return both (D9).
+
+        The claim keeps its value: same makes it fresh, changed makes it changed, and
+        error or cannot_tell leave its status alone. next_check_at follows
+        scheduler.next_check_after. Raises ValueError for an unknown or retired claim, or
+        one without a check method.
+        """
+        now = self._now()
+        with self._lock, self._conn:
+            claim = self._get_checkable(claim_id)
+            check = Check(
+                id=uuid.uuid4().hex[:12],
+                claim_id=claim.id,
+                checked_at=now.astimezone(UTC).replace(microsecond=0),
+                method=claim.check_method,
+                result=result,
+                old_value=claim.value,
+                new_value=new_value,
+                evidence=evidence,
+            )
+            row = asdict(check) | {"checked_at": check.checked_at.isoformat()}
+            columns, placeholders = ", ".join(row), ", ".join(f":{c}" for c in row)
+            self._conn.execute(f"INSERT INTO checks ({columns}) VALUES ({placeholders})", row)
+            next_at = scheduler.next_check_after(
+                claim.volatility,
+                result,
+                now.date(),
+                claim.next_check_at,
+                self._inconclusive_in_a_row(claim.id),
+            )
+            status = {CheckResult.SAME: Status.FRESH, CheckResult.CHANGED: Status.CHANGED}
+            self._conn.execute(
+                "UPDATE claims SET last_checked_at = ?, next_check_at = ?, status = ? WHERE id = ?",
+                (
+                    row["checked_at"],
+                    next_at.isoformat() if next_at else None,
+                    status.get(result, claim.status),
+                    claim.id,
+                ),
+            )
+            return self._get(claim.id), check
+
+    def checkable(self, claim_id: str) -> Claim:
+        """The claim, if a check of it may be recorded; else ValueError, as add_check."""
+        with self._lock:
+            return self._get_checkable(claim_id)
+
+    def _get_checkable(self, claim_id: str) -> Claim:
+        """Caller holds the lock."""
+        claim = self._get(claim_id)
+        if claim is None:
+            raise ValueError(f"no claim with id {claim_id!r}")
+        if claim.status is Status.RETIRED:
+            raise ValueError(f"claim {claim_id!r} is retired (forgotten), so it is not checked")
+        if claim.check_method is CheckMethod.NONE:
+            raise ValueError(f"claim {claim_id!r} has no check_method, so nothing can check it")
+        return claim
+
+    def _inconclusive_in_a_row(self, claim_id: str) -> int:
+        """Caller holds the lock. The error and cannot_tell results since the claim's last
+        same or changed one, newest first, counted up to scheduler.INCONCLUSIVE_LIMIT."""
+        rows = self._conn.execute(
+            "SELECT result FROM checks WHERE claim_id = ? ORDER BY rowid DESC LIMIT ?",
+            (claim_id, scheduler.INCONCLUSIVE_LIMIT),
+        ).fetchall()
+        count = 0
+        for row in rows:
+            if row["result"] in (CheckResult.SAME, CheckResult.CHANGED):
+                break
+            count += 1
+        return count
+
     def _new_claim(self, claim_id: str, text: str, kind: str, fields: Mapping[str, Any]) -> Claim:
         """Apply validation and defaults. Does not touch the database."""
         unknown = sorted(set(fields) - set(OPTIONAL_FIELDS))
@@ -372,8 +454,12 @@ class Store:
 
     def get(self, claim_id: str) -> Claim | None:
         with self._lock:
-            row = self._conn.execute("SELECT * FROM claims WHERE id = ?", (claim_id,)).fetchone()
-            return None if row is None else self._to_claim(row)
+            return self._get(claim_id)
+
+    def _get(self, claim_id: str) -> Claim | None:
+        """Caller holds the lock."""
+        row = self._conn.execute("SELECT * FROM claims WHERE id = ?", (claim_id,)).fetchone()
+        return None if row is None else self._to_claim(row)
 
     def recall(self, query: str, limit: int = 10) -> list[Claim]:
         """Substring search over text and subject, best match first (D8). Skips retired claims.

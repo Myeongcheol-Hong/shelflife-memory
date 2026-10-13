@@ -1,4 +1,4 @@
-"""Claim model and its enums (design 4.1 and 4.2)."""
+"""Claim and check models and their enums (design 4.1, 4.2 and 4.4)."""
 
 from __future__ import annotations
 
@@ -127,6 +127,45 @@ class Claim:
                 v = list(v)
             out[f.name] = v
         return out
+
+
+@dataclass(frozen=True)
+class Check:
+    """One row of the check log (design 4.4)."""
+
+    id: str
+    claim_id: str
+    checked_at: datetime
+    method: CheckMethod
+    result: CheckResult
+    old_value: str | None  # the claim's value when it was checked
+    new_value: str | None  # the value found at the source
+    evidence: str | None  # quoted verbatim from the fetched content, or the error
+    cost_usd: float | None = None  # what an LLM judgment cost; None for rule-based checks
+
+    @classmethod
+    def from_row(cls, row: Mapping[str, Any]) -> Check:
+        return cls(
+            id=row["id"],
+            claim_id=row["claim_id"],
+            checked_at=datetime.fromisoformat(row["checked_at"]),
+            method=CheckMethod(row["method"]),
+            result=CheckResult(row["result"]),
+            old_value=row["old_value"],
+            new_value=row["new_value"],
+            evidence=row["evidence"],
+            cost_usd=row["cost_usd"],
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        """What the tools return for a check (D9); the claim carries the id and method."""
+        return {
+            "result": self.result.value,
+            "old_value": self.old_value,
+            "new_value": self.new_value,
+            "evidence": self.evidence,
+            "checked_at": self.checked_at.isoformat(),
+        }
 
 
 _FROM_STR: dict[str, Callable[[Any], Any]] = {

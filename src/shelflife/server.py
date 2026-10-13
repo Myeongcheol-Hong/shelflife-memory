@@ -13,6 +13,7 @@ from mcp.types import CallToolResult, TextContent
 
 from shelflife.models import CheckMethod, Kind, Volatility
 from shelflife.store import Store
+from shelflife.verifiers import Fetch, http_get, verifier_for
 
 RECALL_LIMIT = 10
 
@@ -25,11 +26,12 @@ something. You may offer ("Want me to remember this?") with the exact sentence y
 store, but never call remember until the user confirms; the user's yes approves that
 sentence. Store the user's sentence as given, in their language. Call recall before
 answering a question a remembered claim might cover, and say how old the claim is
-(observed_at) when that matters. Nothing is re-checked automatically yet."""
+(observed_at) when that matters. Claims are checked against their source only when you
+call verify; nothing is re-checked automatically yet."""
 
 
-def build_server(store: Store) -> MCPServer:
-    """An MCPServer whose tools read and write `store`."""
+def build_server(store: Store, fetch: Fetch = http_get) -> MCPServer:
+    """An MCPServer whose tools read and write `store`; verify fetches through `fetch`."""
     declared: dict[str, set[str]] = {}
 
     async def reject_unknown_arguments(
@@ -132,9 +134,11 @@ def build_server(store: Store) -> MCPServer:
         particles off ("Chatbox 가격", not "Chatbox의 가격은"). Search for names in their
         original spelling (Hindsight, not 힌드사이트). Korean and English both work.
 
-        In this version status is fresh or unverifiable (nothing can check the claim), and
-        nothing re-checks claims or updates their status. A claim whose next_check_at is
-        before today has not been checked since observed_at, so say how old it is.
+        status is fresh, unverifiable (nothing can check the claim) or changed (the last
+        check found a different value at the source; the claim keeps the value it was
+        stored with, so tell the user and call verify to see the new value). Claims are
+        checked only when verify is called. A claim whose next_check_at is today or
+        earlier is due: say how old it is (observed_at, last_checked_at).
         """
         return {"claims": [c.to_dict() for c in store.recall(query, limit=RECALL_LIMIT)]}
 
@@ -151,5 +155,39 @@ def build_server(store: Store) -> MCPServer:
         except ValueError as e:
             raise ToolError(str(e)) from e
         return {"claims": [c.to_dict() for c in claims]}
+
+    @tool
+    def verify(claim_id: str) -> dict[str, Any]:
+        """Check one claim against its source now, record the check and return both.
+
+        Use when the user asks whether a remembered fact is still true, or to check a
+        claim that due lists. Works for claims whose check_method is pypi or
+        github_release and that have a value; web_page claims cannot be checked this way
+        yet.
+
+        check.result is same (the source still gives the claim's value), changed (the
+        source gives new_value), cannot_tell, or error (evidence says why). The claim keeps
+        the value it was stored with: after changed its status is changed, and to adopt
+        new_value the user asks you to remember the new sentence.
+        After cannot_tell or error the claim keeps its next_check_at, so a due claim stays
+        due and is tried again; the third such result in a row moves the next check out
+        by one class interval (see claim.next_check_at). Tell the user either way.
+        """
+        try:
+            claim = store.checkable(claim_id)
+            verifier = verifier_for(claim.check_method)
+            if verifier is None:
+                raise ValueError(
+                    f"claim {claim_id!r} is a web_page claim; verify cannot check it yet"
+                )
+            if claim.value is None:
+                raise ValueError(f"claim {claim_id!r} has no value to compare with the source")
+            outcome = verifier(claim.check_target or "", claim.value, fetch)
+            claim, check = store.add_check(
+                claim.id, outcome.result, outcome.new_value, outcome.evidence
+            )
+        except ValueError as e:
+            raise ToolError(str(e)) from e
+        return {"claim": claim.to_dict(), "check": check.to_dict()}
 
     return server

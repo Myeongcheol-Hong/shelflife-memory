@@ -19,7 +19,7 @@ Items marked **(owner)** are done by the maintainer by hand: ground-truth labels
 - [x] Volatility classification: rules first. The LLM part is Claude setting volatility at write time through `remember` when confident; no new tool (D4). Rules also fill check_method for latest-version facts whose source_url is a PyPI project or GitHub repository page
 - [x] `pypi` and `github_release` verifiers (no LLM) with fixtures (PyPI recorded; GitHub written by hand and checked against the live API by the owner on 2026-10-13. `tests/fixtures/record.py` re-records both where the GitHub API is reachable)
 - [x] `due` returns claims past `next_check_at` (done early in M1: `next_check_at` = `observed_at` + the class interval from design 4.2, and only claims with a check method are listed. M2 extends it: recompute after each check and also list `changed` claims)
-- [ ] `verify` tool
+- [x] `verify` tool (M2b): records each check and reschedules the claim (D9)
 - [ ] `forget` tool (design 5.2)
 - [ ] `due`: a "needs a check method" section for claims that rules could not give a check method
 
@@ -34,6 +34,7 @@ Items marked **(owner)** are done by the maintainer by hand: ground-truth labels
 - [ ] `depends_on` links; a changed claim flags dependent decisions for review
 - [ ] Daily due run (cron/launchd), no LLM
 - [ ] Weekly digest
+- [ ] `supersede`: one call that remembers the new claim and retires the old one (D9). Decisions linked to the old claim stay linked to it and stay flagged for the owner's review
 
 ## M5: Eval data and tooling
 - [ ] PyPI/GitHub release timelines (about 50 packages, 20 repos), dev/test split. Collected by a script the owner runs locally, because the cloud session cannot call the GitHub API for repositories not attached to it; the data is committed

@@ -13,7 +13,7 @@ import urllib.request
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 
-from shelflife.models import CheckResult
+from shelflife.models import CheckMethod, CheckResult
 
 TIMEOUT_SECONDS = 15
 USER_AGENT = "shelflife-memory (+https://github.com/Myeongcheol-Hong/shelflife-memory)"
@@ -31,6 +31,10 @@ class Outcome:
     result: CheckResult
     new_value: str | None = None  # the value found at the source
     evidence: str | None = None  # text quoted verbatim from the fetched content, or the error
+
+
+# (check_target, claimed value, fetch) -> outcome.
+Verifier = Callable[[str, str | None, Fetch], Outcome]
 
 
 def http_get(url: str, headers: Mapping[str, str]) -> bytes:
@@ -103,3 +107,13 @@ def compare_version(claimed: str | None, found: object, body: str) -> Outcome:
         return Outcome(CheckResult.CANNOT_TELL, new_value=found, evidence=found)
     result = CheckResult.SAME if same_version(claimed, found) else CheckResult.CHANGED
     return Outcome(result, new_value=found, evidence=found)
+
+
+def verifier_for(method: CheckMethod) -> Verifier | None:
+    """The rule-based verifier for a check method; None for web_page, which Claude judges
+    in the conversation (D4), and for none."""
+    from shelflife.verifiers import github_release, pypi  # both modules import this one
+
+    return {CheckMethod.PYPI: pypi.check, CheckMethod.GITHUB_RELEASE: github_release.check}.get(
+        method
+    )
