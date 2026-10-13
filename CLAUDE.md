@@ -17,8 +17,8 @@ The main contribution is the **eval**, not the feature list. Re-check tools alre
 
 - Move as fast as the work allows. `docs/roadmap.md` sets the **order** of milestones, not the pace. When a milestone is done and its tests pass, tick its boxes in the roadmap and continue to the next one.
 - At the start of a session, show a short plan for the milestones you intend to finish and wait for approval. After that, keep going without asking again unless the plan has to change.
-- One PR per milestone (roughly one plan week). Do not mix milestones in one PR. Keep each PR reviewable: aim for under about 400 changed lines, excluding fixtures and data files. Split larger work into stacked PRs.
-- In each PR description, explain the design choices and trade-offs so the owner understands and can explain every line.
+- One PR per milestone (roughly one plan week). Do not mix milestones in one PR. Keep each PR within the size limit in "Review rules" below; split larger work into stacked PRs.
+- In each PR description, explain the design choices and trade-offs so the owner understands and can explain every line. They go under "Details" (see "Review rules").
 - Never skip tests, the quote check or the eval rules below to go faster.
 - When the owner says a part is theirs to implement, leave a `TODO(mc)` stub with a failing or skipped test that describes the expected behavior.
 - If the design doc is wrong or unclear, say so and propose an edit instead of silently diverging.
@@ -28,8 +28,19 @@ The main contribution is the **eval**, not the feature list. Re-check tools alre
 
 - **Ground-truth labels belong to the owner.** Never create, fill in or edit labels in `eval/data/` (Wayback pair labels, write-eval snippet labels, human volatility labels). Build the files, schemas and labeling tools, then stop and hand over.
 - **Decisions belong to the owner.** Propose options for any new decision and for any change to the schema or MCP tool interfaces; do not decide them. Decisions are recorded in `docs/decisions.md` (D1-D4 came from `docs/design.md` section 8 and are decided). Items marked **(owner)** in the roadmap are never done by Claude.
-- **New dependencies** need approval.
+- **New dependencies** need approval, and a check that the package exists on PyPI.
 - **Blocked network access**: report it instead of working around it.
+
+## Review rules
+
+These apply to all work from the PR that added them on. `REVIEW.md` repeats them for reviewer agents; keep the two in sync.
+
+- **What a review flags.** Only gaps that affect correctness, security, or the decisions in `docs/decisions.md`. Style and "could also handle X" go in one optional list, and are not fixed by default.
+- **Simpler, not bigger.** Before fixing a review finding, ask whether the fix makes the code simpler or more complex. Prefer deleting code. Every PR description states what was removed or simplified.
+- **Size.** Keep a PR under about 400 changed lines, excluding tests and fixtures. If review fixes would push it over, they go in the next PR.
+- **PR description.** It starts with at most 10 lines: what changed, "Read these first" (the 1-3 core files or functions the owner must read), and the decisions needed. Everything else goes under "Details".
+- **Code the owner always reads:** the `store.py` schema and transactions, the MCP tool interfaces, quote and `record_check` validation, and eval scoring code. A PR that changes one of them names it under "Read these first".
+- **Packages.** Never add a package without the owner's approval and without confirming it exists on PyPI.
 
 ## Tech constraints
 
