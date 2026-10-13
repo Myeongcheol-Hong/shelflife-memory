@@ -103,10 +103,14 @@ def test_a_host_the_proxy_bypasses_is_checked_as_direct(monkeypatch):
         check_url("https://intranet.example:8443/", resolver("10.0.0.7"))
     check_url("https://intranet.example/", resolver("10.0.0.7"))  # through the proxy
     assert asked == ["intranet.example:8443", "intranet.example"]
-    handler, used = web_page._HTTPSHandler(), []
+    handler, used, proxies = web_page._HTTPSHandler(), [], urllib.request.ProxyHandler()
     handler.do_open = lambda conn, req, **kw: used.append(conn)
-    handler.https_open(urllib.request.Request("https://intranet.example:8443/"))
-    assert used == [web_page._HTTPSConnection]
+    for url in ("https://intranet.example:8443/", "https://intranet.example/"):
+        request = urllib.request.Request(url)
+        proxies.proxy_open(request, proxies.proxies["https"], "https")
+        handler.https_open(request)
+    # Bypassed: a checked direct connection. Through the proxy: to the proxy, unchecked.
+    assert used == [web_page._HTTPSConnection, web_page.http.client.HTTPSConnection]
 
 
 def test_every_redirect_is_checked(direct):
@@ -153,16 +157,36 @@ def test_a_public_peer_is_kept(monkeypatch):
 
 
 def connections_used():
+    """The connection classes the handlers use, for requests ProxyHandler has prepared."""
     http_handler, https_handler = web_page._HTTPHandler(), web_page._HTTPSHandler()
     used = []
     http_handler.do_open = https_handler.do_open = lambda conn, req, **kw: used.append(conn)
-    http_handler.http_open(urllib.request.Request("http://example.com/"))
-    https_handler.https_open(urllib.request.Request("https://example.com/"))
+    proxies = urllib.request.ProxyHandler()
+    for url, handler in (
+        ("http://example.com/", http_handler),
+        ("https://example.com/", https_handler),
+    ):
+        request = urllib.request.Request(url)
+        if request.type in proxies.proxies:  # what OpenerDirector does before http(s)_open
+            proxies.proxy_open(request, proxies.proxies[request.type], request.type)
+        getattr(handler, f"{request.type}_open")(request)
     return used
 
 
 def test_a_direct_connection_checks_the_connected_address(direct):
     assert connections_used() == [web_page._HTTPConnection, web_page._HTTPSConnection]
+
+
+def test_a_proxy_on_a_bypassed_address_is_still_used(monkeypatch):
+    # Cloud sessions list the proxy's own address (127.0.0.1) in NO_PROXY. ProxyHandler
+    # makes the proxy the request's host, so the handler must not ask NO_PROXY again.
+    proxy = "http://127.0.0.1:3128"
+    monkeypatch.setattr(urllib.request, "getproxies", lambda: {"http": proxy, "https": proxy})
+    monkeypatch.setattr(urllib.request, "proxy_bypass", lambda host: host.startswith("127.0.0.1"))
+    assert connections_used() == [
+        web_page.http.client.HTTPConnection,
+        web_page.http.client.HTTPSConnection,
+    ]
 
 
 def test_through_a_proxy_the_connection_goes_to_the_proxy(proxied):

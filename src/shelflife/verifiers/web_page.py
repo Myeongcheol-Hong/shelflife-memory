@@ -139,8 +139,8 @@ def _public(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
 
 
 def _proxied(request: urllib.request.Request) -> bool:
-    """Whether urllib sends this request through a proxy: ProxyHandler's own rule, on the
-    same host string (with its port, which a NO_PROXY entry may name)."""
+    """Whether urllib will send this request through a proxy: ProxyHandler's own rule, on
+    the same host string (with its port, which a NO_PROXY entry may name)."""
     return request.type in urllib.request.getproxies() and not urllib.request.proxy_bypass(
         request.host
     )
@@ -172,16 +172,22 @@ class _HTTPSConnection(http.client.HTTPSConnection):
         self._create_connection = _connect_public
 
 
+def _via_proxy(req: urllib.request.Request) -> bool:
+    """Whether ProxyHandler set this request up to go through a proxy (it then holds the
+    proxy as its host): the same test urllib's do_open makes."""
+    return req.has_proxy() or bool(getattr(req, "_tunnel_host", None))
+
+
 class _HTTPHandler(urllib.request.HTTPHandler):
     def http_open(self, req: urllib.request.Request) -> http.client.HTTPResponse:
         # Through a proxy the connection goes to the proxy, which may be local.
-        direct = not _proxied(req)
+        direct = not _via_proxy(req)
         return self.do_open(_HTTPConnection if direct else http.client.HTTPConnection, req)
 
 
 class _HTTPSHandler(urllib.request.HTTPSHandler):
     def https_open(self, req: urllib.request.Request) -> http.client.HTTPResponse:
-        direct = not _proxied(req)
+        direct = not _via_proxy(req)
         return self.do_open(_HTTPSConnection if direct else http.client.HTTPSConnection, req)
 
 
