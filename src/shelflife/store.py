@@ -320,6 +320,18 @@ class Store:
             )
             return self._get(claim.id), check
 
+    def forget(self, claim_id: str) -> Claim:
+        """Retire a claim: recall and due skip it from now on, and nothing is deleted.
+
+        Forgetting a retired claim again changes nothing. Raises ValueError for an
+        unknown id.
+        """
+        with self._lock, self._conn:
+            if not self._exists(claim_id):
+                raise ValueError(f"no claim with id {claim_id!r}")
+            self._conn.execute("UPDATE claims SET status = 'retired' WHERE id = ?", (claim_id,))
+            return self._get(claim_id)
+
     def checkable(self, claim_id: str) -> Claim:
         """The claim, if a check of it may be recorded; else ValueError, as add_check."""
         with self._lock:
@@ -538,6 +550,37 @@ class Store:
                 (cutoff,),
             ).fetchall()
             return [self._to_claim(r) for r in rows]
+
+    def changed(self) -> list[Claim]:
+        """Claims a check found changed (status changed), most recently checked first."""
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM claims WHERE status = 'changed' ORDER BY last_checked_at DESC, id"
+            ).fetchall()
+            return [self._to_claim(r) for r in rows]
+
+    def needs_check_method(self) -> list[Claim]:
+        """World facts nothing can check, because no check method was given or found."""
+        with self._lock:
+            rows = self._conn.execute(
+                """
+                SELECT * FROM claims
+                WHERE kind = 'world_fact' AND check_method = 'none' AND status != 'retired'
+                ORDER BY recorded_at, id
+                """
+            ).fetchall()
+            return [self._to_claim(r) for r in rows]
+
+    def last_check(self, claim_id: str, result: CheckResult | None = None) -> Check | None:
+        """The claim's most recent check, or its most recent one with `result`; None if
+        there is none."""
+        with self._lock:
+            row = self._conn.execute(
+                """SELECT * FROM checks WHERE claim_id = ? AND result = coalesce(?, result)
+                   ORDER BY rowid DESC LIMIT 1""",
+                (claim_id, result),
+            ).fetchone()
+            return None if row is None else Check.from_row(row)
 
     def _to_claim(self, row: sqlite3.Row) -> Claim:
         deps = self._conn.execute(
