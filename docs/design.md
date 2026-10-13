@@ -191,7 +191,7 @@ Tool descriptions say when to use each tool and when not to. Claude calls `remem
 ### 5.3 web_page verifier
 
 1. Fetch the page and extract its visible text. Only http and https URLs whose host is a public address are fetched, checked again on every redirect. Behind a proxy, which resolves host names itself, only addresses written as numbers and localhost names are refused, and the proxy decides the rest (Claude's choice, for the owner to confirm; cloud sessions cannot resolve names locally). A page is at most 10 MB, and the fetch stops once it passes about 30 s; each network step also times out after 15 s. The whole body is kept; hidden and struck-through text is dropped, and table cells are joined with " | "
-2. Select only the part relevant to the claim (for long pages)
+2. Select only the part relevant to the claim (for long pages). The selector is plain code, so a page and a claim always give the same section. It scores each heading's segment by the claim's subject, attribute and other words, found in the segment or the headings above it (words found only in navigation, headers or footers count half); the claim's value only breaks ties, so a changed page still finds the right segment. It reports the section's position on the page, its heading and its score against the runner-up, so 6.2 can tell a selection miss from a judgment miss, and its weights are parameters 6.2 can vary one at a time
 3. Get a structured judgment: same / changed (with new value) / cannot_tell, plus a **verbatim quote** as evidence for same and changed
 4. Check in code that the quote really appears on the page (blocks invented evidence)
 
