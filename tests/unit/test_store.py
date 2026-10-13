@@ -91,6 +91,17 @@ def test_remember_treats_blank_strings_as_missing(store):
         ({"kind": "decision", "depends_on": "x"}, "depends_on must be a list"),
         ({"status": "fresh", "id": "x"}, r"unknown or system-managed field\(s\): id, status"),
         ({"value": 300}, "value must be a string"),
+        ({"source_url": "aws.amazon.com/certification"}, "source_url must be a full http"),
+        ({"source_url": "file:///etc/passwd"}, "source_url must be a full http"),
+        ({"source_url": "https://"}, "source_url must be a full http"),
+        (
+            {"check_method": "web_page", "check_target": "javascript:alert(1)"},
+            "check_target must be a full http",
+        ),
+        (
+            {"check_method": "web_page", "check_target": "http://[::1"},
+            "check_target must be a full http",
+        ),
         (
             {"kind": "preference", "check_method": "web_page", "check_target": "https://a.b"},
             "preference claims are never checked",
