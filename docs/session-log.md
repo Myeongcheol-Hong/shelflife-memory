@@ -2,6 +2,27 @@
 
 Handoff notes between working sessions. Newest entry first. Each entry says where the work stands, what waits on the owner, and what the next session should do first.
 
+## 2026-10-13: owner decisions D1-D4
+
+### State at the end of the session
+
+- The owner decided D1-D4. `docs/decisions.md` records each with the option chosen, why, and a "Revisit if" line. D5-D7 also have a "Revisit if" line now; Claude drafted those three, and they wait for the owner's check. D5's "Why" refers to the recorded D4 instead of assuming it.
+- D3 is applied: the server instructions and the `remember` description say Claude may offer ("Want me to remember this?") but never calls `remember` until the user confirms. This answers proposal 2 in #3.
+- `docs/design.md` (5.2, 5.3, 6.0, 8) and `docs/roadmap.md` no longer call D1-D4 open. Both "(owner) ... recorded" roadmap items are ticked. Design 6.0-2 calls extraction recall and precision a stretch goal (D2).
+- These are new commits on M1c (#3), because three PRs are already open. #1-#3 are still unmerged.
+
+### Questions for the owner
+
+1. D2 says the user gives the sentence, but the `remember` description still says "Write one self-contained sentence per claim", which reads as Claude writing it. Proposed wording: "text: the user's sentence as given; do not rewrite it, only structure it into the other fields."
+2. D2 with D3: when Claude offers and the user says yes, which sentence is stored? Proposed: the offer shows the exact sentence, and the yes approves that sentence.
+3. D4 (b) and M2's "LLM fallback per D4" for volatility: with no LLM on the server, the fallback can only be Claude in a conversation. Options: (i) only at write time, through `remember`'s `volatility` parameter; (ii) `recall` or `due` also return claims whose volatility is still a default, with the prompt template, and a tool stores Claude's answer as `volatility_source = llm`. Option (ii) changes the tool interface.
+4. Design 6.0-2 under D2: the snippets and trap cases ("no claim at all") were written for extraction. M5 builds the snippet format and needs the answer: is a snippet one given sentence (plus context), and which trap cases stay?
+
+### Next session: start here
+
+1. Check #1-#3 as in the entry below (merged? review comments? CI?).
+2. Show the owner a short plan and wait for approval. M2 starts when fewer than three PRs are open; the answers to questions 1 and 3 shape it.
+
 ## 2026-10-12: M1 (core store and MCP server)
 
 ### State at the end of the session

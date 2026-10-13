@@ -5,7 +5,7 @@
 **One-line pitch**
 > Tools that re-check agent memories against the world already exist. None of the open-source ones I found measure *when* to re-check. Shelf Life is a small MCP memory that does both, and its eval compares re-check policies on reproducible ground truth from PyPI, GitHub releases and the Wayback Machine.
 
-- Status: draft, last updated 2026-10-12. Milestones are in `docs/roadmap.md`.
+- Status: draft, last updated 2026-10-13. Milestones are in `docs/roadmap.md`.
 - Repository: `shelflife-memory` (public, MIT). Distribution name `shelflife-memory`, import name `shelflife`. (`shelflife` cannot be registered on PyPI because it collides with the existing `shelf-life` project under PyPI's name normalization.)
 
 ---
@@ -179,9 +179,9 @@ CREATE VIRTUAL TABLE claims_fts USING fts5(text, subject, content='claims');
 | `due` | days? | Lists claims that are due or changed, and decisions to revisit |
 | `verify` | claim_id | Checks a claim now |
 | `forget` | claim_id | Marks the claim `retired` (history kept, nothing deleted) |
-| `record_check` | claim_id, result, new_value?, quote | (If D4 option (b) is chosen) stores a check result judged by Claude in the conversation. Accepted only after code confirms the quote appears on the page |
+| `record_check` | claim_id, result, new_value?, quote | Stores a check result judged by Claude in the conversation (D4 (b)). Accepted only after code confirms the quote appears on the page |
 
-Tool descriptions say when to use each tool and when not to. Whether Claude calls `remember` on its own during a conversation or only when asked is an open decision (D3).
+Tool descriptions say when to use each tool and when not to. Claude calls `remember` only when the user asks; it may offer, but waits for the user's confirmation (D3).
 
 ### 5.3 web_page verifier
 
@@ -190,7 +190,7 @@ Tool descriptions say when to use each tool and when not to. Whether Claude call
 3. Get a structured judgment: same / changed (with new value) / cannot_tell, plus a **verbatim quote** as evidence
 4. Check in code that the quote really appears on the page (blocks invented evidence)
 
-Who makes the judgment in step 3 depends on D4: the server (via API) or Claude in the conversation. Step 4 always runs either way.
+Under D4, Claude in the conversation makes the judgment in step 3 and stores it with `record_check`. The judgment instructions are a versioned prompt template that `recall` returns and the eval harness reuses, so 6.2 measures what runs in daily use. Step 4 runs in code for every result.
 
 ## 6. Eval: write quality, when to check, whether the check is right
 
@@ -200,7 +200,7 @@ The three questions are measured **separately**, in the order a memory goes thro
 
 ### 6.0 Write quality
 
-When Claude calls `remember`, it decides: whether to remember at all, the claim text and (subject, attribute, value), kind, volatility, check_method/check_target, source and quote. If these are wrong, no re-check policy can fix it.
+The user decides what to remember and gives the claim sentence (D2, D3). When Claude calls `remember`, it structures that sentence into fields: (subject, attribute, value), kind, volatility, check_method/check_target, source and quote. If these are wrong, no re-check policy can fix it.
 
 1. **Automatic checks (no labels, run on every claim)**
    - The quote appears verbatim on the source page
@@ -210,7 +210,7 @@ When Claude calls `remember`, it decides: whether to remember at all, the claim 
    - Metric: write integrity rate (share of claims passing all four)
 2. **Labeled set (small, hand-made)**
    - 40 snippets from my own research conversations (certifications, multi-LLM apps, memory frameworks; no employer data), each labeled with the expected claims and their kind/volatility/check_method
-   - Metrics: recall (missed claims), precision (invented or unneeded claims), per-field accuracy, volatility confusion matrix
+   - Metrics: per-field accuracy for the given sentences, volatility confusion matrix. Recall (missed claims) and precision (invented or unneeded claims) measure extraction, which is a stretch goal under D2
    - **Labeling fast as slow is the most expensive error** (checks come too late and stale answers get served). The opposite error only costs extra checks, so the two directions are reported separately
    - Matching is done in code on normalized (subject, attribute); only ambiguous cases are judged by hand
    - Comparisons: Haiku vs Sonnet, prompt v1 (rules only) vs v2 (with examples)
@@ -282,18 +282,19 @@ When Claude calls `remember`, it decides: whether to remember at all, the claim 
 - **Release histories are a proxy.** PyPI and GitHub release timelines change in a clean, dated way. Prices and policies on web pages change less regularly, which 6.2 covers only partly.
 - **ChatGPT needs a remote server.** v1 runs over stdio for Claude Desktop and Claude Code.
 
-## 8. Open decisions
+## 8. Decisions D1-D4
 
-Each decision is recorded in `docs/decisions.md` with the option chosen and why.
+These were open when the design was written. The owner decided them on 2026-10-13; `docs/decisions.md` records the option chosen, why, and when to revisit each one. The options are kept here for context.
 
-- **D1: Storage.** A single SQLite file with FTS5 and no embeddings to start. Enough at personal scale; embeddings can be added later if search quality needs it.
-- **D2: Who extracts claims.** The LLM, or the user giving sentences directly. Suggested: direct at first, since extraction quality is a separate problem. Revisit if manual entry turns out to be tedious enough that the tool goes unused.
-- **D3: When `remember` is called.** Claude calls it on its own during conversations, or only when asked. If on its own, the 6.0 write eval is mandatory.
+- **D1: Storage.** A single SQLite file with FTS5 and no embeddings to start. Enough at personal scale; embeddings can be added later if search quality needs it. **Decided:** SQLite + FTS5, no embeddings.
+- **D2: Who extracts claims.** The LLM, or the user giving sentences directly. Suggested: direct at first, since extraction quality is a separate problem. Revisit if manual entry turns out to be tedious enough that the tool goes unused. **Decided:** direct entry; Claude only structures the given sentence into fields.
+- **D3: When `remember` is called.** Claude calls it on its own during conversations, or only when asked. If on its own, the 6.0 write eval is mandatory. **Decided:** only when asked; Claude may offer, but waits for confirmation.
 - **D4: Where LLM judgments happen** (web_page comparison, volatility classification).
   - (a) The server calls the Claude API directly. web_page checks can run in the background. Needs an API key and a small cost.
   - (b) Claude in the conversation judges. `recall` returns "due + relevant part of the current page", Claude compares and stores the result with `record_check`. Works with a Claude subscription only.
   - In both cases the background job (cron) runs without an LLM: pypi/github are decided by rules; web_page only detects whether the relevant section changed (hash comparison) and marks it "possibly changed", and Claude judges at the next conversation or in the weekly digest.
   - Suggested: (b) plus the rule-based background job for v1. Model comparisons in 6.0/6.2 run small-scale with `claude -p --model`.
+  - **Decided:** (b) plus the rule-based background job.
 
 ## 9. Development workflow (Claude Code cloud)
 

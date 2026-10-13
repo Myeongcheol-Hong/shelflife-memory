@@ -11,7 +11,7 @@ Items marked **(owner)** are done by the maintainer by hand: ground-truth labels
 - [x] stdio MCP server exposing `remember`, `recall`, `due`
 - [x] Integration test that calls the tools through an in-process MCP client
 - [x] Import `examples/seed_claims.jsonl`
-- [ ] **(owner)** D1-D3 recorded in `docs/decisions.md`
+- [x] **(owner)** D1-D3 recorded in `docs/decisions.md` (decided 2026-10-13)
 
 ## M2: Volatility and rule-based verifiers
 - [ ] Volatility classification (rules first, LLM fallback per D4)
@@ -21,10 +21,10 @@ Items marked **(owner)** are done by the maintainer by hand: ground-truth labels
 
 ## M3: web_page verifier and write checks
 - [ ] Fetch, extract main text, select the relevant section
-- [ ] Judgment per D4 (`record_check` if option (b)) with verbatim-quote validation in code
+- [ ] Judgment per D4 (b): `record_check` with verbatim-quote validation in code, and a versioned judgment prompt template that `recall` returns and the eval harness reuses
 - [ ] `checks` table populated for every check
 - [ ] Four automatic write checks (design 6.0-1)
-- [ ] **(owner)** D4 recorded
+- [x] **(owner)** D4 recorded (decided 2026-10-13)
 
 ## M4: Decisions, scheduler, digest
 - [ ] `depends_on` links; a changed claim flags dependent decisions for review
@@ -58,6 +58,7 @@ Items marked **(owner)** are done by the maintainer by hand: ground-truth labels
 - [ ] Labeled write eval (design 6.0-2), trap cases reported separately
 - [ ] **(owner)** Blind re-label of 20% and self-agreement
 - [ ] Optional: Hindsight invalidation integration
+- [ ] Optional: extraction recall and precision (a stretch goal under D2)
 
 ## M9: Release
 - [ ] README: problem, demo GIF, install, results, limitations, prior art, real-use stats
