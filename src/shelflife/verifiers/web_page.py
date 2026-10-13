@@ -56,21 +56,24 @@ def fetch_page(
     url: str,
     *,
     opener: urllib.request.OpenerDirector | None = None,
-    resolve: Resolve = socket.getaddrinfo,
+    resolve: Resolve | None = None,
     clock: Callable[[], float] = time.monotonic,
 ) -> Page:
     """GET a web page. Raises FetchError, with `status` set for an HTTP error.
 
     Only http and https URLs whose host is a public address are fetched, and every
     redirect is checked the same way, so a stored URL cannot read a local file, the
-    owner's network or a cloud metadata service. The body is capped at MAX_BYTES and the
-    whole fetch at about DEADLINE_SECONDS.
+    owner's network or a cloud metadata service (behind a proxy, see check_url). The body
+    is capped at MAX_BYTES. The fetch, redirects and body included, is stopped once it
+    passes DEADLINE_SECONDS; each network step also times out after TIMEOUT_SECONDS.
     """
     check_url(url, resolve)
     request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     start = clock()
     try:
-        with (opener or _opener()).open(request, timeout=TIMEOUT_SECONDS) as response:
+        with (opener or _opener(resolve)).open(request, timeout=TIMEOUT_SECONDS) as response:
+            if clock() - start > DEADLINE_SECONDS:
+                raise FetchError(f"page took longer than {DEADLINE_SECONDS} s at {url}")
             content_type = response.headers.get_content_type()
             if content_type not in PAGE_TYPES:
                 raise FetchError(f"not a web page ({content_type}) at {url}")
@@ -85,11 +88,12 @@ def fetch_page(
         raise FetchError(f"cannot reach {url}: {e}") from None
 
 
-def check_url(url: str, resolve: Resolve = socket.getaddrinfo) -> None:
+def check_url(url: str, resolve: Resolve | None = None) -> None:
     """Raise FetchError unless `url` is http(s) and its host is a public address.
 
-    Behind a proxy the proxy resolves host names (a local lookup may not work), so only
-    literal addresses and localhost names are checked here.
+    Behind a proxy the proxy resolves host names (a local lookup may not work, as in
+    cloud sessions), so there only addresses written as numbers ("10.0.0.1", "127.1",
+    "0x7f000001") and localhost names are refused, and the proxy decides the rest.
     """
     try:
         parts = urllib.parse.urlsplit(url)
@@ -98,18 +102,18 @@ def check_url(url: str, resolve: Resolve = socket.getaddrinfo) -> None:
         raise FetchError(f"refused: not a valid URL: {url!r}") from None
     if parts.scheme not in ("http", "https"):
         raise FetchError(f"refused: only http and https URLs are fetched, not {url!r}")
-    host = parts.hostname
+    host = (parts.hostname or "").rstrip(".")
     if not host:
         raise FetchError(f"refused: no host in {url!r}")
     if host == "localhost" or host.endswith(".localhost"):
         raise FetchError(f"refused: {host} is not a public host")
-    try:
-        addresses = [ipaddress.ip_address(host)]
-    except ValueError:
-        if _proxied(url):
-            return
+    if (literal := _address(host)) is not None:
+        addresses = [literal]
+    elif _proxied(urllib.request.Request(url)):
+        return
+    else:
         try:
-            infos = resolve(host, port, type=socket.SOCK_STREAM)
+            infos = (resolve or socket.getaddrinfo)(host, port, type=socket.SOCK_STREAM)
         except OSError:
             raise FetchError(f"cannot reach {url}: unknown host {host}") from None
         addresses = [ipaddress.ip_address(info[4][0].split("%")[0]) for info in infos]
@@ -118,15 +122,30 @@ def check_url(url: str, resolve: Resolve = socket.getaddrinfo) -> None:
             raise FetchError(f"refused: {host} is not a public address ({address})")
 
 
+def _address(host: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address | None:
+    """The address a host written as a number stands for, in any form a resolver reads
+    ("127.0.0.1", "127.1", "0x7f000001", "2130706433", "0177.0.0.1", "::1"), else None."""
+    try:
+        return ipaddress.ip_address(host)
+    except ValueError:
+        pass
+    if re.fullmatch(r"[0-9a-fx.]+", host, re.I):
+        try:
+            return ipaddress.IPv4Address(socket.inet_aton(host))
+        except OSError:
+            pass
+    return None
+
+
 def _public(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
     return address.is_global and not address.is_multicast
 
 
-def _proxied(url: str) -> bool:
-    """Whether urllib sends this URL through a proxy (the same rule as ProxyHandler)."""
-    parts = urllib.parse.urlsplit(url)
-    return parts.scheme in urllib.request.getproxies() and not urllib.request.proxy_bypass(
-        parts.hostname or ""
+def _proxied(request: urllib.request.Request) -> bool:
+    """Whether urllib sends this request through a proxy: ProxyHandler's own rule, on the
+    same host string (with its port, which a NO_PROXY entry may name)."""
+    return request.type in urllib.request.getproxies() and not urllib.request.proxy_bypass(
+        request.host
     )
 
 
@@ -159,25 +178,28 @@ class _HTTPSConnection(http.client.HTTPSConnection):
 class _HTTPHandler(urllib.request.HTTPHandler):
     def http_open(self, req: urllib.request.Request) -> http.client.HTTPResponse:
         # Through a proxy the connection goes to the proxy, which may be local.
-        direct = not _proxied(req.full_url)
+        direct = not _proxied(req)
         return self.do_open(_HTTPConnection if direct else http.client.HTTPConnection, req)
 
 
 class _HTTPSHandler(urllib.request.HTTPSHandler):
     def https_open(self, req: urllib.request.Request) -> http.client.HTTPResponse:
-        direct = not _proxied(req.full_url)
+        direct = not _proxied(req)
         return self.do_open(_HTTPSConnection if direct else http.client.HTTPSConnection, req)
 
 
 class _CheckedRedirects(urllib.request.HTTPRedirectHandler):
     max_redirections = MAX_REDIRECTS
 
+    def __init__(self, resolve: Resolve | None = None) -> None:
+        self.resolve = resolve
+
     def redirect_request(self, req, fp, code, msg, headers, newurl):  # type: ignore[no-untyped-def]
-        check_url(newurl)
+        check_url(newurl, self.resolve)
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
-def _opener() -> urllib.request.OpenerDirector:
+def _opener(resolve: Resolve | None = None) -> urllib.request.OpenerDirector:
     """An opener for http and https only (no file:, data: or ftp: handlers)."""
     opener = urllib.request.OpenerDirector()
     for handler in (
@@ -185,7 +207,7 @@ def _opener() -> urllib.request.OpenerDirector:
         _HTTPHandler(),
         _HTTPSHandler(),
         urllib.request.HTTPDefaultErrorHandler(),
-        _CheckedRedirects(),
+        _CheckedRedirects(resolve),
         urllib.request.HTTPErrorProcessor(),
     ):
         opener.add_handler(handler)
@@ -242,7 +264,9 @@ def decode(body: bytes, charset: str | None = None) -> str:
 def _codec(label: str | None) -> str:
     label = (label or "utf-8").strip().lower()
     try:
-        return codecs.lookup(CHARSET_ALIASES.get(label, label)).name
+        name = codecs.lookup(CHARSET_ALIASES.get(label, label)).name
+        b" ".decode(name, "ignore")  # LookupError if not a text encoding ("base64", "hex")
+        return name
     except LookupError:
         return "utf-8"
 
