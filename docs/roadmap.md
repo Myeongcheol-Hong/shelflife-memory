@@ -6,8 +6,8 @@ Items marked **(owner)** are done by the maintainer by hand: ground-truth labels
 
 ## M1: Core store and MCP server
 - [x] Package skeleton: `uv` package `shelflife-memory`, import name `shelflife`, pytest, ruff, SessionStart hook (`uv sync`)
-- [ ] SQLite schema (design 5.1) with FTS5
-- [ ] `remember` / `recall` (no verification yet) with unit tests
+- [x] SQLite schema (design 5.1) with FTS5
+- [x] `remember` / `recall` (no verification yet) with unit tests
 - [ ] stdio MCP server exposing `remember`, `recall`, `due`
 - [ ] Integration test that calls the tools through an in-process MCP client
 - [ ] Import `examples/seed_claims.jsonl`
@@ -16,7 +16,7 @@ Items marked **(owner)** are done by the maintainer by hand: ground-truth labels
 ## M2: Volatility and rule-based verifiers
 - [ ] Volatility classification (rules first, LLM fallback per D4)
 - [ ] `pypi` and `github_release` verifiers (no LLM) with recorded fixtures
-- [ ] `due` returns claims past `next_check_at`
+- [x] `due` returns claims past `next_check_at` (done early in M1: `next_check_at` = `observed_at` + the class interval from design 4.2, and only claims with a check method are listed. M2 extends it: recompute after each check and also list `changed` claims)
 - [ ] `verify` tool
 
 ## M3: web_page verifier and write checks
