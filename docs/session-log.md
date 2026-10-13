@@ -2,6 +2,35 @@
 
 Handoff notes between working sessions. Newest entry first. Each entry says where the work stands, what waits on the owner, and what the next session should do first.
 
+## 2026-10-13: M3a-M3c merged (handoff)
+
+### State at the end of the session
+
+- Merged into `main` (3950817): [#12](https://github.com/Myeongcheol-Hong/shelflife-memory/pull/12) M3a (D10, safe page fetching, http(s)-only URLs), [#13](https://github.com/Myeongcheol-Hong/shelflife-memory/pull/13) M3b (`normalize()`, `extract()`, five recorded seed pages), [#14](https://github.com/Myeongcheol-Hong/shelflife-memory/pull/14) M3c (`verifiers/section.py`). On `main`: 510 passed, 3 xfailed (the known selection misses), ruff clean, CI green on 3.11 and 3.13.
+- No PRs are open. Roadmap M3: fetch, extraction and section selection are ticked; the judgment, the `checks` rows for every check and the four write checks remain.
+- Plan letters from here (the plan's M3a was split, so the rest moved one letter): M3d judgment module, M3e tools, M3f write checks and seed edits.
+
+### Waiting on the owner
+
+1. D10's open questions 1-5 (in `docs/decisions.md`, under D10 "Open"): where `cannot_tell`'s reason is stored; `same`/`changed` for a web_page claim without a value; MetagenomicsBench "60%" against the page's "60.0%"; Claude's reading that "differs" compares folded values; struck-through text dropped, not marked.
+2. Claude's choices to confirm: behind a proxy, host names are left to the proxy (D10.8); M4 hashes `Section.core`; the fee/cost/price synonym group in `section.py`; D10's revisit line.
+3. Proposal, not built: drop D8 particles from pure Hangul words in section selection.
+
+### Next session: start here
+
+1. Read CLAUDE.md, this entry, D10 (with its open questions) and roadmap M3. Get the owner's answers to the open questions first: M3d and M3e build on them.
+2. Show a short plan for the rest of M3 and wait for approval:
+   - M3d `shelflife/judgment.py`: the versioned judgment template (a test pins its hash), render, parse and validate a `Judgment {result, new_value, quote, reason}`; the quote rules of D10-3 on `normalize()`d text; the value matcher of D10-5 (dashes, quote marks, money with currency, plus whatever question 3 decides); page text marked as untrusted.
+   - M3e tools: `verify` on web_page returns `{claim, check: null, judge}`; `record_check` with the 30-minute hold and the stale-fetch refusal (D10-2); schema v2 migration tested on a v1 file; `needs_check_method` without caller-set `none`; the MemGuard seed as `none` (caller); tool descriptions and the tests that pin them.
+   - M3f write checks (pure functions plus a read-only CLI, D10-7), the seed edits ("60%" per question 3, the eligibility phrase, `source_quote` proposals copied from the fixtures for the owner to approve).
+3. Keep PRs near 400 lines: reviews added about half again to M3a-M3c, so plan smaller pieces.
+
+### Notes for the next session
+
+- After any change to fetching, re-record the fixtures (`uv run python tests/fixtures/record.py pages`): that is how the cloud-proxy bug (NO_PROXY lists the proxy itself) was caught.
+- Tests refuse DNS lookups and connections (`tests/conftest.py`). Python 3.11 locally: `UV_PROJECT_ENVIRONMENT=<some dir> uv run --python 3.11 pytest -q`; the `fsum` test only fails on 3.11.
+- The developer-mode seed URL returns HTTP 404 on purpose (D10): it is the "source moved" case for write check 3.
+
 ## 2026-10-13: M3a-M3c open (web_page fetch, extraction, section selection)
 
 ### State at the end of the session
