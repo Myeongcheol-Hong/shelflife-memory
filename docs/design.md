@@ -167,15 +167,17 @@ CREATE TABLE checks (
   method TEXT NOT NULL, result TEXT NOT NULL,   -- same | changed | cannot_tell | error
   old_value TEXT, new_value TEXT, evidence TEXT, cost_usd REAL
 );
-CREATE VIRTUAL TABLE claims_fts USING fts5(text, subject, content='claims');
+CREATE VIRTUAL TABLE claims_fts USING fts5(text, subject, content='claims', tokenize='trigram');
 ```
+
+Search works for Korean (D8). The trigram index matches substrings, so a particle fused onto a word ("Chatbox로") does not hide it. Query words shorter than 3 characters, common in Korean, are matched with LIKE. Results are ranked by the number of query words matched, then bm25.
 
 ### 5.2 MCP tools
 
 | Tool | Input | What it does |
 |---|---|---|
-| `remember` | text, kind; optional: subject, attribute, value, volatility, check_method, check_target, source_url, source_quote, observed_at, depends_on | Stores a claim. Unknown enum values are rejected, and system-managed fields (id, recorded_at, last_checked_at, next_check_at, status, volatility_source, check_method_source) are never accepted. The model leaves volatility and check_method empty unless it is confident; empty ones get a default, later rules plus the LLM (D4), and the `*_source` columns record who set them. The user can correct them |
-| `recall` | query, verify = auto / never / always | Searches and returns claims. With `auto`, due claims are checked before they are served, and results are annotated with "checked today" or "changed: old -> new" |
+| `remember` | text, kind; optional: subject, attribute, value, volatility, check_method, check_target, source_url, source_quote, observed_at, depends_on | Stores a claim. Unknown enum values are rejected, and system-managed fields (id, recorded_at, last_checked_at, next_check_at, status, volatility_source, check_method_source) are never accepted. `text` is the user's sentence as given, in whatever language (D2). The model leaves volatility and check_method empty unless it is confident; empty ones get a default, later refined by rules (M2), and the `*_source` columns record who set them. Claude sets volatility only here, at write time (D4). The user can correct them |
+| `recall` | query, verify = auto / never / always | Searches and returns claims (Korean and English; names in their original spelling, D8). With `auto`, due claims are checked before they are served, and results are annotated with "checked today" or "changed: old -> new" |
 | `due` | days? | Lists claims that are due or changed, and decisions to revisit |
 | `verify` | claim_id | Checks a claim now |
 | `forget` | claim_id | Marks the claim `retired` (history kept, nothing deleted) |
@@ -209,12 +211,18 @@ The user decides what to remember and gives the claim sentence (D2, D3). When Cl
    - **Verify right after write returns `same`**: if a just-written claim verifies as changed or cannot_tell, either the claim or the verifier is wrong
    - Metric: write integrity rate (share of claims passing all four)
 2. **Labeled set (small, hand-made)**
-   - 40 snippets from my own research conversations (certifications, multi-LLM apps, memory frameworks; no employer data), each labeled with the expected claims and their kind/volatility/check_method
+   - 40 items from my own research conversations (certifications, multi-LLM apps, memory frameworks; no employer data). An item is one sentence I gave, plus the surrounding turn and the source URL if any (D2). The gold labels are the fields Claude should fill: kind, subject/attribute/value, volatility, check_method/check_target, observed_at and source
    - Metrics: per-field accuracy for the given sentences, volatility confusion matrix. Recall (missed claims) and precision (invented or unneeded claims) measure extraction, which is a stretch goal under D2
    - **Labeling fast as slow is the most expensive error** (checks come too late and stale answers get served). The opposite error only costs extra checks, so the two directions are reported separately
    - Matching is done in code on normalized (subject, attribute); only ambiguous cases are judged by hand
    - Comparisons: Haiku vs Sonnet, prompt v1 (rules only) vs v2 (with examples)
-   - **Trap cases** (about 10 of the 40): snippets where the right output is "not stated" or no claim at all, and snippets with a tempting value that belongs to a different subject. A filled-in trap is a fabrication and is reported on its own line
+   - **Trap cases** (about 10 of the 40), where the tempting output is a fabrication:
+     - a sentence with no checkable value (right answer: check_method `none`)
+     - a relative date ("last month") that must not become an invented observed_at
+     - a value that belongs to a different subject in the context
+     - an unstated check target ("the latest version" with no package named) that must not be guessed
+     - two similar values (monthly vs annual price)
+   - A filled-in trap is a fabrication and is reported on its own line
 3. **Downstream impact (reuses the 6.1 replayer, almost free)**
    - Swap the owner's volatility labels for Claude's in the 6.1 replay and measure how much the stale-answer rate rises
    - Example finding: "When Claude assigns volatility, stale answers rise by X points compared with human labels"
@@ -284,7 +292,7 @@ The user decides what to remember and gives the claim sentence (D2, D3). When Cl
 
 ## 8. Decisions D1-D4
 
-These were open when the design was written. The owner decided them on 2026-10-13; `docs/decisions.md` records the option chosen, why, and when to revisit each one. The options are kept here for context.
+These were open when the design was written. The owner decided them on 2026-10-13; `docs/decisions.md` records the option chosen, why, and when to revisit each one. The options are kept here for context. Later decisions (D5 onward, such as D8 on Korean search) are recorded only in `docs/decisions.md`.
 
 - **D1: Storage.** A single SQLite file with FTS5 and no embeddings to start. Enough at personal scale; embeddings can be added later if search quality needs it. **Decided:** SQLite + FTS5, no embeddings.
 - **D2: Who extracts claims.** The LLM, or the user giving sentences directly. Suggested: direct at first, since extraction quality is a separate problem. Revisit if manual entry turns out to be tedious enough that the tool goes unused. **Decided:** direct entry; Claude only structures the given sentence into fields.

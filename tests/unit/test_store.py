@@ -137,6 +137,51 @@ def test_recall_treats_operators_as_plain_words(store):
     assert [c.id for c in store.recall('free" OR (')] == [claim.id]
 
 
+# Korean (D8): particles fuse onto words ("Chatbox로", "가격은"), and many Korean words
+# are shorter than a trigram.
+KOREAN = {
+    "decision": "멀티 LLM 앱은 Chatbox로 정했다",
+    "price": "Chatbox Pro 가격은 월 $19.99이다",
+    "exam": "AWS AIP-C01 시험 비용은 $300이다",
+}
+
+
+@pytest.fixture
+def korean(store):
+    return {store.remember(text, "note").id: name for name, text in KOREAN.items()}
+
+
+@pytest.mark.parametrize(
+    ("query", "expected"),
+    [
+        ("Chatbox 가격", ["price", "decision"]),  # two words matched before one
+        ("시험 비용", ["exam"]),  # both words shorter than a trigram
+        ("Chatbox로", ["decision"]),  # the particle is part of the query word
+        ("aip-c01 시험", ["exam"]),
+        ("챗박스", []),  # a name is found only in its original spelling
+    ],
+)
+def test_recall_finds_korean_claims(store, korean, query, expected):
+    assert [korean[c.id] for c in store.recall(query)] == expected
+
+
+def test_recall_finds_a_latin_name_with_a_korean_particle_attached(store, korean):
+    assert {korean[c.id] for c in store.recall("chatbox")} == {"decision", "price"}
+
+
+def test_recall_ranks_more_matched_words_above_a_common_short_word(store):
+    for i in range(12):
+        store.remember(f"가격 메모 {i}", "note")
+    target = store.remember("Chatbox Pro 가격은 월 $19.99이다", "world_fact")
+    assert store.recall("Chatbox 가격")[0].id == target.id
+
+
+def test_recall_like_fallback_treats_underscore_literally(store):
+    snake = store.remember("snake_case names", "note")
+    store.remember("snakeXcase names", "note")
+    assert [c.id for c in store.recall("e_")] == [snake.id]
+
+
 def test_recall_respects_limit(store):
     for i in range(5):
         store.remember(f"Claim number {i} about pricing", "note")
@@ -196,6 +241,11 @@ def test_claims_survive_reopening(tmp_path, clock):
     with Store(path, now=clock) as s:
         assert s.get(claim.id) == claim
         assert [c.id for c in s.recall("fact")] == [claim.id]
+
+
+def test_connection_uses_wal_and_a_busy_timeout(store):
+    assert store._conn.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
+    assert store._conn.execute("PRAGMA busy_timeout").fetchone()[0] == 5000
 
 
 def test_schema_creation_is_idempotent(tmp_path, clock):

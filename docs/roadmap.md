@@ -12,12 +12,15 @@ Items marked **(owner)** are done by the maintainer by hand: ground-truth labels
 - [x] Integration test that calls the tools through an in-process MCP client
 - [x] Import `examples/seed_claims.jsonl`
 - [x] **(owner)** D1-D3 recorded in `docs/decisions.md` (decided 2026-10-13)
+- [x] Follow-ups from the owner's review (M1d): Korean search (D8), WAL and a busy timeout for two server processes, `remember` wording for D2/D3
 
 ## M2: Volatility and rule-based verifiers
-- [ ] Volatility classification (rules first, LLM fallback per D4)
+- [ ] Volatility classification: rules first. The LLM part is Claude setting volatility at write time through `remember` when confident; no new tool (D4)
 - [ ] `pypi` and `github_release` verifiers (no LLM) with recorded fixtures
 - [x] `due` returns claims past `next_check_at` (done early in M1: `next_check_at` = `observed_at` + the class interval from design 4.2, and only claims with a check method are listed. M2 extends it: recompute after each check and also list `changed` claims)
 - [ ] `verify` tool
+- [ ] `forget` tool (design 5.2)
+- [ ] `due`: a "needs a check method" section for claims that rules could not give a check method
 
 ## M3: web_page verifier and write checks
 - [ ] Fetch, extract main text, select the relevant section
@@ -32,14 +35,14 @@ Items marked **(owner)** are done by the maintainer by hand: ground-truth labels
 - [ ] Weekly digest
 
 ## M5: Eval data and tooling
-- [ ] PyPI/GitHub release timelines (about 50 packages, 20 repos), dev/test split
+- [ ] PyPI/GitHub release timelines (about 50 packages, 20 repos), dev/test split. Collected by a script the owner runs locally, because the cloud session cannot call the GitHub API for repositories not attached to it; the data is committed
 - [ ] Wayback pair collection tool and labeling file format
-- [ ] Write-eval snippet file format and labeling tool
+- [ ] Write-eval item file format (one given sentence, the surrounding turn, the source URL; gold labels are the fields; design 6.0-2) and labeling tool
 - [ ] `eval/data/README.md` data card
 - [ ] Smoke corpus in `eval/data/smoke/`, wired into CI
 - [ ] Shared model runner (`claude -p --model`, repeats, run artifacts)
 - [ ] **(owner)** Label 30-40 Wayback pairs
-- [ ] **(owner)** Label 40 write-eval snippets, including about 10 trap cases
+- [ ] **(owner)** Label 40 write-eval items, including about 10 trap cases (design 6.0-2)
 
 ## M6: Replay simulator and baseline policies
 - [ ] Day-by-day replay over the timelines

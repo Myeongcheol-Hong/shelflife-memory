@@ -2,6 +2,30 @@
 
 Handoff notes between working sessions. Newest entry first. Each entry says where the work stands, what waits on the owner, and what the next session should do first.
 
+## 2026-10-13: owner review of #1-#3, M1d follow-ups
+
+### State at the end of the session
+
+- The owner reviewed #1-#3 and merges them bottom-up with merge commits.
+- Everything from that review is on `claude/tender-mayer-wts8cd-m1d`, built on the M1c head. It becomes the PR "M1d: follow-ups" against `main` once the merges land: rebase it onto `main` first, then open it. It is not part of #3.
+- M1d contents:
+  - Korean search (D8): `claims_fts` uses the `trigram` tokenizer; query words shorter than 3 characters use LIKE; ranking is by matched words, then bm25. Schema changed in place at version 1.
+  - WAL and a 5-second busy timeout, since Claude Desktop and Claude Code each run a server process on the same file.
+  - Tool wording: `text` is the user's sentence as given (D2), an offer shows the exact sentence and the yes approves it (D3), and `recall` asks for names in their original spelling (D8).
+  - Docs: the owner's answers to the proposals in #1-#3 and to questions 1-4 below, D5-D7 revisit lines confirmed, D8 recorded, the stale "open decisions" pointer in CLAUDE.md fixed.
+
+### Owner answers recorded (2026-10-13)
+
+- #1 world facts default to `fast`; #2 `due` leaves out `check_method = none` for now, the extra validation rules, and the M1 meaning of "unverifiable"; #3 refusing unknown arguments and `{"claims": [...]}`: all agreed.
+- `porter` stemming: no (Korean matters more, D8).
+- Question 1: `text` is the user's sentence as given, in whatever language; never rewritten or translated. Question 2: the offer shows the exact sentence. Question 3: option (i), volatility is set only at write time through `remember`, no new tool (recorded under D4). Question 4: a write-eval item is one given sentence plus the surrounding turn and source URL; the trap list is in design 6.0-2.
+- M2 adds a "needs a check method" section to `due`. M5's release timelines are collected by a script the owner runs on the Mac (roadmap M5).
+
+### Next session: start here
+
+1. If #1-#3 are merged and the M1d PR is not open yet: rebase `claude/tender-mayer-wts8cd-m1d` onto `main`, run the checks, and open "M1d: follow-ups" against `main`.
+2. Show the owner a short plan for M2 and wait for approval. M2 items are in `docs/roadmap.md`; keep at most 3 unmerged PRs open.
+
 ## 2026-10-13: owner decisions D1-D4
 
 ### State at the end of the session

@@ -41,10 +41,13 @@ OPTIONAL_FIELDS = (
 )
 
 SCHEMA_VERSION = 1
+BUSY_TIMEOUT_SECONDS = 5
 
 # Design 5.1, plus the *_source columns and the triggers that keep the
 # external-content FTS index in sync with the claims table. IF NOT EXISTS lets two
-# processes that open a new file at the same moment both succeed.
+# processes that open a new file at the same moment both succeed. The trigram tokenizer
+# matches substrings, so a Korean particle fused onto a word ("Chatbox로") does not hide
+# the word (D8).
 SCHEMA = """
 BEGIN;
 CREATE TABLE IF NOT EXISTS claims (
@@ -71,7 +74,8 @@ CREATE TABLE IF NOT EXISTS checks (
   method TEXT NOT NULL, result TEXT NOT NULL,   -- same | changed | cannot_tell | error
   old_value TEXT, new_value TEXT, evidence TEXT, cost_usd REAL
 );
-CREATE VIRTUAL TABLE IF NOT EXISTS claims_fts USING fts5(text, subject, content='claims');
+CREATE VIRTUAL TABLE IF NOT EXISTS claims_fts
+  USING fts5(text, subject, content='claims', tokenize='trigram');
 CREATE TRIGGER IF NOT EXISTS claims_ai AFTER INSERT ON claims BEGIN
   INSERT INTO claims_fts(rowid, text, subject) VALUES (new.rowid, new.text, new.subject);
 END;
@@ -132,11 +136,17 @@ class Store:
     def __init__(self, path: str | Path, now: Clock = system_clock) -> None:
         if str(path) != ":memory:":
             Path(path).parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(str(path), check_same_thread=False)
+        # Claude Desktop and Claude Code each run their own server process on this file.
+        # WAL lets readers and a writer work at the same time, and a writer waits for
+        # another writer's lock (busy timeout) instead of failing at once.
+        self._conn = sqlite3.connect(
+            str(path), check_same_thread=False, timeout=BUSY_TIMEOUT_SECONDS
+        )
         self._conn.row_factory = sqlite3.Row
         self._lock = threading.Lock()
         self._clock = now
         try:
+            self._conn.execute("PRAGMA journal_mode = WAL")
             self._migrate()
         except BaseException:
             self._conn.close()
@@ -311,23 +321,56 @@ class Store:
             return None if row is None else self._to_claim(row)
 
     def recall(self, query: str, limit: int = 10) -> list[Claim]:
-        """Full-text search over text and subject, best match first. Skips retired claims.
+        """Substring search over text and subject, best match first (D8). Skips retired claims.
 
-        Each word of the query is quoted and the words are joined with OR, so FTS5 syntax
-        in the query is never interpreted and a partial match still ranks.
+        Each query word is matched on its own: words of 3 or more characters through the
+        trigram index, shorter ones (common in Korean, such as "가격") with LIKE, because a
+        trigram cannot match them. Claims that match more query words come first, then
+        better bm25 scores, so a short common word cannot push a better match out of the
+        top results. Words are always quoted, so FTS5 syntax in a query is never
+        interpreted.
         """
-        words = re.findall(r"\w+", query)
+        words = list(dict.fromkeys(w.lower() for w in re.findall(r"\w+", query)))
         if not words:
             return []
-        match = " OR ".join(f'"{w}"' for w in words)
+        hit_terms, params = [], []
+        for w in words:
+            if len(w) >= 3:
+                hit_terms.append(
+                    "c.rowid IN (SELECT rowid FROM claims_fts WHERE claims_fts MATCH ?)"
+                )
+                params.append(f'"{w}"')
+            else:
+                hit_terms.append(
+                    "c.text LIKE ? ESCAPE '\\' OR coalesce(c.subject, '') LIKE ? ESCAPE '\\'"
+                )
+                pattern = "%" + w.replace("_", "\\_") + "%"  # \w+ holds no % or \
+                params += [pattern, pattern]
+        # Each term is 0 or 1; the parentheses matter because "+" binds tighter than "IN".
+        hits = " + ".join(f"({t})" for t in hit_terms)
+
+        join, score = "", "0"
+        long_words = [w for w in words if len(w) >= 3]
+        if long_words:
+            join = """LEFT JOIN (
+                    SELECT rowid, bm25(claims_fts) AS score FROM claims_fts WHERE claims_fts MATCH ?
+                  ) s ON s.rowid = c.rowid"""
+            score = "coalesce(s.score, 0)"  # bm25 is negative; lower is better
+            params.append(" OR ".join(f'"{w}"' for w in long_words))
+
         with self._lock:
             rows = self._conn.execute(
-                """
-                SELECT c.* FROM claims_fts JOIN claims c ON c.rowid = claims_fts.rowid
-                WHERE claims_fts MATCH ? AND c.status != 'retired'
-                ORDER BY bm25(claims_fts) LIMIT ?
+                f"""
+                SELECT * FROM (
+                  SELECT c.*, {hits} AS hits, {score} AS score
+                  FROM claims c {join}
+                  WHERE c.status != 'retired'
+                )
+                WHERE hits > 0
+                ORDER BY hits DESC, score, id
+                LIMIT ?
                 """,
-                (match, limit),
+                (*params, limit),
             ).fetchall()
             return [self._to_claim(r) for r in rows]
 

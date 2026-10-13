@@ -45,8 +45,15 @@ async def test_lists_the_m1_tools(client):
     for text in (tools["remember"].description, client.instructions):
         text = " ".join(text.split())  # line wrapping is not part of the wording
         assert "only when the user asks" in text
-        assert '"Want me to remember this?"' in text
+        assert '("Want me to remember this?") with the exact sentence you would store' in text
         assert "never call remember until the user confirms" in text
+        assert "the user's yes approves that sentence" in text
+    # D2: the user's sentence is stored as given.
+    remember = " ".join(tools["remember"].description.split())
+    assert "Do not rewrite or translate it" in remember
+    # D8: names are matched by substring, so they must be searched in their own spelling.
+    recall = " ".join(tools["recall"].description.split())
+    assert "original spelling (Hindsight, not 힌드사이트)" in recall
 
 
 async def test_remember_passes_every_optional_field_through(client):
