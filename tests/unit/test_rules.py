@@ -160,6 +160,10 @@ def test_infer_check(check_target, source_url, attribute, value, expected):
         (None, RELEASE, "버전", "v0.30.2"),
         (None, RELEASE, "릴리스", "v0.30.2"),
         (None, PYPI, "latest", "2.3.0"),
+        (None, PYPI, "최신", "2.3.0"),
+        # The whole attribute must name it, not a part of it.
+        (None, PYPI, "latest_release_requires_python", "3.10"),
+        (None, PYPI, "최신 버전 출시일", "1.0"),
         (None, "https://github.com/ac12644/MemGuard", "published_eval", "none"),
         (None, PYPI, "python_version", "3.10"),
         (None, PYPI, "release_date", "2026-03-01"),
@@ -170,7 +174,7 @@ def test_infer_check(check_target, source_url, attribute, value, expected):
         (None, PYPI, "latest_version", "2025"),  # a bare year
         (None, PYPI, "latest_version", "2024-06-20"),  # a date
         (None, PYPI, "latest_version", "2024-06"),
-        (None, PYPI, "latest_version", "2024/06/20"),
+        (None, PYPI, "latest_version", "2024/06/20"),  # does not parse as a version at all
         # Not a PyPI project or GitHub repository page.
         (None, "https://github.com/orgs/anthropics/repositories", "latest_release", "v1.0"),
         (None, "https://github.com/marketplace/actions/checkout", "latest_version", "v4.2.2"),

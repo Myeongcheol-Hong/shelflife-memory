@@ -51,10 +51,10 @@ VERSION_ATTRIBUTE = re.compile(
     r"(?:latest|newest|current)\s+(?:stable\s+)?(?:version|release)s?"
     r"|최신\s*(?:버전|릴리스)"
 )
-# A bare year or a date (2025, 2024-06, 2024-06-20, 2024/06/20) is not a version string,
-# although it parses as one. Dotted calendar versions (certifi's 2024.08.30) and compact
-# dates (20240620) still count (owner, 2026-10-13).
-YEAR_OR_DATE = re.compile(r"\d{4}(?:([-/])\d{1,2}(?:\1\d{1,2})?)?")
+# A bare year or a date (2025, 2024-06, 2024-06-20) is not a version string, although it
+# parses as one (2024/06/20 does not parse). Dotted calendar versions (certifi's
+# 2024.08.30) and compact dates (20240620) still count (owner, 2026-10-13).
+YEAR_OR_DATE = re.compile(r"\d{4}(?:-\d{1,2}(?:-\d{1,2})?)?")
 PYPI_URL = re.compile(r"https?://pypi\.org/project/([A-Za-z0-9][A-Za-z0-9._-]*)/?.*", re.I)
 GITHUB_URL = re.compile(
     r"https?://(?:www\.)?github\.com/([A-Za-z0-9-]+)/([A-Za-z0-9._-]+?)(?:\.git)?(?:[/?#].*)?",
