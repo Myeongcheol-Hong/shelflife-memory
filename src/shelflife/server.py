@@ -11,7 +11,7 @@ from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import CallToolResult, TextContent
 
-from shelflife.models import CheckMethod, Claim, Kind, Volatility
+from shelflife.models import CheckMethod, CheckResult, Claim, Kind, Volatility
 from shelflife.store import Store
 from shelflife.verifiers import Fetch, http_get, verifier_for
 
@@ -134,9 +134,9 @@ def build_server(store: Store, fetch: Fetch = http_get) -> MCPServer:
         particles off ("Chatbox 가격", not "Chatbox의 가격은"). Search for names in their
         original spelling (Hindsight, not 힌드사이트). Korean and English both work.
 
-        status is fresh, unverifiable (nothing can check the claim) or changed (the last
-        check found a different value at the source; the claim keeps the value it was
-        stored with, so tell the user and call verify to see the new value). Claims are
+        status is fresh, unverifiable (nothing can check the claim) or changed (a check
+        found a different value at the source; the claim keeps the value it was stored
+        with, so tell the user; due shows the value found). Claims are
         checked only when verify is called. A claim whose next_check_at is today or
         earlier is due: say how old it is (observed_at, last_checked_at).
         """
@@ -149,10 +149,11 @@ def build_server(store: Store, fetch: Fetch = http_get) -> MCPServer:
         - due: claims whose next check date is today or earlier, or within `days` days.
           Each has last_check, the result of its latest check (null if never checked),
           so a source that keeps failing is visible.
-        - changed: claims whose last check found a different value at the source
-          (last_check.new_value). The claim keeps the value it was stored with; to adopt
-          the new value, the user asks you to remember the new sentence and forget this
-          claim. A changed claim is also under due once its next check is due.
+        - changed: claims a check found changed. Each has change, the check that found
+          the different value (change.new_value), even if a later check failed. The claim
+          keeps the value it was stored with; to adopt the new value, the user asks you
+          to remember the new sentence and forget this claim. A changed claim is also
+          under due once its next check is due.
         - needs_check_method: world facts that nothing can check, because they have no
           check_method. They are never due.
 
@@ -165,13 +166,13 @@ def build_server(store: Store, fetch: Fetch = http_get) -> MCPServer:
         except ValueError as e:
             raise ToolError(str(e)) from e
 
-        def with_last_check(claim: Claim) -> dict[str, Any]:
-            check = store.last_check(claim.id)
-            return claim.to_dict() | {"last_check": check.to_dict() if check else None}
+        def with_check(claim: Claim, key: str, result: CheckResult | None) -> dict[str, Any]:
+            check = store.last_check(claim.id, result)
+            return claim.to_dict() | {key: check.to_dict() if check else None}
 
         return {
-            "due": [with_last_check(c) for c in due_claims],
-            "changed": [with_last_check(c) for c in store.changed()],
+            "due": [with_check(c, "last_check", None) for c in due_claims],
+            "changed": [with_check(c, "change", CheckResult.CHANGED) for c in store.changed()],
             "needs_check_method": [c.to_dict() for c in store.needs_check_method()],
         }
 

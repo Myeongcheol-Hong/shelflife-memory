@@ -552,7 +552,7 @@ class Store:
             return [self._to_claim(r) for r in rows]
 
     def changed(self) -> list[Claim]:
-        """Claims whose last check found a different value at the source, newest first."""
+        """Claims a check found changed (status changed), most recently checked first."""
         with self._lock:
             rows = self._conn.execute(
                 "SELECT * FROM claims WHERE status = 'changed' ORDER BY last_checked_at DESC, id"
@@ -571,11 +571,14 @@ class Store:
             ).fetchall()
             return [self._to_claim(r) for r in rows]
 
-    def last_check(self, claim_id: str) -> Check | None:
-        """The claim's most recent check, if any."""
+    def last_check(self, claim_id: str, result: CheckResult | None = None) -> Check | None:
+        """The claim's most recent check, or its most recent one with `result`; None if
+        there is none."""
         with self._lock:
             row = self._conn.execute(
-                "SELECT * FROM checks WHERE claim_id = ? ORDER BY rowid DESC LIMIT 1", (claim_id,)
+                """SELECT * FROM checks WHERE claim_id = ? AND result = coalesce(?, result)
+                   ORDER BY rowid DESC LIMIT 1""",
+                (claim_id, result),
             ).fetchone()
             return None if row is None else Check.from_row(row)
 

@@ -145,11 +145,14 @@ def test_checks_are_refused_for_claims_that_cannot_be_checked(store, claim):
     assert store._conn.execute("SELECT count(*) FROM checks").fetchone()[0] == 0
 
 
-def test_last_check_is_the_newest(store, claim):
+def test_last_check_is_the_newest_or_the_newest_with_a_result(store, claim):
     assert store.last_check(claim.id) is None
     store.add_check(claim.id, CheckResult.CHANGED, "2.4.0", "2.4.0")
+    _, change = store.add_check(claim.id, CheckResult.CHANGED, "2.5.0", "2.5.0")
     _, newest = store.add_check(claim.id, CheckResult.ERROR, evidence="timeout")
     assert store.last_check(claim.id) == newest
+    assert store.last_check(claim.id, CheckResult.CHANGED) == change
+    assert store.last_check(claim.id, CheckResult.SAME) is None
 
 
 # --- forget ---------------------------------------------------------------------------

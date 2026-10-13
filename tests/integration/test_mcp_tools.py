@@ -246,10 +246,28 @@ async def test_due_returns_three_lists(client, routes):
         (never_checked["id"], None),
         (changed["id"], verified["check"]),  # next check 10-19, within 7 days
     ]
-    assert [(c["id"], c["last_check"]) for c in listed["changed"]] == [
+    assert [(c["id"], c["change"]) for c in listed["changed"]] == [
         (changed["id"], verified["check"])
     ]
     assert [c["id"] for c in listed["needs_check_method"]] == [unverifiable["id"]]
+
+
+async def test_a_changed_claim_keeps_its_change_after_a_failed_check(client, routes, clock):
+    routes[GITHUB_GRAPHITI] = "github/getzep__graphiti.json"
+    claim = await remember_version(
+        client, check_method="github_release", check_target="getzep/graphiti", value="v0.30.1"
+    )
+    change = (await call(client, "verify", claim_id=claim["id"]))["check"]
+    clock.now += timedelta(days=7)
+    routes[GITHUB_GRAPHITI] = FetchError("HTTP 503")
+    failed = (await call(client, "verify", claim_id=claim["id"]))["check"]
+
+    listed = await call(client, "due")
+    [item] = listed["changed"]
+    assert (item["status"], item["change"]["new_value"]) == ("changed", "v0.30.2")
+    assert item["change"] == change
+    [item] = listed["due"]
+    assert item["last_check"] == failed  # the failure shows under due
 
 
 async def test_forget_retires_a_claim(client):
