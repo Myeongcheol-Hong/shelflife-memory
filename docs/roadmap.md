@@ -25,21 +25,24 @@ Items marked **(owner)** are done by the maintainer by hand: ground-truth labels
 - [x] Follow-ups from the owner's review (M2d): the check-method rule reads only the attribute; `pypi` and `github_release` claims need a value; `BEGIN IMMEDIATE` in `add_check` and `forget`; "due" is derived, not a stored status
 
 ## M3: web_page verifier and write checks
-- [ ] Fetch, extract main text, select the relevant section
-- [ ] Judgment per D4 (b): `record_check` with verbatim-quote validation in code, and a versioned judgment prompt template that `recall` returns and the eval harness reuses
+- [x] Fetch pages safely: http(s) and public addresses only, checked on every redirect, with size and time caps; `remember` rejects non-http(s) URLs (M3a, D10)
+- [ ] Extract the visible page text
+- [ ] Select the relevant section
+- [ ] Judgment per D4 (b): `record_check` with verbatim-quote validation in code, and a versioned judgment prompt template that `verify` returns for web_page claims and the eval harness reuses (D10)
 - [ ] `checks` table populated for every check
 - [ ] Four automatic write checks (design 6.0-1)
 - [x] **(owner)** D4 recorded (decided 2026-10-13)
 
 ## M4: Decisions, scheduler, digest
 - [ ] `depends_on` links; a changed claim flags dependent decisions for review
+- [ ] `recall(verify=auto/never/always)` (D9); for a due web_page claim, `auto` returns `verify`'s `judge` payload (D10)
 - [ ] Daily due run (cron/launchd), no LLM
 - [ ] Weekly digest
 - [ ] `supersede`: one call that remembers the new claim and retires the old one (D9). Decisions linked to the old claim stay linked to it and stay flagged for the owner's review
 
 ## M5: Eval data and tooling
 - [ ] PyPI/GitHub release timelines (about 50 packages, 20 repos), dev/test split. Collected by a script the owner runs locally, because the cloud session cannot call the GitHub API for repositories not attached to it; the data is committed
-- [ ] Wayback pair collection tool and labeling file format
+- [ ] Wayback pair collection tool and labeling file format. Collected by a script the owner runs on the Mac, like the release timelines, because cloud sessions cannot reach `web.archive.org` reliably; the data is committed
 - [ ] Write-eval item file format (one given sentence, the surrounding turn, the source URL; gold labels are the fields; design 6.0-2) and labeling tool
 - [ ] `eval/data/README.md` data card
 - [ ] Smoke corpus in `eval/data/smoke/`, wired into CI

@@ -23,7 +23,11 @@ Fetch = Callable[[str, Mapping[str, str]], bytes]
 
 
 class FetchError(Exception):
-    """The source could not be fetched (HTTP error, network error, timeout)."""
+    """The source could not be fetched (HTTP error, network error, timeout, refused URL)."""
+
+    def __init__(self, message: str, status: int | None = None) -> None:
+        super().__init__(message)
+        self.status = status  # the HTTP status, for an HTTP error
 
 
 @dataclass(frozen=True)
@@ -44,7 +48,7 @@ def http_get(url: str, headers: Mapping[str, str]) -> bytes:
         with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:
             return response.read()
     except urllib.error.HTTPError as e:
-        raise FetchError(f"HTTP {e.code} from {url}") from None
+        raise FetchError(f"HTTP {e.code} from {url}", status=e.code) from None
     except (OSError, http.client.HTTPException) as e:  # URLError and timeouts are OSErrors
         raise FetchError(f"cannot reach {url}: {e}") from None
 

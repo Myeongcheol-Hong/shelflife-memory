@@ -123,6 +123,8 @@ A `decision` claim points to its supporting claims through `depends_on`. If any 
 
 Every check is recorded in the `checks` table: when, which method, result (same / changed / cannot_tell / error), old value, new value, evidence quote and cost. This is the audit trail for "why did it answer this way", which matters in regulated domains.
 
+A `web_page` check also records which judgment template was used and what it judged: `prompt_version`, `page_sha256` and `section_sha256` (schema v2, D10). The section hash is the baseline M4's daily run compares with to mark a claim "possibly changed" (D4). `cost_usd` stays empty under the subscription: a judgment made in the conversation (D4 (b)) has no per-call price the server could know.
+
 ## 5. Architecture
 
 ```
@@ -165,7 +167,8 @@ CREATE TABLE depends_on (decision_id TEXT, claim_id TEXT, PRIMARY KEY (decision_
 CREATE TABLE checks (
   id TEXT PRIMARY KEY, claim_id TEXT NOT NULL, checked_at TEXT NOT NULL,
   method TEXT NOT NULL, result TEXT NOT NULL,   -- same | changed | cannot_tell | error
-  old_value TEXT, new_value TEXT, evidence TEXT, cost_usd REAL
+  old_value TEXT, new_value TEXT, evidence TEXT, cost_usd REAL,
+  prompt_version TEXT, page_sha256 TEXT, section_sha256 TEXT   -- web_page (schema v2, D10)
 );
 CREATE VIRTUAL TABLE claims_fts USING fts5(text, subject, content='claims', tokenize='trigram');
 ```
@@ -177,22 +180,28 @@ Search works for Korean (D8). The trigram index matches substrings, so a particl
 | Tool | Input | What it does |
 |---|---|---|
 | `remember` | text, kind; optional: subject, attribute, value, volatility, check_method, check_target, source_url, source_quote, observed_at, depends_on | Stores a claim. Unknown enum values are rejected, and system-managed fields (id, recorded_at, last_checked_at, next_check_at, status, volatility_source, check_method_source) are never accepted. `text` is the user's sentence as given, in whatever language (D2). The model leaves volatility and check_method empty unless it is confident; for a world fact, empty ones are filled by write-time rules where one applies (`src/shelflife/rules.py`), else by a default, and the `*_source` columns record who set them. The check-method rule fires only when the attribute names a latest-version or latest-release fact, such as `latest_version` or `latest_release` (D5). A `pypi` or `github_release` claim needs a `value`. Claude sets volatility only here, at write time (D4). The user can correct them |
-| `recall` | query, verify = auto / never / always | Searches and returns claims (Korean and English; names in their original spelling, D8). With `auto`, due claims are checked before they are served, and results are annotated with "checked today" or "changed: old -> new" |
-| `due` | days? | Returns `{"due", "changed", "needs_check_method"}` (D9): claims whose next check is due (within `days`), each with its last check; claims a check found changed, each with that check; world facts with no check method. Decisions to revisit join in M4 |
-| `verify` | claim_id | Checks a claim now with its rule-based verifier (pypi, github_release), records the check and returns `{"claim", "check"}`. The claim keeps its value; `changed` sets its status, and `next_check_at` follows D9. web_page claims are judged in the conversation (`record_check`, D4) |
+| `recall` | query, verify = auto / never / always | Searches and returns claims (Korean and English; names in their original spelling, D8). With `auto`, due claims are checked before they are served, and results are annotated with "checked today" or "changed: old -> new". `recall`'s `verify` parameter arrives in M4 (D9); for a due `web_page` claim, `auto` returns `verify`'s `judge` payload (D10) |
+| `due` | days? | Returns `{"due", "changed", "needs_check_method"}` (D9): claims whose next check is due (within `days`), each with its last check; claims a check found changed, each with that check; world facts with no check method, except those whose `none` the caller set on purpose (D10). Decisions to revisit join in M4 |
+| `verify` | claim_id | Checks a claim now. pypi and github_release: the rule-based verifier compares the value, the check is recorded, and it returns `{"claim", "check"}`. The claim keeps its value; `changed` sets its status, and `next_check_at` follows D9. web_page: it fetches the page, selects the relevant section and returns `{"claim", "check": null, "judge": {"prompt_version", "prompt", "url", "section"}}`; Claude judges in the conversation and stores the result with `record_check` (D4, D10). A failed fetch is recorded as `error` |
 | `forget` | claim_id | Marks the claim `retired` (history kept, nothing deleted) and returns `{"claim"}`. Forgetting a retired claim again is not an error |
-| `record_check` | claim_id, result, new_value?, quote | Stores a check result judged by Claude in the conversation (D4 (b)). Accepted only after code confirms the quote appears on the page |
+| `record_check` | claim_id, result, new_value?, quote?, reason? | Stores a web_page judgment Claude made in the conversation (D4 (b)) from the section `verify` returned. `result` is same, changed or cannot_tell. Before anything is stored, code checks the quote against the page text `verify` fetched, which the server holds for about 30 minutes (otherwise: call `verify` again). `cannot_tell` needs no quote and may give a short reason. Rules in 5.3 and D10 |
 
 Tool descriptions say when to use each tool and when not to. Claude calls `remember` only when the user asks; it may offer, but waits for the user's confirmation (D3).
 
 ### 5.3 web_page verifier
 
-1. Fetch the page and extract the main text
+1. Fetch the page and extract its visible text. Only http and https URLs whose host is a public address are fetched, checked again on every redirect. Behind a proxy, which resolves host names itself, only addresses written as numbers and localhost names are refused, and the proxy decides the rest (Claude's choice, for the owner to confirm; cloud sessions cannot resolve names locally). A page is at most 10 MB, and the fetch stops once it passes about 30 s; each network step also times out after 15 s. The whole body is kept; hidden and struck-through text is dropped, and table cells are joined with " | "
 2. Select only the part relevant to the claim (for long pages)
-3. Get a structured judgment: same / changed (with new value) / cannot_tell, plus a **verbatim quote** as evidence
+3. Get a structured judgment: same / changed (with new value) / cannot_tell, plus a **verbatim quote** as evidence for same and changed
 4. Check in code that the quote really appears on the page (blocks invented evidence)
 
-Under D4, Claude in the conversation makes the judgment in step 3 and stores it with `record_check`. The judgment instructions are a versioned prompt template that `recall` returns and the eval harness reuses, so 6.2 measures what runs in daily use. Step 4 runs in code for every result.
+Under D4 and D10, `verify` does steps 1 and 2 and returns the section with the versioned judgment template. Claude makes the judgment in step 3 in the conversation and stores it with `record_check`. The eval harness reuses the same template, so 6.2 measures what runs in daily use. Step 4 runs in code, before anything is stored, for `same` and `changed`:
+
+- Quotes are matched against the extracted text of step 1, not the raw HTML. The quote and the page text go through the same `normalize()`: invisible format characters removed, Unicode NFC, each run of whitespace as one space. That keeps every word as written; removing format characters such as zero-width joiners can only change how some emoji and scripts render.
+- The quote is at least about 20 characters and 3 words, appears exactly once on the page, and lies inside the section `verify` returned.
+- `same` needs the claim's value inside the quote. `changed` needs `new_value` inside the quote and different from the claim's value. This value check also folds dashes and quote marks and matches money amounts with their currency ($300 = 300 USD = USD 300 = 300달러).
+
+`cannot_tell` needs no quote. A failed fetch is recorded by the server as `error`.
 
 ## 6. Eval: write quality, when to check, whether the check is right
 
@@ -210,6 +219,7 @@ The user decides what to remember and gives the claim sentence (D2, D3). When Cl
    - The check_target exists (PyPI package, GitHub repo, URL responds)
    - **Verify right after write returns `same`**: if a just-written claim verifies as changed or cannot_tell, either the claim or the verifier is wrong
    - Metric: write integrity rate (share of claims passing all four)
+   - How they run (D10): pure functions over `remember`-shaped records, so the M8 write eval runs them without a database, plus a read-only CLI that writes one JSON line per claim and check; never inside `remember`. Check 3 fails only on HTTP 404 or 410; a 403, 429, 5xx or network error is reported as blocked. For `web_page`, check 4 needs a judgment and is left out of the rate until M5. The report gives pass, fail and skip counts per check, and the rate is over claims where all four checks applied
 2. **Labeled set (small, hand-made)**
    - 40 items from my own research conversations (certifications, multi-LLM apps, memory frameworks; no employer data). An item is one sentence I gave, plus the surrounding turn and the source URL if any (D2). The gold labels are the fields Claude should fill: kind, subject/attribute/value, volatility, check_method/check_target, observed_at and source
    - Metrics: per-field accuracy for the given sentences, volatility confusion matrix. Recall (missed claims) and precision (invented or unneeded claims) measure extraction, which is a stretch goal under D2
@@ -299,7 +309,7 @@ These were open when the design was written. The owner decided them on 2026-10-1
 - **D3: When `remember` is called.** Claude calls it on its own during conversations, or only when asked. If on its own, the 6.0 write eval is mandatory. **Decided:** only when asked; Claude may offer, but waits for confirmation.
 - **D4: Where LLM judgments happen** (web_page comparison, volatility classification).
   - (a) The server calls the Claude API directly. web_page checks can run in the background. Needs an API key and a small cost.
-  - (b) Claude in the conversation judges. `recall` returns "due + relevant part of the current page", Claude compares and stores the result with `record_check`. Works with a Claude subscription only.
+  - (b) Claude in the conversation judges. `recall` returns "due + relevant part of the current page", Claude compares and stores the result with `record_check`. (M3 moved the hand-off to `verify`, D10.) Works with a Claude subscription only.
   - In both cases the background job (cron) runs without an LLM: pypi/github are decided by rules; web_page only detects whether the relevant section changed (hash comparison) and marks it "possibly changed", and Claude judges at the next conversation or in the weekly digest.
   - Suggested: (b) plus the rule-based background job for v1. Model comparisons in 6.0/6.2 run small-scale with `claude -p --model`.
   - **Decided:** (b) plus the rule-based background job.

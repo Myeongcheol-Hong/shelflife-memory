@@ -100,9 +100,9 @@ def build_server(store: Store, fetch: Fetch = http_get) -> MCPServer:
           as unverifiable and is not scheduled for checks yet.
         - check_target: the PyPI package, GitHub owner/repo or URL to check. Required
           when check_method is set; pypi and github_release also need the version as
-          value.
-        - source_url, source_quote: where the fact came from, and one line copied
-          verbatim from that source.
+          value, and a web_page check_target is a full http(s) URL.
+        - source_url, source_quote: where the fact came from (a full http(s) URL), and
+          one line copied verbatim from that source.
         - observed_at: the date (YYYY-MM-DD) the fact was confirmed true. Defaults to today.
         - depends_on: decisions only. Ids of the claims the decision rests on; remember
           those first.
