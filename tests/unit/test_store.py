@@ -4,7 +4,7 @@ from datetime import UTC, date, datetime, timedelta, timezone
 
 import pytest
 
-from shelflife.models import CheckMethod, FieldSource, Status, Volatility
+from shelflife.models import CheckMethod, CheckResult, FieldSource, Status, Volatility
 from shelflife.store import Store, default_db_path, query_words
 
 # --- remember -------------------------------------------------------------------------
@@ -280,6 +280,32 @@ def test_dates_follow_the_clocks_time_zone(store, clock):
     [(raw,)] = store._conn.execute("SELECT recorded_at FROM claims WHERE id = ?", (note.id,))
     assert raw == "2026-10-12T23:00:00+00:00"
     assert [c.id for c in store.due()] == [fact.id]  # next_check_at 10-13 is local today
+
+
+def test_changed_lists_claims_whose_last_check_found_a_new_value(store, clock):
+    pypi = {"check_method": "pypi", "check_target": "mcp", "value": "1.0"}
+    first = store.remember("First version", "world_fact", **pypi)
+    second = store.remember("Second version", "world_fact", **pypi)
+    store.remember("Third version", "world_fact", **pypi)  # never checked
+    store.add_check(first.id, CheckResult.CHANGED, "2.0", "2.0")
+    clock.now += timedelta(hours=1)
+    store.add_check(second.id, CheckResult.CHANGED, "2.0", "2.0")
+    assert [c.id for c in store.changed()] == [second.id, first.id]  # newest check first
+
+    store.add_check(first.id, CheckResult.SAME, "1.0", "1.0")  # the source went back
+    assert [c.id for c in store.changed()] == [second.id]
+
+
+def test_needs_check_method_lists_world_facts_nothing_can_check(store, clock):
+    first = store.remember("Seoul has 25 districts", "world_fact")
+    clock.now += timedelta(minutes=1)
+    second = store.remember("A fee with no check method", "world_fact")
+    store.remember("A version", "world_fact", check_method="pypi", check_target="x")
+    store.remember("I like short answers", "preference")
+    store.remember("A note", "note")
+    retired = store.remember("A forgotten fact", "world_fact")
+    store.forget(retired.id)
+    assert [c.id for c in store.needs_check_method()] == [first.id, second.id]
 
 
 def test_due_rejects_bad_days(store):

@@ -54,7 +54,7 @@ async def call_error(client, tool, **arguments) -> str:
 
 async def test_lists_the_tools(client):
     tools = {t.name: t for t in (await client.list_tools()).tools}
-    assert set(tools) == {"remember", "recall", "due", "verify"}
+    assert set(tools) == {"remember", "recall", "due", "verify", "forget"}
     schema = tools["remember"].input_schema
     assert set(schema["required"]) == {"text", "kind"}
     assert set(schema["properties"]) == {"text", "kind", *OPTIONAL_FIELDS}
@@ -75,10 +75,13 @@ async def test_lists_the_tools(client):
     assert "2-5 key words (names and nouns), not a full question" in recall
     assert '("Chatbox 가격", not "Chatbox의 가격은")' in recall
     # D9 with D3: a check never changes the stored value; adopting a new value is the
-    # user's call.
+    # user's call, through remember and forget.
     verify = " ".join(tools["verify"].description.split())
     assert "The claim keeps the value it was stored with" in verify
-    assert "the user asks you to remember the new sentence" in verify
+    for text in (verify, " ".join(tools["due"].description.split())):
+        assert "the user asks you to remember the new sentence and forget this claim" in text
+    forget = " ".join(tools["forget"].description.split())
+    assert "Use only when the user asks to forget a claim" in forget
 
 
 async def test_remember_passes_every_optional_field_through(client):
@@ -121,10 +124,10 @@ async def test_remember_then_recall_and_due(client, clock):
     found = await call(client, "recall", query="mcp version")
     assert [c["id"] for c in found["claims"]] == [stored["id"]]
 
-    assert (await call(client, "due"))["claims"] == []
-    assert [c["id"] for c in (await call(client, "due", days=7))["claims"]] == [stored["id"]]
+    assert (await call(client, "due"))["due"] == []
+    assert [c["id"] for c in (await call(client, "due", days=7))["due"]] == [stored["id"]]
     clock.now += timedelta(days=7)
-    assert [c["id"] for c in (await call(client, "due"))["claims"]] == [stored["id"]]
+    assert [c["id"] for c in (await call(client, "due"))["due"]] == [stored["id"]]
 
 
 async def test_decision_with_depends_on(client):
@@ -184,7 +187,7 @@ async def test_verify_records_a_same_check_and_reschedules(client, routes):
     assert verified["claim"]["status"] == "fresh"
     assert verified["claim"]["last_checked_at"] == "2026-10-12T09:30:00+00:00"
     assert verified["claim"]["next_check_at"] == "2026-10-19"
-    assert (await call(client, "due"))["claims"] == []
+    assert (await call(client, "due"))["due"] == []
 
 
 async def test_verify_reports_a_change_and_keeps_the_value(client, routes):
@@ -211,7 +214,8 @@ async def test_verify_error_keeps_the_claim_due(client, routes):
     assert verified["check"]["result"] == "error"
     assert verified["check"]["evidence"] == f"HTTP 503 from {PYPI_MCP}"
     assert verified["claim"]["next_check_at"] == "2026-10-08"
-    assert [c["id"] for c in (await call(client, "due"))["claims"]] == [claim["id"]]
+    [item] = (await call(client, "due"))["due"]
+    assert (item["id"], item["last_check"]) == (claim["id"], verified["check"])
 
 
 async def test_verify_refuses_claims_it_cannot_check(client):
@@ -225,3 +229,36 @@ async def test_verify_refuses_claims_it_cannot_check(client):
     no_value = await remember_version(client, check_method="pypi", check_target="mcp")
     message = await call_error(client, "verify", claim_id=no_value["id"])
     assert "has no value to compare with the source" in message
+
+
+async def test_due_returns_three_lists(client, routes):
+    routes[GITHUB_GRAPHITI] = "github/getzep__graphiti.json"
+    changed = await remember_version(
+        client, check_method="github_release", check_target="getzep/graphiti", value="v0.30.1"
+    )
+    never_checked = await remember_version(client, check_method="pypi", check_target="mcp")
+    unverifiable = await call(client, "remember", text="Seoul has 25 districts", kind="world_fact")
+    verified = await call(client, "verify", claim_id=changed["id"])
+
+    listed = await call(client, "due", days=7)
+    assert set(listed) == {"due", "changed", "needs_check_method"}
+    assert [(c["id"], c["last_check"]) for c in listed["due"]] == [
+        (never_checked["id"], None),
+        (changed["id"], verified["check"]),  # next check 10-19, within 7 days
+    ]
+    assert [(c["id"], c["last_check"]) for c in listed["changed"]] == [
+        (changed["id"], verified["check"])
+    ]
+    assert [c["id"] for c in listed["needs_check_method"]] == [unverifiable["id"]]
+
+
+async def test_forget_retires_a_claim(client):
+    claim = await call(client, "remember", text="Chatbox Pro costs $19.99", kind="world_fact")
+    forgotten = await call(client, "forget", claim_id=claim["id"])
+    assert forgotten["claim"]["id"] == claim["id"]
+    assert forgotten["claim"]["status"] == "retired"
+    assert (await call(client, "recall", query="Chatbox"))["claims"] == []
+    assert (await call(client, "due"))["needs_check_method"] == []
+    assert (await call(client, "forget", claim_id=claim["id"]))["claim"] == forgotten["claim"]
+    assert "no claim with id 'nope'" in await call_error(client, "forget", claim_id="nope")
+    assert "is retired" in await call_error(client, "verify", claim_id=claim["id"])

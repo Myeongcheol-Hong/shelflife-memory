@@ -1,4 +1,4 @@
-"""Recording checks (D9)."""
+"""Recording checks (D9) and retiring claims."""
 
 from datetime import UTC, date, datetime, timedelta, timezone
 
@@ -131,8 +131,7 @@ def test_an_inconclusive_check_leaves_a_changed_claim_changed(store, claim):
 def test_checks_are_refused_for_claims_that_cannot_be_checked(store, claim):
     unverifiable = store.remember("Seoul has 25 districts", "world_fact")
     note = store.remember("A note", "note")
-    with store._conn:  # forget arrives in M2c
-        store._conn.execute("UPDATE claims SET status = 'retired' WHERE id = ?", (claim.id,))
+    store.forget(claim.id)
     for claim_id, message in [
         ("nope", "no claim with id 'nope'"),
         (claim.id, "is retired"),
@@ -144,3 +143,37 @@ def test_checks_are_refused_for_claims_that_cannot_be_checked(store, claim):
         with pytest.raises(ValueError, match=message):
             store.checkable(claim_id)
     assert store._conn.execute("SELECT count(*) FROM checks").fetchone()[0] == 0
+
+
+def test_last_check_is_the_newest(store, claim):
+    assert store.last_check(claim.id) is None
+    store.add_check(claim.id, CheckResult.CHANGED, "2.4.0", "2.4.0")
+    _, newest = store.add_check(claim.id, CheckResult.ERROR, evidence="timeout")
+    assert store.last_check(claim.id) == newest
+
+
+# --- forget ---------------------------------------------------------------------------
+
+
+def test_forget_retires_the_claim_and_keeps_its_history(store, claim):
+    store.add_check(claim.id, CheckResult.CHANGED, "2.4.0", "2.4.0")
+    retired = store.forget(claim.id)
+
+    assert retired.status is Status.RETIRED
+    assert retired == store.get(claim.id)
+    assert len(checks(store, claim.id)) == 1
+    assert store.recall("mcp") == []
+    assert store.due(days=365) == []
+    assert store.changed() == []
+    assert store.forget(claim.id) == retired  # again: nothing changes
+
+
+def test_forget_keeps_a_decisions_link_to_the_claim(store, claim):
+    decision = store.remember("Pin mcp 2.3.0", "decision", depends_on=[claim.id])
+    store.forget(claim.id)
+    assert store.get(decision.id).depends_on == (claim.id,)
+
+
+def test_forget_rejects_an_unknown_id(store):
+    with pytest.raises(ValueError, match="no claim with id 'nope'"):
+        store.forget("nope")

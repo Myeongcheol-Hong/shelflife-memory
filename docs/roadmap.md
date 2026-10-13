@@ -20,8 +20,8 @@ Items marked **(owner)** are done by the maintainer by hand: ground-truth labels
 - [x] `pypi` and `github_release` verifiers (no LLM) with fixtures (PyPI recorded; GitHub written by hand and checked against the live API by the owner on 2026-10-13. `tests/fixtures/record.py` re-records both where the GitHub API is reachable)
 - [x] `due` returns claims past `next_check_at` (done early in M1: `next_check_at` = `observed_at` + the class interval from design 4.2, and only claims with a check method are listed. M2 extends it: recompute after each check and also list `changed` claims)
 - [x] `verify` tool (M2b): records each check and reschedules the claim (D9)
-- [ ] `forget` tool (design 5.2)
-- [ ] `due`: a "needs a check method" section for claims that rules could not give a check method
+- [x] `forget` tool (design 5.2, M2c)
+- [x] `due`: a "needs a check method" section for claims that rules could not give a check method (M2c: `due` returns the due, changed and needs_check_method lists, D9)
 
 ## M3: web_page verifier and write checks
 - [ ] Fetch, extract main text, select the relevant section
