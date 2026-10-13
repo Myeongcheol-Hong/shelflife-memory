@@ -94,6 +94,13 @@ def test_remember_treats_blank_strings_as_missing(store):
         ({"source_url": "aws.amazon.com/certification"}, "source_url must be a full http"),
         ({"source_url": "file:///etc/passwd"}, "source_url must be a full http"),
         ({"source_url": "https://"}, "source_url must be a full http"),
+        ({"source_url": "ftp://example.com/notes"}, "source_url must be a full http"),
+        ({"source_url": "javascript://example.com/%0Aalert(1)"}, "source_url must be a full http"),
+        ({"source_url": "http://:80/"}, "source_url must be a full http"),
+        (
+            {"check_method": "web_page", "check_target": "ftp://example.com/x"},
+            "check_target must be a full http",
+        ),
         (
             {"check_method": "web_page", "check_target": "javascript:alert(1)"},
             "check_target must be a full http",

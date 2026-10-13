@@ -19,7 +19,7 @@ from html.parser import HTMLParser
 from pathlib import Path
 
 from shelflife.verifiers import FetchError, http_get
-from shelflife.verifiers.web_page import extract, fetch_page
+from shelflife.verifiers.web_page import decode, extract, fetch_page
 
 HERE = Path(__file__).parent
 PYPI = ["mcp", "claude-agent-sdk"]
@@ -44,26 +44,32 @@ PAGES = {
     "benchmarks-metagenomics": ("https://benchmarks.bio/metagenomics", False),
 }
 # Attributes the extractor reads; every other attribute is dropped from page fixtures.
-KEPT_ATTRIBUTES = {"hidden", "aria-hidden", "style", "charset", "http-equiv", "content"}
+KEPT_ATTRIBUTES = {"hidden", "aria-hidden", "style", "open"}
+HIDING = ("display:none", "visibility:hidden", "visibility:collapse")
 
 
 class _Slim(HTMLParser):
     """Re-serializes HTML without comments, SVG, attributes the extractor ignores and,
-    unless kept, scripts and styles. Text and entity references are copied as they are."""
+    unless kept, scripts and styles. Text is copied as it reads; a <meta> charset becomes
+    UTF-8, the encoding the fixture is saved in."""
 
     def __init__(self, keep_scripts: bool) -> None:
-        super().__init__(convert_charrefs=False)
+        super().__init__(convert_charrefs=True)
         self.out: list[str] = []
         self.drop = {"svg"} | (set() if keep_scripts else {"script", "style", "noscript"})
         self.skip: str | None = None
         self.depth = 0
 
     def tag(self, tag: str, attrs: list[tuple[str, str | None]], close: str) -> str:
+        if tag == "meta":
+            names = {k: (v or "").lower() for k, v in attrs}
+            if "charset" in names or names.get("http-equiv") == "content-type":
+                return f'<meta charset="utf-8"{close}>'
         kept = "".join(
             f" {k}" if v is None else f' {k}="{html.escape(v)}"'
             for k, v in attrs
             if k in KEPT_ATTRIBUTES
-            and (k != "style" or any(s in v.replace(" ", "").lower() for s in HIDING))
+            and (k != "style" or any(h in "".join((v or "").lower().split()) for h in HIDING))
         )
         return f"<{tag}{kept}{close}>"
 
@@ -87,24 +93,13 @@ class _Slim(HTMLParser):
         else:
             self.out.append(f"</{tag}>")
 
-    def emit(self, text: str) -> None:
-        if not self.skip:
-            self.out.append(text)
-
     def handle_data(self, data):
-        self.emit(data)
-
-    def handle_entityref(self, name):
-        self.emit(f"&{name};")
-
-    def handle_charref(self, name):
-        self.emit(f"&#{name};")
+        if not self.skip:  # script and style text is raw; other text was unescaped
+            self.out.append(data if self.cdata_elem else html.escape(data, quote=False))
 
     def handle_decl(self, decl):
-        self.emit(f"<!{decl}>")
-
-
-HIDING = ("display:none", "visibility:hidden")
+        if not self.skip:
+            self.out.append(f"<!{decl}>")
 
 
 def slim(page: str, keep_scripts: bool) -> str:
@@ -114,9 +109,16 @@ def slim(page: str, keep_scripts: bool) -> str:
     return "".join(parser.out)
 
 
+def faithful(original: str, slimmed: str) -> bool:
+    """Whether the fixture, as the tests will read it (UTF-8 bytes), extracts to the same
+    text as the page."""
+    return extract(decode(slimmed.encode("utf-8"))) == extract(original)
+
+
 def record_pages() -> int:
     failed = 0
-    index = {}
+    index_path = HERE / "pages" / "index.json"
+    index = json.loads(index_path.read_text(encoding="utf-8")) if index_path.exists() else {}
     for name, (url, keep_scripts) in PAGES.items():
         try:
             page = fetch_page(url)
@@ -126,8 +128,10 @@ def record_pages() -> int:
             continue
         original = page.text()
         slimmed = slim(original, keep_scripts)
-        if extract(slimmed) != extract(original):
-            raise SystemExit(f"{name}: the slimmed page does not extract to the same text")
+        if not faithful(original, slimmed):
+            print(f"skipped {name}: the slimmed page extracts differently", file=sys.stderr)
+            failed += 1
+            continue
         path = HERE / "pages" / f"{name}.html"
         path.write_text(slimmed, encoding="utf-8")
         print(f"wrote {path.relative_to(HERE)}")
@@ -142,7 +146,7 @@ def record_pages() -> int:
             "bytes": len(page.body),
             "scripts_kept": keep_scripts,
         }
-    save(HERE / "pages" / "index.json", index)
+    save(index_path, index)  # pages that failed keep their earlier entry
     return failed
 
 
