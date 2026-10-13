@@ -3,6 +3,8 @@ from datetime import UTC, datetime
 
 import pytest
 
+from shelflife.store import Store
+
 NOW = datetime(2026, 10, 12, 9, 30, tzinfo=UTC)
 
 
@@ -28,3 +30,9 @@ class FakeClock:
 @pytest.fixture
 def clock() -> FakeClock:
     return FakeClock()
+
+
+@pytest.fixture
+def store(tmp_path, clock):
+    with Store(tmp_path / "shelflife.db", now=clock) as s:
+        yield s

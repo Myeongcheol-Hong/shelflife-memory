@@ -9,6 +9,7 @@ The main contribution is the **eval**, not the feature list. Re-check tools alre
 - Design (source of truth): `docs/design.md`
 - Milestones, in order: `docs/roadmap.md`
 - Decision log: `docs/decisions.md` (D1 to D4 and later)
+- Session handoff notes: `docs/session-log.md` (read the newest entry first)
 - Owner: MC.
 - Language: English only, everywhere (code, comments, docs, README, commit messages, PR descriptions, eval data labels).
 
