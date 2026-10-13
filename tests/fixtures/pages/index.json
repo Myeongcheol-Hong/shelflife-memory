@@ -1,0 +1,57 @@
+{
+  "skilljar-faq": {
+    "url": "https://anthropic-partners.skilljar.com/page/faq-certifications",
+    "final_url": "https://anthropic-partners.skilljar.com/page/faq-certifications",
+    "status": 200,
+    "content_type": "text/html",
+    "charset": "utf-8",
+    "recorded_on": "2026-10-13",
+    "sha256": "8175e0b086d0271abf29c3be08153c88b4bc474bd9b64242be8456d5e75f56ec",
+    "bytes": 1762358,
+    "scripts_kept": false
+  },
+  "skilljar-partner": {
+    "url": "https://anthropic-partners.skilljar.com/page/partner-certifications",
+    "final_url": "https://anthropic-partners.skilljar.com/page/partner-certifications",
+    "status": 200,
+    "content_type": "text/html",
+    "charset": "utf-8",
+    "recorded_on": "2026-10-13",
+    "sha256": "b4ec21678dd0d6fc0198b739a52a185941b52e36311e6f33748c504ff36be05c",
+    "bytes": 1685983,
+    "scripts_kept": false
+  },
+  "aws-aip-c01": {
+    "url": "https://aws.amazon.com/certification/certified-generative-ai-developer-professional/",
+    "final_url": "https://aws.amazon.com/certification/certified-generative-ai-developer-professional/",
+    "status": 200,
+    "content_type": "text/html",
+    "charset": "utf-8",
+    "recorded_on": "2026-10-13",
+    "sha256": "6c334c85098b8033363b043f99a42d77f2837cb00ae2a78cbdef632c8a215e8a",
+    "bytes": 385341,
+    "scripts_kept": true
+  },
+  "databricks-genai": {
+    "url": "https://www.databricks.com/learn/certification/genai-engineer-associate",
+    "final_url": "https://www.databricks.com/learn/certification/genai-engineer-associate",
+    "status": 200,
+    "content_type": "text/html",
+    "charset": "utf-8",
+    "recorded_on": "2026-10-13",
+    "sha256": "c382788a335fc7f8942c4cdea2746a971c3f328c2749d50d16f0ee5762c561de",
+    "bytes": 805532,
+    "scripts_kept": false
+  },
+  "benchmarks-metagenomics": {
+    "url": "https://benchmarks.bio/metagenomics",
+    "final_url": "https://benchmarks.bio/metagenomics",
+    "status": 200,
+    "content_type": "text/html",
+    "charset": "utf-8",
+    "recorded_on": "2026-10-13",
+    "sha256": "c8138447ab97506f2a8af2fe223401fa80cf6d61738d90af93d467e8b614a75c",
+    "bytes": 7812,
+    "scripts_kept": false
+  }
+}

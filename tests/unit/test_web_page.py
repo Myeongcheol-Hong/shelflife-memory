@@ -1,12 +1,25 @@
 import email.message
+import json
 import socket
 import urllib.error
 import urllib.request
+from pathlib import Path
 
 import pytest
 
 from shelflife.verifiers import FetchError, web_page
-from shelflife.verifiers.web_page import check_url, decode, fetch_page
+from shelflife.verifiers.web_page import (
+    Block,
+    check_url,
+    decode,
+    extract,
+    fetch_page,
+    normalize,
+    page_text,
+)
+
+PAGES = Path(__file__).parents[1] / "fixtures" / "pages"
+INDEX = json.loads((PAGES / "index.json").read_text(encoding="utf-8"))
 
 
 def resolver(*addresses):
@@ -252,3 +265,119 @@ def test_decode(body, charset, text):
 def test_the_header_charset_wins_over_meta():
     body = b"<meta charset='utf-8'>" + "가".encode("cp949")
     assert decode(body, "euc-kr").endswith("가")
+
+
+# --- normalize ------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("raw", "normalized"),
+    [
+        ("Exam fee:  $300\n\tUSD ", "Exam fee: $300 USD"),  # NBSP, runs, line breaks
+        ("Foun­dations​ fee", "Foundations fee"),  # soft hyphen, zero-width space
+        ("﻿‎Global⁠ Premier ", "Global Premier"),  # BOM, LRM, joiner
+        ("Café", "Café"),  # NFC
+        ("Developer – Foundations “Pro”", "Developer – Foundations “Pro”"),  # kept as is
+        ("USD 300", "USD 300"),  # case kept
+    ],
+)
+def test_normalize(raw, normalized):
+    assert normalize(raw) == normalized
+
+
+# --- extract --------------------------------------------------------------------------
+
+
+def texts(html):
+    return [block.text for block in extract(html)]
+
+
+@pytest.mark.parametrize(
+    "dropped",
+    [
+        "<script>var fee = '$300';</script>",
+        "<style>.fee::after { content: '$300' }</style>",
+        "<noscript>Enable JavaScript to see $300</noscript>",
+        "<template><p>$300</p></template>",
+        "<svg><text>$300</text></svg>",
+        "<select><option>$300</option></select>",
+        "<p hidden>$300</p>",
+        "<p aria-hidden='true'>$300</p>",
+        "<p style='DISPLAY: none'>$300</p>",
+        "<p style='color:red;visibility:hidden'>$300</p>",
+        "<del>$300</del>",
+        "<s>$300</s>",
+        "<strike>$300</strike>",
+        "<div hidden><div><p>$300</p></div><p>$300</p></div>",  # nested elements of one name
+    ],
+)
+def test_extract_drops_what_is_not_visible(dropped):
+    html = f"<html><head><title>Fee</title></head><body><p>Fee:</p>{dropped}<p>$250</p></body>"
+    assert texts(html) == ["Fee:", "$250"]
+
+
+def test_extract_keeps_what_is_visible():
+    html = """<body><header><nav><a>Home</a></nav></header>
+        <main><article><h2>Exam fee</h2><p>300&nbsp;USD &amp; tax</p></article>
+        <p hidden="until-found">Found by search</p><input hidden><img aria-hidden="true">
+        <div hidden/><p>Price: <s>$300</s> $250</p></main>
+        <footer><p>© 2026</p></footer></body>"""
+    assert extract(html) == [
+        Block("Home", "nav", ("header", "nav")),
+        Block("Exam fee", "h2", ("main", "article")),
+        Block("300 USD & tax", "p", ("main", "article")),
+        Block("Found by search", "p", ("main",)),
+        Block("Price: $250", "p", ("main",)),
+        Block("© 2026", "p", ("footer",)),
+    ]
+
+
+def test_extract_joins_table_cells_and_splits_rows():
+    html = """<table><tr><th>Rank</th><th>Agent</th><th>Score</th></tr>
+        <tr><td>1</td><td>Claude Code</td><td>60.0%</td></tr>
+        <tr><td></td><td>Pi</td><td>58.1%</td></tr></table>"""
+    assert texts(html) == ["Rank | Agent | Score", "1 | Claude Code | 60.0%", "Pi | 58.1%"]
+
+
+def test_extract_splits_blocks_at_line_breaks_and_unclosed_tags():
+    html = "<ul><li>Associate<br>$99<li>Developer<br/>$125</ul><p>Next"
+    assert texts(html) == ["Associate", "$99", "Developer", "$125", "Next"]
+    assert normalize(page_text(extract(html))) == "Associate $99 Developer $125 Next"
+
+
+def test_extract_reads_a_page_without_a_closing_head_tag():
+    assert texts("<head><title>T</title><body><p>Fee: $200</p>") == ["Fee: $200"]
+
+
+# --- the recorded seed pages ----------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("name", "evidence"),
+    [
+        ("skilljar-faq", "Certification is currently available only to organizations in the "
+         "Claude Partner Network."),
+        ("skilljar-partner", "Claude Certified Developer – Foundations Foundations $125 USD"),
+        ("skilljar-partner", "Claude Certified Architect – Foundations Foundations $125 USD"),
+        ("aws-aip-c01", "300 USD. Visit Exam pricing for additional cost information"),
+        ("databricks-genai", "Registration fee: $200"),
+        ("benchmarks-metagenomics", "1 | Claude Sonnet 5.5 | Claude Code | Anthropic | 60.0%"),
+    ],
+)  # fmt: skip
+def test_the_seed_evidence_survives_extraction(name, evidence):
+    html = decode((PAGES / f"{name}.html").read_bytes())
+    assert evidence in normalize(page_text(extract(html)))
+
+
+def test_text_inside_scripts_is_never_extracted():
+    assert INDEX["aws-aip-c01"]["scripts_kept"]
+    html = decode((PAGES / "aws-aip-c01.html").read_bytes())
+    text = page_text(extract(html))
+    assert "imageSrc" in html and "imageSrc" not in text
+    assert text.count("300 USD") == 1  # the page, not the JSON in its scripts
+
+
+def test_the_partner_page_lists_one_price_for_two_exams():
+    # Section selection (M3b) must tell these apart: the value alone matches both.
+    html = decode((PAGES / "skilljar-partner.html").read_bytes())
+    assert page_text(extract(html)).count("$125 USD") == 2

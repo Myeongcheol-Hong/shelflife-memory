@@ -1,6 +1,7 @@
-"""Web pages for web_page claims: fetch one safely and decode it (M3).
+"""Web pages for web_page claims: fetch one safely, decode it and extract its visible text.
 
-Later milestones extract the page's visible text, which a web_page judgment quotes.
+A web_page judgment quotes this text, and the quote must appear in it verbatim (CLAUDE.md).
+Every comparison of page text with a quote or a value runs both sides through normalize().
 """
 
 from __future__ import annotations
@@ -12,11 +13,13 @@ import ipaddress
 import re
 import socket
 import time
+import unicodedata
 import urllib.error
 import urllib.parse
 import urllib.request
 from collections.abc import Callable
 from dataclasses import dataclass
+from html.parser import HTMLParser
 
 from shelflife.verifiers import TIMEOUT_SECONDS, USER_AGENT, FetchError
 
@@ -242,3 +245,124 @@ def _codec(label: str | None) -> str:
         return codecs.lookup(CHARSET_ALIASES.get(label, label)).name
     except LookupError:
         return "utf-8"
+
+
+# --- text -----------------------------------------------------------------------------
+
+
+def normalize(text: str) -> str:
+    """Text as every comparison sees it: invisible format characters (zero-width spaces,
+    soft hyphens, direction marks) removed, Unicode NFC, and each run of whitespace,
+    line breaks included, as one space. Case, dashes and quote marks are kept."""
+    visible = "".join(ch for ch in text if unicodedata.category(ch) != "Cf")
+    return " ".join(unicodedata.normalize("NFC", visible).split())
+
+
+@dataclass(frozen=True)
+class Block:
+    """One run of text between block-level tags, normalized."""
+
+    text: str
+    tag: str  # the innermost open block element: "p", "li", "tr", "h2", ...
+    landmarks: tuple[str, ...]  # enclosing main, article, nav, header, footer, aside
+
+
+# Never visible: their whole content is dropped.
+SKIP = frozenset(
+    "head script style noscript template svg math iframe object canvas select textarea "
+    "datalist".split()
+)
+# Struck-through text is an old value ("~~$300~~ $250"): dropped, so it cannot be quoted.
+STRUCK = frozenset({"del", "s", "strike"})
+BLOCKS = frozenset(
+    "address article aside blockquote body br caption dd details dialog div dl dt fieldset "
+    "figcaption figure footer form h1 h2 h3 h4 h5 h6 header hgroup hr html li main nav ol "
+    "p pre section summary table tbody tfoot thead tr ul".split()
+)
+LANDMARKS = frozenset({"main", "article", "nav", "header", "footer", "aside"})
+VOID = frozenset("area base br col embed hr img input link meta source track wbr".split())
+
+
+def extract(html: str) -> list[Block]:
+    """The visible text of an HTML page, as blocks in page order.
+
+    The whole body is kept, navigation and footers included: choosing the part of the
+    page that matters is section selection's job, and a page's <main> or <article> may
+    not hold the fact (on the Skilljar pages, <article> holds only an FAQ). Hidden
+    elements (hidden, aria-hidden="true", inline display:none or visibility:hidden) are
+    dropped. Table cells are joined with " | ".
+    """
+    parser = _TextParser()
+    parser.feed(html)
+    parser.close()
+    return parser.blocks
+
+
+def page_text(blocks: list[Block]) -> str:
+    return "\n".join(block.text for block in blocks)
+
+
+def _hidden(attrs: list[tuple[str, str | None]]) -> bool:
+    values = {name: (value or "").strip().lower() for name, value in attrs}
+    if "hidden" in values and values["hidden"] != "until-found":
+        return True
+    if values.get("aria-hidden") == "true":
+        return True
+    style = values.get("style", "").replace(" ", "")
+    return "display:none" in style or "visibility:hidden" in style
+
+
+class _TextParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.blocks: list[Block] = []
+        self._text: list[str] = []
+        self._open: list[str] = []  # open block elements, outermost first
+        self._skip: str | None = None  # the element whose content is being dropped
+        self._skip_depth = 0
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if self._skip is not None:
+            if tag == self._skip:
+                self._skip_depth += 1
+            elif self._skip == "head" and tag == "body":  # a page without </head>
+                self._skip = None
+            if self._skip is not None:
+                return
+        if tag not in VOID and (tag in SKIP or tag in STRUCK or _hidden(attrs)):
+            self._skip, self._skip_depth = tag, 1
+            return
+        if tag in BLOCKS:
+            self._flush()
+            if tag not in VOID:
+                self._open.append(tag)
+        elif tag in ("td", "th") and "".join(self._text).strip():
+            self._text.append(" | ")
+
+    def handle_endtag(self, tag: str) -> None:
+        if self._skip is not None:
+            if tag == self._skip:
+                self._skip_depth -= 1
+                if self._skip_depth == 0:
+                    self._skip = None
+            return
+        if tag in BLOCKS:
+            self._flush()
+            if tag in self._open:  # close it and any unclosed elements inside it
+                del self._open[len(self._open) - 1 - self._open[::-1].index(tag) :]
+
+    def handle_data(self, data: str) -> None:
+        if self._skip is None:
+            self._text.append(data)
+
+    def close(self) -> None:
+        super().close()
+        self._flush()
+
+    def _flush(self) -> None:
+        text = normalize("".join(self._text))
+        self._text = []
+        if text:
+            tag = self._open[-1] if self._open else "body"
+            landmarks = tuple(t for t in self._open if t in LANDMARKS)
+            self.blocks.append(Block(text, tag, landmarks))
