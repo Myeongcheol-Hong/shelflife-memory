@@ -6,16 +6,16 @@ Handoff notes between working sessions. Newest entry first. Each entry says wher
 
 ### State at the end of the session
 
-- The owner answered the four questions of the M1d entry below. The answers are in "M1e: recall follow-ups", a small PR on `main`. It is built on #4's head, so once #4 is merged with a merge commit, the M1e PR shows only its own commits.
+- The owner answered the four questions of the M1d entry below. The answers went into M1e, which the owner merged as #6; #6 also carried #4's commits, so `main` has M1a-M1e.
 - Answers:
   1. Particles: (a) and (b). The `recall` description asks for bare key words, and the store splits a query word where Latin letters meet Hangul, dropping the Hangul part only if it is a common particle (D8, "Added").
   2. Filler words: (a). The `recall` description asks for 2-5 key words (names and nouns), not a full question; D8's revisit line names the filler-word ranking.
   3. `FieldSource.LLM`: removed. It comes back if D4 is revisited (D4 note).
-  4. D8's trade-offs and revisit line: confirmed; draft markers removed.
+  4. D8's trade-offs and revisit line: confirmed; draft markers removed. The confirmed example in the revisit line ("Chatbox로" against "Chatbox의") no longer fails after answer 1, so M1e replaced it with "가격이" against "가격은". The owner has not confirmed the new example yet.
 
 ### Next session: start here
 
-1. Check #4 and the M1e PR (merged? review comments? CI?).
+1. Check the small M1f PR (tests for the full particle list, this log entry).
 2. M2, as in `docs/roadmap.md`. Keep at most 3 unmerged PRs open, and check an upper PR's base as soon as the PR below it is merged.
 
 ## 2026-10-13: owner review of #1-#3, M1d follow-ups
