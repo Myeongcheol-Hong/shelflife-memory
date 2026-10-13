@@ -257,5 +257,6 @@ def test_http_get_turns_failures_into_fetch_errors(monkeypatch, raised, message)
         raise raised
 
     monkeypatch.setattr("urllib.request.urlopen", urlopen)
-    with pytest.raises(FetchError, match=message):
+    with pytest.raises(FetchError, match=message) as error:
         http_get("https://example.org/x", {})
+    assert error.value.status == (503 if isinstance(raised, urllib.error.HTTPError) else None)
