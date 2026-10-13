@@ -38,6 +38,15 @@ class Status(StrEnum):
     RETIRED = "retired"
 
 
+class CheckResult(StrEnum):
+    """Outcome of one check (design 4.4)."""
+
+    SAME = "same"
+    CHANGED = "changed"
+    CANNOT_TELL = "cannot_tell"
+    ERROR = "error"
+
+
 class FieldSource(StrEnum):
     """Who set a claim's volatility or check_method.
 
