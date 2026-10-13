@@ -16,14 +16,16 @@ from shelflife.store import Store
 
 RECALL_LIMIT = 10
 
-# D3: remember only when asked. Claude may offer, but waits for the user's confirmation.
+# D2: the user gives the sentence. D3: remember only when asked; Claude may offer, showing
+# the exact sentence, and waits for the user's confirmation of that sentence.
 INSTRUCTIONS = """\
 Shelf Life is a memory whose claims carry a source, the date they were observed and a
 schedule for re-checking them. Call remember only when the user asks you to remember
-something. You may offer ("Want me to remember this?"), but never call remember until
-the user confirms. Call recall before answering a question a remembered claim might
-cover, and say how old the claim is (observed_at) when that matters. Nothing is
-re-checked automatically yet."""
+something. You may offer ("Want me to remember this?") with the exact sentence you would
+store, but never call remember until the user confirms; the user's yes approves that
+sentence. Store the user's sentence as given, in their language. Call recall before
+answering a question a remembered claim might cover, and say how old the claim is
+(observed_at) when that matters. Nothing is re-checked automatically yet."""
 
 
 def build_server(store: Store) -> MCPServer:
@@ -75,10 +77,12 @@ def build_server(store: Store) -> MCPServer:
 
         Use only when the user asks you to remember something: a fact about the world
         (a price, a version, a policy), a decision, a preference or a note. You may offer
-        ("Want me to remember this?"), but never call remember until the user confirms.
-        Write one self-contained sentence per claim. Do not store guesses or whole
-        conversations.
+        ("Want me to remember this?") with the exact sentence you would store, but never
+        call remember until the user confirms; the user's yes approves that sentence. Do
+        not store guesses or whole conversations.
 
+        - text: the user's sentence as given, in whatever language. Do not rewrite or
+          translate it; only structure it into the other fields.
         - kind: world_fact, decision, preference or note.
         - subject, attribute, value: the structured form of a checkable fact, for example
           "AWS AIP-C01", "exam_fee", "$300".
@@ -119,6 +123,10 @@ def build_server(store: Store) -> MCPServer:
 
         Use before answering a question that a remembered fact or decision might cover.
         Do not use it to find what needs re-checking (use due).
+
+        Search with 2-5 key words (names and nouns), not a full question, and leave
+        particles off ("Chatbox 가격", not "Chatbox의 가격은"). Search for names in their
+        original spelling (Hindsight, not 힌드사이트). Korean and English both work.
 
         In this version status is fresh or unverifiable (nothing can check the claim), and
         nothing re-checks claims or updates their status. A claim whose next_check_at is

@@ -1,10 +1,11 @@
 import sqlite3
+import threading
 from datetime import UTC, date, datetime, timedelta, timezone
 
 import pytest
 
 from shelflife.models import CheckMethod, FieldSource, Status, Volatility
-from shelflife.store import Store, default_db_path
+from shelflife.store import Store, default_db_path, query_words
 
 # --- remember -------------------------------------------------------------------------
 
@@ -116,6 +117,7 @@ def test_recall_matches_text_and_subject_case_insensitively(store):
 
     assert [c.id for c in store.recall("EXAM")] == [fee.id]
     assert [c.id for c in store.recall("aip-c01")] == [fee.id]
+    assert [c.id for c in store.recall("AI")] == [fee.id]  # short word, subject only
     assert store.recall("python") == []
 
 
@@ -135,6 +137,96 @@ def test_recall_treats_operators_as_plain_words(store):
     claim = store.remember("The exam is not free", "world_fact")
     assert [c.id for c in store.recall("exam NOT free")] == [claim.id]
     assert [c.id for c in store.recall('free" OR (')] == [claim.id]
+
+
+# Korean (D8): particles fuse onto words ("Chatbox로", "가격은"), and many Korean words
+# are shorter than a trigram.
+KOREAN = {
+    "decision": "멀티 LLM 앱은 Chatbox로 정했다",
+    "price": "Chatbox Pro 가격은 월 $19.99이다",
+    "exam": "AWS AIP-C01 시험 비용은 $300이다",
+}
+
+
+@pytest.fixture
+def korean(store):
+    return {store.remember(text, "note").id: name for name, text in KOREAN.items()}
+
+
+@pytest.mark.parametrize(
+    ("query", "expected"),
+    [
+        ("Chatbox 가격", ["price", "decision"]),  # two words matched before one
+        ("시험 비용", ["exam"]),  # both words shorter than a trigram
+        ("aip-c01 시험", ["exam"]),
+        ("챗박스", []),  # a name is found only in its original spelling
+    ],
+)
+def test_recall_finds_korean_claims(store, korean, query, expected):
+    assert [korean[c.id] for c in store.recall(query)] == expected
+
+
+@pytest.mark.parametrize(
+    ("query", "words"),
+    [
+        ("Chatbox의 가격", ["Chatbox", "가격"]),  # particle after a Latin name: dropped
+        ("Hindsight에서", ["Hindsight"]),
+        ("GPT4는", ["GPT4"]),
+        ("AI모델", ["AI", "모델"]),  # not a particle: both parts kept
+        ("Chatbox로 chatbox", ["Chatbox"]),  # deduplicated ignoring case
+        ("가격은", ["가격은"]),  # Hangul only: not split
+        ("3월", ["3월"]),  # no Latin letter: not split
+    ],
+)
+def test_query_words_split_latin_and_hangul(query, words):
+    assert query_words(query) == words
+
+
+def test_recall_drops_a_particle_after_a_latin_name(store, korean):
+    assert [korean[c.id] for c in store.recall("Chatbox의 가격은")] == ["price", "decision"]
+
+
+def test_recall_keeps_a_hangul_part_that_is_not_a_particle(store):
+    both = store.remember("새 AI 모델 비교", "note")
+    one = store.remember("모델 목록", "note")
+    assert [c.id for c in store.recall("AI모델")] == [both.id, one.id]
+
+
+def test_recall_finds_a_latin_name_with_a_korean_particle_attached(store, korean):
+    assert {korean[c.id] for c in store.recall("chatbox")} == {"decision", "price"}
+
+
+def test_recall_ranks_more_matched_words_above_a_common_short_word(store):
+    for i in range(12):
+        store.remember(f"가격 메모 {i}", "note")
+    target = store.remember("Chatbox Pro 가격은 월 $19.99이다", "world_fact")
+    assert store.recall("Chatbox 가격")[0].id == target.id
+
+
+def test_recall_breaks_equal_word_counts_by_bm25(store):
+    # Ids sort opposite to the bm25 order, so ranking without bm25 fails every time.
+    store.import_claims(
+        [
+            {
+                "id": "a",
+                "text": "chatbox appears once in this long note about other apps",
+                "kind": "note",
+            },
+            {"id": "b", "text": "chatbox chatbox", "kind": "note"},
+        ]
+    )
+    assert [c.id for c in store.recall("chatbox")] == ["b", "a"]
+
+
+def test_recall_keeps_the_spelling_of_short_non_ascii_words(store):
+    claim = store.remember("ЕС санкции", "note")  # LIKE folds ASCII case only
+    assert [c.id for c in store.recall("ЕС")] == [claim.id]
+
+
+def test_recall_like_fallback_treats_underscore_literally(store):
+    snake = store.remember("snake_case names", "note")
+    store.remember("snakeXcase names", "note")
+    assert [c.id for c in store.recall("e_")] == [snake.id]
 
 
 def test_recall_respects_limit(store):
@@ -196,6 +288,24 @@ def test_claims_survive_reopening(tmp_path, clock):
     with Store(path, now=clock) as s:
         assert s.get(claim.id) == claim
         assert [c.id for c in s.recall("fact")] == [claim.id]
+
+
+def test_connection_uses_wal_and_a_busy_timeout(store):
+    assert store._conn.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
+    assert store._conn.execute("PRAGMA busy_timeout").fetchone()[0] == 5000
+
+
+def test_switch_to_wal_waits_for_another_writer(tmp_path, clock):
+    # A second process creating the schema holds a write lock; the WAL switch does not
+    # use the busy handler, so the store must retry instead of failing at once.
+    path = tmp_path / "shelflife.db"
+    other = sqlite3.connect(path, isolation_level=None, check_same_thread=False)
+    other.execute("CREATE TABLE other (x)")
+    other.execute("BEGIN IMMEDIATE")
+    threading.Timer(0.3, lambda: other.execute("COMMIT")).start()
+    with Store(path, now=clock) as s:
+        assert s._conn.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
+    other.close()
 
 
 def test_schema_creation_is_idempotent(tmp_path, clock):
