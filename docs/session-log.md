@@ -11,23 +11,23 @@ Handoff notes between working sessions. Newest entry first. Each entry says wher
 
 | PR | Branch | Base | Content |
 |---|---|---|---|
-| M3a `[stack 1/3]` | `claude/tender-mayer-wts8cd-m3a` | `main` | D10 and the doc edits it asked for; safe page fetching (`verifiers/web_page.py`: http(s) and public addresses only, every redirect checked, the connected peer checked, 10 MB and about 30 s) and `decode()`; `remember` takes only http(s) URLs (Q8) |
-| M3b `[stack 2/3]` | `claude/tender-mayer-wts8cd-m3b` | M3a | `normalize()` and `extract()`: the whole visible body as blocks, hidden and struck text dropped, implied end tags, linear time on hostile pages; five recorded seed pages (`tests/fixtures/pages/`) |
-| M3c `[stack 3/3]` | `claude/tender-mayer-wts8cd-m3c` | M3b | `verifiers/section.py`: deterministic section selection with its position, heading, core and scores |
+| [#12](https://github.com/Myeongcheol-Hong/shelflife-memory/pull/12) M3a `[stack 1/3]` | `claude/tender-mayer-wts8cd-m3a` | `main` | D10 and the doc edits it asked for; safe page fetching (`verifiers/web_page.py`: http(s) and public addresses only, every redirect checked, the connected peer checked, 10 MB and about 30 s) and `decode()`; `remember` takes only http(s) URLs (Q8) |
+| [#13](https://github.com/Myeongcheol-Hong/shelflife-memory/pull/13) M3b `[stack 2/3]` | `claude/tender-mayer-wts8cd-m3b` | M3a | `normalize()` and `extract()`: the whole visible body as blocks, hidden and struck text dropped, implied end tags, linear time on hostile pages; five recorded seed pages (`tests/fixtures/pages/`) |
+| [#14](https://github.com/Myeongcheol-Hong/shelflife-memory/pull/14) M3c `[stack 3/3]` | `claude/tender-mayer-wts8cd-m3c` | M3b | `verifiers/section.py`: deterministic section selection with its position, heading, core and scores |
 
 - Plan letters from here: M3d judgment module (template, render, parse), M3e tools (`verify` for web_page, `record_check`, schema v2, `needs_check_method` without caller-set `none`), M3f write checks and the seed edits (MemGuard `none` (caller), the eligibility phrase, `source_quote` proposals).
 - Found while re-recording: a review fix had made every fetch through the cloud proxy fail (NO_PROXY lists the proxy itself); fixed in M3a with a test that copies that setup. Run `uv run python tests/fixtures/record.py pages` after fetch changes.
 
 ### Waiting on the owner
 
-1. Review and merge of M3a-M3c (three open PRs: the limit).
+1. Review and merge of #12-#14 (three open PRs: the limit).
 2. D10's open questions 1-5: where `cannot_tell`'s reason is stored; `same`/`changed` for a web_page claim without a value; MetagenomicsBench "60%" against the page's "60.0%"; Claude's reading that "differs" compares folded values; struck-through text dropped, not marked as planned.
 3. Claude's choices to confirm: behind a proxy, host names are left to the proxy (D10.8); M4 hashes `Section.core`, not the grown section; the fee/cost/price synonym group in `section.py`; D10's revisit line.
 4. Not done, proposed: dropping D8 particles from pure Hangul words in section selection ("가격은" matches only "가격은").
 
 ### Next session: start here
 
-1. Check M3a-M3c (merged? review comments? CI?). When a lower PR merges, retarget the next one to `main` at once.
+1. Check #12-#14 (merged? review comments? CI?). When a lower PR merges, retarget the next one to `main` at once.
 2. With the open questions answered, build M3d, then M3e and M3f, one PR each, at most three open.
 
 ## 2026-10-13: M2d, the owner's follow-ups to #8-#10
