@@ -17,7 +17,10 @@ Handoff notes between working sessions. Newest entry first. Each entry says wher
 ### Waiting on the owner
 
 - Review and merge of the M2d PR.
-- One choice in M2d the owner may overrule: a bare `version` or `release` attribute (no "latest") still counts as a latest-version fact, as in #8, because a version stated from a PyPI project or GitHub repository page is its current one.
+- Two choices in M2d the owner may overrule:
+  - A bare `version` or `release` attribute (no "latest") still counts as a latest-version fact, as in #8, because a version stated from a PyPI project or GitHub repository page is its current one.
+  - A compact date (20240620) still counts as a version string, since some projects number builds that way; the year/date pattern covers 2025, 2024-06 and 2024-06-20 (or with `/`).
+- Noticed in review, outside M2d: `import_claims` checks which ids exist before its write transaction, so two imports at once could raise an IntegrityError that the CLI prints as a traceback. Rare (the owner runs imports by hand); not fixed.
 
 ### Next session: start here
 

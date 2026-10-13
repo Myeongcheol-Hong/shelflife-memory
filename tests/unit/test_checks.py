@@ -157,9 +157,11 @@ def test_a_check_reads_the_claim_after_another_process_has_written(store, claim,
     )
     other.execute("BEGIN IMMEDIATE")
     other.execute("UPDATE claims SET status = 'retired' WHERE id = ?", (claim.id,))
-    threading.Timer(0.3, lambda: other.execute("COMMIT")).start()
+    commit = threading.Timer(0.3, lambda: other.execute("COMMIT"))
+    commit.start()
     with pytest.raises(ValueError, match="is retired"):
         store.add_check(claim.id, CheckResult.SAME, "2.3.0", "2.3.0")
+    commit.join()
     other.close()
     assert store.get(claim.id).status is Status.RETIRED
     assert checks(store, claim.id) == []
@@ -169,13 +171,37 @@ def test_a_check_that_fails_halfway_leaves_nothing_behind(store, claim, monkeypa
     def broken(*args):
         raise RuntimeError("scheduler failed")
 
-    monkeypatch.setattr("shelflife.scheduler.next_check_after", broken)
-    with pytest.raises(RuntimeError):
-        store.add_check(claim.id, CheckResult.SAME, "2.3.0", "2.3.0")  # after the INSERT
+    with monkeypatch.context() as m:
+        m.setattr("shelflife.scheduler.next_check_after", broken)
+        with pytest.raises(RuntimeError):
+            store.add_check(claim.id, CheckResult.SAME, "2.3.0", "2.3.0")  # after the INSERT
     assert checks(store, claim.id) == []
-    monkeypatch.undo()
     updated, _ = store.add_check(claim.id, CheckResult.SAME, "2.3.0", "2.3.0")
     assert updated.status is Status.FRESH and len(checks(store, claim.id)) == 1
+
+
+class FailingCommit:
+    """A connection whose next commit fails, as on a full disk."""
+
+    def __init__(self, conn):
+        self.conn = conn
+
+    def __getattr__(self, name):
+        return getattr(self.conn, name)
+
+    def commit(self):
+        raise sqlite3.OperationalError("database or disk is full")
+
+
+def test_a_failed_commit_releases_the_write_lock(store, claim):
+    real = store._conn
+    store._conn = FailingCommit(real)
+    with pytest.raises(sqlite3.OperationalError, match="disk is full"):
+        store.add_check(claim.id, CheckResult.SAME, "2.3.0", "2.3.0")
+    store._conn = real
+    assert not real.in_transaction
+    assert checks(store, claim.id) == []
+    assert store.forget(claim.id).status is Status.RETIRED
 
 
 def test_last_check_is_the_newest_or_the_newest_with_a_result(store, claim):

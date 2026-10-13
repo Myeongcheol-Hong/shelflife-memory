@@ -104,7 +104,7 @@ Claude Code: "This project decided to use library X.
 | `source_url`, `source_quote` | Evidence at write time | One verbatim line from the source |
 | `observed_at` | When the fact was confirmed true | 2026-10-08 |
 | `next_check_at` | Next scheduled check | 2026-10-15 |
-| `status` | `fresh` / `changed` / `unverifiable` / `retired`. "Due" is not a status: a claim is due when its `next_check_at` is today or earlier, derived and never stored | fresh |
+| `status` | `fresh` / `changed` / `unverifiable` / `retired`. "Due" is not a status: a claim with a check method that is not retired is due when its `next_check_at` is today or earlier, derived and never stored | fresh |
 
 ### 4.2 Volatility classes (defaults; later replaced by adaptive scheduling)
 

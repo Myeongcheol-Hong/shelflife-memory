@@ -138,8 +138,9 @@ def build_server(store: Store, fetch: Fetch = http_get) -> MCPServer:
         status is fresh, unverifiable (nothing can check the claim) or changed (a check
         found a different value at the source; the claim keeps the value it was stored
         with, so tell the user; due shows the value found). Claims are
-        checked only when verify is called. A claim whose next_check_at is today or
-        earlier is due: say how old it is (observed_at, last_checked_at).
+        checked only when verify is called. A claim with a check_method whose
+        next_check_at is today or earlier is due: say how old it is (observed_at,
+        last_checked_at).
         """
         return {"claims": [c.to_dict() for c in store.recall(query, limit=RECALL_LIMIT)]}
 

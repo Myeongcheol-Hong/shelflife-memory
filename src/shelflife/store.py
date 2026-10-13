@@ -341,15 +341,16 @@ class Store:
         first reads the claim must not let another process change it in between; a
         deferred transaction would read without the lock and could overwrite, for
         example, a forget committed meanwhile. BEGIN IMMEDIATE waits up to the busy
-        timeout for the lock.
+        timeout for the lock. If the work or the commit fails (a full disk), the transaction
+        is rolled back, so it never keeps the lock.
         """
         self._conn.execute("BEGIN IMMEDIATE")
         try:
             yield
+            self._conn.commit()
         except BaseException:
             self._conn.rollback()
             raise
-        self._conn.commit()
 
     def checkable(self, claim_id: str) -> Claim:
         """The claim, if a check of it may be recorded; else ValueError, as add_check."""
