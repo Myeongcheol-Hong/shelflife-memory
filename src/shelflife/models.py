@@ -42,14 +42,13 @@ class FieldSource(StrEnum):
     """Who set a claim's volatility or check_method.
 
     M2 rules may replace a DEFAULT value but never a CALLER value. The write eval
-    (design 6.0) uses this to tell the two apart. Nothing sets LLM yet: under D4, Claude
-    sets volatility only at write time through remember, which records CALLER.
+    (design 6.0) uses this to tell the two apart. Under D4, Claude sets volatility only at
+    write time through remember, which records CALLER; there is no LLM source.
     """
 
     CALLER = "caller"
     DEFAULT = "default"
     RULE = "rule"
-    LLM = "llm"
 
 
 # Volatility used when the caller gives none. World facts default to fast because

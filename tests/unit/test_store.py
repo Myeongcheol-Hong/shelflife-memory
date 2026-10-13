@@ -5,7 +5,7 @@ from datetime import UTC, date, datetime, timedelta, timezone
 import pytest
 
 from shelflife.models import CheckMethod, FieldSource, Status, Volatility
-from shelflife.store import Store, default_db_path
+from shelflife.store import Store, default_db_path, query_words
 
 # --- remember -------------------------------------------------------------------------
 
@@ -158,14 +158,38 @@ def korean(store):
     [
         ("Chatbox 가격", ["price", "decision"]),  # two words matched before one
         ("시험 비용", ["exam"]),  # both words shorter than a trigram
-        ("Chatbox로", ["decision"]),  # the particle is part of the query word
         ("aip-c01 시험", ["exam"]),
         ("챗박스", []),  # a name is found only in its original spelling
-        ("Chatbox의", []),  # a particle in a query word must match the stored one (D8)
     ],
 )
 def test_recall_finds_korean_claims(store, korean, query, expected):
     assert [korean[c.id] for c in store.recall(query)] == expected
+
+
+@pytest.mark.parametrize(
+    ("query", "words"),
+    [
+        ("Chatbox의 가격", ["Chatbox", "가격"]),  # particle after a Latin name: dropped
+        ("Hindsight에서", ["Hindsight"]),
+        ("GPT4는", ["GPT4"]),
+        ("AI모델", ["AI", "모델"]),  # not a particle: both parts kept
+        ("Chatbox로 chatbox", ["Chatbox"]),  # deduplicated ignoring case
+        ("가격은", ["가격은"]),  # Hangul only: not split
+        ("3월", ["3월"]),  # no Latin letter: not split
+    ],
+)
+def test_query_words_split_latin_and_hangul(query, words):
+    assert query_words(query) == words
+
+
+def test_recall_drops_a_particle_after_a_latin_name(store, korean):
+    assert [korean[c.id] for c in store.recall("Chatbox의 가격은")] == ["price", "decision"]
+
+
+def test_recall_keeps_a_hangul_part_that_is_not_a_particle(store):
+    both = store.remember("새 AI 모델 비교", "note")
+    one = store.remember("모델 목록", "note")
+    assert [c.id for c in store.recall("AI모델")] == [both.id, one.id]
 
 
 def test_recall_finds_a_latin_name_with_a_korean_particle_attached(store, korean):

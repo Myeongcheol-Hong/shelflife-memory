@@ -98,7 +98,7 @@ Claude Code: "This project decided to use library X.
 | `kind` | `world_fact` / `decision` / `preference` / `note` | world_fact |
 | `subject`, `attribute`, `value` | Structured form of a checkable fact (optional) | AIP-C01 / exam_fee / $300 |
 | `volatility` | `fast` / `medium` / `slow` / `none` | fast |
-| `volatility_source`, `check_method_source` | Who set volatility and check_method: `caller` / `default` (later `rule`; `llm` is unused, see D4). Rules never overwrite a caller's value | caller |
+| `volatility_source`, `check_method_source` | Who set volatility and check_method: `caller` / `default` (later `rule`). Rules never overwrite a caller's value | caller |
 | `check_method` | `pypi` / `github_release` / `web_page` / `none` | web_page |
 | `check_target` | Package name, owner/repo, or URL | https://aws.amazon.com/certification/... |
 | `source_url`, `source_quote` | Evidence at write time | One verbatim line from the source |
@@ -151,9 +151,9 @@ CREATE TABLE claims (
   kind          TEXT NOT NULL,          -- world_fact | decision | preference | note
   subject       TEXT, attribute TEXT, value TEXT,
   volatility    TEXT NOT NULL,          -- fast | medium | slow | none
-  volatility_source   TEXT NOT NULL,    -- caller | default | rule | llm
+  volatility_source   TEXT NOT NULL,    -- caller | default | rule
   check_method  TEXT NOT NULL,          -- pypi | github_release | web_page | none
-  check_method_source TEXT NOT NULL,    -- caller | default | rule | llm
+  check_method_source TEXT NOT NULL,    -- caller | default | rule
   check_target  TEXT,
   source_url    TEXT, source_quote TEXT,
   observed_at   TEXT NOT NULL,          -- ISO 8601
@@ -170,7 +170,7 @@ CREATE TABLE checks (
 CREATE VIRTUAL TABLE claims_fts USING fts5(text, subject, content='claims', tokenize='trigram');
 ```
 
-Search works for Korean (D8). The trigram index matches substrings, so a particle fused onto a word ("Chatbox로") does not hide it. Query words shorter than 3 characters, common in Korean, are matched with LIKE. Results are ranked by the number of query words matched, then bm25.
+Search works for Korean (D8). The trigram index matches substrings, so a particle fused onto a word ("Chatbox로") does not hide it. Query words shorter than 3 characters, common in Korean, are matched with LIKE. A query word that mixes Latin letters and Hangul is split where the scripts meet, and a common particle there is dropped. Results are ranked by the number of query words matched, then bm25.
 
 ### 5.2 MCP tools
 

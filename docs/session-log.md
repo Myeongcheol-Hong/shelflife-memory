@@ -2,6 +2,22 @@
 
 Handoff notes between working sessions. Newest entry first. Each entry says where the work stands, what waits on the owner, and what the next session should do first.
 
+## 2026-10-13: recall follow-ups (M1e)
+
+### State at the end of the session
+
+- The owner answered the four questions of the M1d entry below. The answers are in "M1e: recall follow-ups", a small PR on `main`. It is built on #4's head, so once #4 is merged with a merge commit, the M1e PR shows only its own commits.
+- Answers:
+  1. Particles: (a) and (b). The `recall` description asks for bare key words, and the store splits a query word where Latin letters meet Hangul, dropping the Hangul part only if it is a common particle (D8, "Added").
+  2. Filler words: (a). The `recall` description asks for 2-5 key words (names and nouns), not a full question; D8's revisit line names the filler-word ranking.
+  3. `FieldSource.LLM`: removed. It comes back if D4 is revisited (D4 note).
+  4. D8's trade-offs and revisit line: confirmed; draft markers removed.
+
+### Next session: start here
+
+1. Check #4 and the M1e PR (merged? review comments? CI?).
+2. M2, as in `docs/roadmap.md`. Keep at most 3 unmerged PRs open, and check an upper PR's base as soon as the PR below it is merged.
+
 ## 2026-10-13: owner review of #1-#3, M1d follow-ups
 
 ### State at the end of the session

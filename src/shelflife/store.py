@@ -57,9 +57,9 @@ CREATE TABLE IF NOT EXISTS claims (
   kind          TEXT NOT NULL,          -- world_fact | decision | preference | note
   subject       TEXT, attribute TEXT, value TEXT,
   volatility    TEXT NOT NULL,          -- fast | medium | slow | none
-  volatility_source   TEXT NOT NULL,    -- caller | default | rule | llm
+  volatility_source   TEXT NOT NULL,    -- caller | default | rule
   check_method  TEXT NOT NULL,          -- pypi | github_release | web_page | none
-  check_method_source TEXT NOT NULL,    -- caller | default | rule | llm
+  check_method_source TEXT NOT NULL,    -- caller | default | rule
   check_target  TEXT,
   source_url    TEXT, source_quote TEXT,
   observed_at   TEXT NOT NULL,          -- ISO 8601 date
@@ -92,6 +92,32 @@ END;
 PRAGMA user_version = 1;
 COMMIT;
 """
+
+
+# Common Korean particles. In a query word that mixes Latin letters and Hangul
+# ("Chatbox의"), a Hangul part that is one of these is dropped (D8).
+PARTICLES = frozenset("은 는 이 가 을 를 의 로 으로 에 에서 와 과 도 만".split())
+_SCRIPT_RUNS = re.compile(r"[\uac00-\ud7a3]+|[^\uac00-\ud7a3]+")
+
+
+def query_words(query: str) -> list[str]:
+    """Split a recall query into words, deduplicated ignoring case (D8).
+
+    A word that mixes Latin letters and Hangul is split where the scripts meet, and a
+    Hangul part that is a common particle is dropped: "Chatbox의" gives "Chatbox", and
+    "AI모델" gives "AI" and "모델". Words keep their spelling, because LIKE folds ASCII
+    case only.
+    """
+    words = []
+    for word in re.findall(r"\w+", query):
+        if re.search(r"[A-Za-z]", word) and re.search(r"[\uac00-\ud7a3]", word):
+            words += [part for part in _SCRIPT_RUNS.findall(word) if part not in PARTICLES]
+        else:
+            words.append(word)
+    first_spelling: dict[str, str] = {}
+    for w in words:
+        first_spelling.setdefault(w.casefold(), w)
+    return list(first_spelling.values())
 
 
 def default_db_path() -> Path:
@@ -348,8 +374,7 @@ class Store:
         top results. Words are always quoted, so FTS5 syntax in a query is never
         interpreted.
         """
-        # Dedupe ignoring case, but keep each word's spelling: LIKE folds ASCII case only.
-        words = list({w.casefold(): w for w in re.findall(r"\w+", query)}.values())
+        words = query_words(query)
         if not words:
             return []
         hit_terms, params = [], []

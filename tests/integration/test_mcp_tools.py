@@ -54,6 +54,8 @@ async def test_lists_the_m1_tools(client):
     # D8: names are matched by substring, so they must be searched in their own spelling.
     recall = " ".join(tools["recall"].description.split())
     assert "original spelling (Hindsight, not 힌드사이트)" in recall
+    assert "2-5 key words (names and nouns), not a full question" in recall
+    assert '("Chatbox 가격", not "Chatbox의 가격은")' in recall
 
 
 async def test_remember_passes_every_optional_field_through(client):

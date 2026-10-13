@@ -13,6 +13,7 @@ Items marked **(owner)** are done by the maintainer by hand: ground-truth labels
 - [x] Import `examples/seed_claims.jsonl`
 - [x] **(owner)** D1-D3 recorded in `docs/decisions.md` (decided 2026-10-13)
 - [x] Follow-ups from the owner's review (M1d): Korean search (D8), WAL and a busy timeout for two server processes, `remember` wording for D2/D3
+- [x] Recall follow-ups (M1e): particles split off Latin names in queries, `recall` asks for 2-5 key words, `FieldSource.LLM` removed
 
 ## M2: Volatility and rule-based verifiers
 - [ ] Volatility classification: rules first. The LLM part is Claude setting volatility at write time through `remember` when confident; no new tool (D4)
