@@ -4,6 +4,7 @@ import http.client
 import io
 import json
 import socket
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -435,6 +436,7 @@ def test_the_header_charset_wins_over_meta():
         ("Café", "Café"),  # NFC
         ("Developer – Foundations “Pro”", "Developer – Foundations “Pro”"),  # kept as is
         ("USD 300", "USD 300"),  # case kept
+        ("１０² ﬁ", "１０² ﬁ"),  # NFC, not NFKC: compatibility forms are kept
     ],
 )
 def test_normalize(raw, normalized):
@@ -465,6 +467,23 @@ def texts(html):
         "<s>$300</s>",
         "<strike>$300</strike>",
         "<div hidden><div><p>$300</p></div><p>$300</p></div>",  # nested elements of one name
+        "<div hidden><span hidden>icon</span>$300</div>",  # hidden inside hidden
+        "<div aria-hidden='true'><script>x</script>$300</div>",
+        "<p hidden='false'>$300</p>",  # a boolean attribute: any value hides
+        "<p style='color:red;display:\tnone'>$300</p>",
+        "<p style='visibility: collapse'>$300</p>",
+        "<dialog><p>$300</p></dialog>",  # a dialog that is not open
+        "<title>$300</title>",
+        "<video>Your browser cannot play $300</video>",
+        "<audio>$300</audio>",
+        "<iframe>$300</iframe>",
+        "<object>$300</object>",
+        "<canvas>$300</canvas>",
+        "<math><mi>$300</mi></math>",
+        "<textarea>$300</textarea>",
+        "<datalist><option>$300</option></datalist>",
+        "<noembed>$300</noembed>",
+        "<ruby><rp>($300)</rp></ruby>",  # ruby fallback parentheses
     ],
 )
 def test_extract_drops_what_is_not_visible(dropped):
@@ -476,13 +495,16 @@ def test_extract_keeps_what_is_visible():
     html = """<body><header><nav><a>Home</a></nav></header>
         <main><article><h2>Exam fee</h2><p>300&nbsp;USD &amp; tax</p></article>
         <p hidden="until-found">Found by search</p><input hidden><img aria-hidden="true">
-        <div hidden/><p>Price: <s>$300</s> $250</p></main>
+        <p aria-hidden="false">Shown</p><dialog open><p>Open dialog</p></dialog>
+        <p>Price: <s>$300</s> $250</p></main>
         <footer><p>© 2026</p></footer></body>"""
     assert extract(html) == [
         Block("Home", "nav", ("header", "nav")),
         Block("Exam fee", "h2", ("main", "article")),
         Block("300 USD & tax", "p", ("main", "article")),
         Block("Found by search", "p", ("main",)),
+        Block("Shown", "p", ("main",)),
+        Block("Open dialog", "p", ("main",)),
         Block("Price: $250", "p", ("main",)),
         Block("© 2026", "p", ("footer",)),
     ]
@@ -501,8 +523,82 @@ def test_extract_splits_blocks_at_line_breaks_and_unclosed_tags():
     assert normalize(page_text(extract(html))) == "Associate $99 Developer $125 Next"
 
 
-def test_extract_reads_a_page_without_a_closing_head_tag():
-    assert texts("<head><title>T</title><body><p>Fee: $200</p>") == ["Fee: $200"]
+def test_a_self_closed_hidden_element_is_empty():
+    # As XHTML reads it. HTML would hide the rest of its parent; reading it as empty
+    # keeps a stray "/>" from dropping text.
+    assert texts("<main><div hidden/><p>Fee: $250</p></main>") == ["Fee: $250"]
+
+
+@pytest.mark.parametrize(
+    ("html", "expected"),
+    [
+        # End tags a page leaves out end a dropped element too, not the rest of the page.
+        ("<body><p hidden>secret<p>Fee: $200<p>Next</body>", ["Fee: $200", "Next"]),
+        ("<ul><li hidden>secret<li>Fee: $200<li>Next</ul>", ["Fee: $200", "Next"]),
+        ("<table><tr><td hidden>secret<td>Fee<td>$200</table>", ["Fee | $200"]),
+        ("<dl><dt hidden>secret<dt>Fee<dd>$200</dl>", ["Fee", "$200"]),
+        ("<ul><li>Pro<span hidden>secret<li>Fee: $200</ul>", ["Pro", "Fee: $200"]),
+        ("<div><p>Fee <del>$300</div><p>After</p>", ["Fee", "After"]),  # closed with its parent
+        ("<div>Fee <del>$300</div>After", ["Fee", "After"]),
+        ("<p>Price: <s>$300 <p>Now $250</p>", ["Price:", "Now $250"]),
+        ("<ul><li><p>One<li>Two</ul><p>After", ["One", "Two", "After"]),
+        # A page may leave out </head>, or put body content in <head>.
+        ("<head><title>T</title><body><p>Fee: $200</p>", ["Fee: $200"]),
+        ("<html><head><title>T</title><meta charset=utf-8><p>Fee $200", ["Fee $200"]),
+        ("<head><title>T</title><p>Fee $200</head><body><p>More", ["Fee $200", "More"]),
+    ],
+)
+def test_extract_implies_end_tags(html, expected):
+    assert texts(html) == expected
+
+
+@pytest.mark.parametrize(
+    ("html", "tags"),
+    [
+        ("<p>One<div>Two</div>Three", ["p", "div", "body"]),  # <div> ended the <p>
+        ("<ul><li><p>One<li>Two</li>Three</ul>", ["p", "li", "ul"]),  # <li> ended both
+        ("<dl><dt>Fee<dd>$300<dt>Length<dd>120 minutes</dl>Next", ["dt", "dd", "dt", "dd", "body"]),
+    ],
+)
+def test_implied_end_tags_close_the_element(html, tags):
+    assert [b.tag for b in extract(html)] == tags
+
+
+def test_blocks_carry_their_tag_and_landmarks():
+    html = """<details><summary>Who can take it?</summary><p>Partners.</p></details>
+        <dl><dt>Exam fee</dt><dd>$300</dd></dl><aside><p>Ad</p></aside>
+        <nav><ul><li>Home<li>About</ul></nav><main><p>Fee<br>$250</p></main>"""
+    assert [(b.text, b.tag, b.landmarks) for b in extract(html)] == [
+        ("Who can take it?", "summary", ()),
+        ("Partners.", "p", ()),
+        ("Exam fee", "dt", ()),
+        ("$300", "dd", ()),
+        ("Ad", "p", ("aside",)),
+        ("Home", "li", ("nav",)),
+        ("About", "li", ("nav",)),
+        ("Fee", "p", ("main",)),
+        ("$250", "p", ("main",)),
+    ]
+
+
+@pytest.mark.parametrize(
+    "html",
+    [
+        "<div>" * 100_000 + "x" + "</div>" * 100_000,  # deep nesting
+        "<p>para text" * 40_000,  # end tags left out
+        "<ul>" + "<li>item" * 40_000 + "</ul>",
+        "<main>x" * 40_000,  # landmarks inside landmarks
+        "<div>" * 40_000 + "</p>" * 40_000,  # end tags that match nothing
+        "<table><tr>" + "<td>cell" * 40_000 + "</table>",
+    ],
+)
+def test_extraction_time_grows_linearly(html):
+    # A hostile page under the 10 MB cap must not hang the check. Quadratic code took
+    # minutes on these; linear code takes well under a second.
+    started = time.perf_counter()
+    blocks = extract(html)
+    assert time.perf_counter() - started < 5
+    assert all(len(b.landmarks) <= web_page.MAX_DEPTH for b in blocks)
 
 
 # --- the recorded seed pages ----------------------------------------------------------
