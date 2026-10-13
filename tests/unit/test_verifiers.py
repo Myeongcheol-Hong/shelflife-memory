@@ -84,9 +84,10 @@ def test_pypi_cannot_tell_without_a_verbatim_version(body):
     assert (outcome.result, outcome.evidence) == (CheckResult.CANNOT_TELL, None)
 
 
-def test_pypi_rejects_a_bad_name_without_fetching():
+@pytest.mark.parametrize("name", ["../etc", "mcp/../x", "mcp-", "mcp/json"])
+def test_pypi_rejects_a_bad_name_without_fetching(name):
     fetch = fetcher({})
-    assert pypi.check("../etc", "1.0", fetch).result is CheckResult.ERROR
+    assert pypi.check(name, "1.0", fetch).result is CheckResult.ERROR
     assert fetch.calls == []
 
 
@@ -155,9 +156,12 @@ def test_github_release_cannot_tell_without_a_verbatim_tag():
     assert outcome.result is CheckResult.CANNOT_TELL
 
 
-def test_github_release_rejects_a_bad_repo_without_fetching():
+@pytest.mark.parametrize(
+    "repo", ["not a repo", "getzep/graphiti/../../x", "getzep/graphiti/releases"]
+)
+def test_github_release_rejects_a_bad_repo_without_fetching(repo):
     fetch = fetcher({})
-    assert github_release.check("not a repo", "v1", fetch).result is CheckResult.ERROR
+    assert github_release.check(repo, "v1", fetch).result is CheckResult.ERROR
     assert fetch.calls == []
 
 
@@ -174,13 +178,19 @@ def test_evidence_must_appear_verbatim_in_the_fetched_body():
     [
         ("2.3.0", "2.3.0"),
         ("v0.10.3", "0.10.3"),
-        ("V1.0", " v1.0 "),
+        ("V1.0", "1.0.0"),  # the V must parse: the exact fallback would fail here
+        (" v1.0 ", "1.0.0"),
+        ("Release-1.0RC1", "release-1.0rc1"),  # prefix and suffix ignore case
         ("1.0", "1.0.0"),  # trailing zeros (PEP 440)
         ("2024.01.05", "2024.1.5"),  # leading zeros (PEP 440)
         ("1.0.0-rc1", "1.0rc1"),  # separator before the suffix (PEP 440)
         ("release-1.0", "1.0"),  # a tag prefix on one side
         ("graphiti-v0.3", "v0.3"),
-        ("vnext", "VNext"),  # not versions: exact, ignoring case and spaces
+        ("@scope/pkg@1.2.3", "1.2.3"),  # a scoped npm tag
+        ("@scope/pkg@1.2.3", "@scope/pkg@v1.2.3"),
+        ("v1.0.0-1", "1.0.0-1"),  # "v1.0.0" is not a tag prefix
+        ("v1.2.3-beta-1", "1.2.3-beta-1"),
+        ("vnext", " VNext "),  # not versions: exact, ignoring case and spaces
     ],
 )
 def test_same_version(a, b):
@@ -195,6 +205,8 @@ def test_same_version(a, b):
         ("1.0rc1", "1.0"),
         ("1.0-1", "1.0.1"),
         ("pkg-a-v1.0", "pkg-b-v1.0"),  # releases of two packages in one repository
+        ("@a/pkg@1.0", "@b/pkg@1.0"),
+        ("v1.0.0-1", "1"),
         ("v0.30.2 - FalkorDB updates", "v0.30.2"),  # not a version: exact
         ("vnext", "next"),
     ],

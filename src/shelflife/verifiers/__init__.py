@@ -46,11 +46,13 @@ def http_get(url: str, headers: Mapping[str, str]) -> bytes:
 
 
 # A version as packages and release tags write it: an optional tag prefix ending in a
-# separator ("release-", "graphiti-", "pkg@"), an optional "v", the numeric release
-# segments, then an optional suffix ("rc1", "-beta.1", "+local"). The release never gives
-# digits back to the suffix, so "3.9+" and "1.0." are not versions.
+# separator ("release-", "graphiti-", "@scope/pkg@"), an optional "v", the numeric release
+# segments, then an optional suffix ("rc1", "-beta.1", "+local"). The parse without a
+# prefix is tried first, so "v1.0.0-1" is release 1.0.0 with suffix 1, not prefix
+# "v1.0.0". The release never gives digits back to the suffix, so "3.9+" and "1.0." are
+# not versions.
 VERSION = re.compile(
-    r"(?:(?P<prefix>[a-z][\w.@/=-]*?)[-_/@=]+)?v?(?P<release>\d++(?:\.\d++)*+)"
+    r"(?:(?P<prefix>@?[a-z][\w.@/=-]*?)[-_/@=]+)??v?(?P<release>\d++(?:\.\d++)*+)"
     r"(?P<suffix>[-_.+]?[a-z0-9][\w.+-]*)?",
     re.IGNORECASE,
 )
@@ -66,12 +68,12 @@ def parse_version(text: str) -> tuple[str | None, str, str] | None:
     m = VERSION.fullmatch(text.strip())
     if m is None:
         return None
-    segments = [int(s) for s in m["release"].split(".")]
-    while len(segments) > 1 and segments[-1] == 0:
+    segments = [s.lstrip("0") or "0" for s in m["release"].split(".")]
+    while len(segments) > 1 and segments[-1] == "0":
         segments.pop()
     prefix = m["prefix"].lower() if m["prefix"] else None
     suffix = (m["suffix"] or "").lower()
-    return prefix, ".".join(map(str, segments)), suffix[1:] if suffix[:1] in "-_." else suffix
+    return prefix, ".".join(segments), suffix[1:] if suffix[:1] in "-_." else suffix
 
 
 def same_version(a: str, b: str) -> bool:

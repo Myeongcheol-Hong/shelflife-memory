@@ -87,13 +87,13 @@ def build_server(store: Store) -> MCPServer:
         - subject, attribute, value: the structured form of a checkable fact, for example
           "AWS AIP-C01", "exam_fee", "$300".
         - volatility (fast, medium, slow, none) and check_method (pypi, github_release,
-          web_page, none): leave both empty unless you are confident. Rules fill empty
-          ones where they apply (a fact about the latest version or release, with the
-          version as value and a PyPI project or GitHub repository page as source_url,
-          gets a check_method; a price, or words such as version, policy or history,
-          give the volatility), else a default; a value you give, check_target
-          included, is never overwritten. Without a check_method, a
-          world fact is stored as unverifiable and is not scheduled for checks yet.
+          web_page, none): leave both empty unless you are confident. For a world fact,
+          rules fill empty ones where they apply (a fact about the latest version or
+          release, with the version as value and a PyPI project or GitHub repository page
+          as source_url, gets a check_method; a price, or words such as version, policy or
+          history, give the volatility), else a default; a value you give, check_target
+          included, is never overwritten. Without a check_method, a world fact is stored
+          as unverifiable and is not scheduled for checks yet.
         - check_target: the PyPI package, GitHub owner/repo or URL to check. Required
           when check_method is set.
         - source_url, source_quote: where the fact came from, and one line copied

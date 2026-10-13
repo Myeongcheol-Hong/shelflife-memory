@@ -28,8 +28,18 @@ KEYWORDS: dict[Volatility, list[str]] = {
     Volatility.SLOW: "history concept principle definition 역사 개념 원칙 정의".split(),
 }
 
-# A price written in the text or value ("$19.99", "300달러", "5,000원") is a fast fact.
-MONEY = re.compile(r"[$€£¥₩]\s?\d|\d[\d,.]*\s?(?:원|달러|(?:usd|eur)(?![a-z]))", re.IGNORECASE)
+# A price written in the text or value is a fast fact: a currency sign or code before
+# the amount ("$19.99", "USD 20"), or a sign, code or word after it ("20€", "20 dollars",
+# "300달러", "5,000원"), Korean counters included ("2만 9천원").
+MONEY = re.compile(
+    r"""
+    [$€£¥₩]\s?\d
+    | (?<![a-z])(?:usd|eur|gbp|jpy|krw)\s?\d
+    | (?<![\d,.만천억])\d[\d,.]*+ (?>(?:\s?[만천억]++(?:\s?\d[\d,.]*+)?)*)
+      \s?(?:[$€£¥₩]|원|달러|불|유로|(?:usd|eur|gbp|jpy|krw|dollars?|euros?)(?![a-z]))
+    """,
+    re.IGNORECASE | re.VERBOSE,
+)
 
 # A fact about the newest version or release of a package or repository: the whole
 # attribute names it ("latest_version", "release", "최신 버전"), or, without an attribute,
@@ -47,11 +57,13 @@ GITHUB_URL = re.compile(
     r"https?://(?:www\.)?github\.com/([A-Za-z0-9-]+)/([A-Za-z0-9._-]+?)(?:\.git)?(?:[/?#].*)?",
     re.I,
 )
-# First path segments of github.com pages that are not repositories.
+# First path segments of GitHub's own sections, which are not owners of repositories.
 GITHUB_NOT_OWNERS = frozenset(
-    """about apps collections customer-stories enterprise events explore features issues
-    login marketplace new notifications orgs organizations pricing pulls search security
-    settings site sponsors topics trending users""".split()
+    """about account advisories apps blog changelog codespaces collections copilot
+    customer-stories dashboard discussions education enterprise events explore features
+    git-guides issues login marketplace new notifications orgs organizations pricing pulls
+    readme resources search security settings site solutions sponsors stars topics trending
+    users""".split()
 )
 
 
@@ -88,9 +100,10 @@ def infer_volatility(attribute: str | None, text: str, value: str | None) -> Vol
 def is_version_fact(attribute: str | None, text: str, value: str | None) -> bool:
     """Whether a claim states the latest version or release, as a version string.
 
-    The attribute decides when there is one; otherwise the text must say "latest
-    version", "latest release" or similar. Either way the value must be a version string,
-    so "Python version support" or "released in 2019" do not qualify.
+    The attribute decides when there is one ("latest_version", not "python_version" or
+    "release_date"); otherwise the text must say "latest version", "latest release" or
+    similar ("released in 2019" does not). Either way the value must be a version string
+    ("2.3 or later" and "Python 3.9" are not).
     """
     if not value or parse_version(value) is None:
         return False

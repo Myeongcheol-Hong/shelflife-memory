@@ -1,6 +1,6 @@
 # Verifier fixtures
 
-Responses the verifier tests read instead of the live network. `record.py` re-records them and trims each response to the fields the verifiers read.
+Responses the verifier tests read instead of the live network. `record.py` re-records them and trims each response to a few fields: the one the verifier reads (`info.version`, `tag_name`) plus `name` and, for GitHub, `html_url`, `published_at`, `draft` and `prerelease`, so the files stay small and the test that the verifier ignores a release's `name` has data.
 
 | Files | Source |
 |---|---|

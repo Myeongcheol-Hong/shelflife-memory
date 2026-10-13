@@ -2,9 +2,10 @@
 
     uv run python tests/fixtures/record.py
 
-Responses are trimmed to the fields the verifiers read, so the files stay small. The
-GitHub API needs network access to api.github.com (set GITHUB_TOKEN to avoid the
-unauthenticated rate limit). Cloud sessions may block it; run it on your own machine.
+Responses are trimmed to the field each verifier reads plus a few for context (see
+README.md), so the files stay small. The GitHub API needs network access to
+api.github.com (set GITHUB_TOKEN to avoid the unauthenticated rate limit). Cloud sessions
+may block it; run it on your own machine.
 """
 
 from __future__ import annotations
