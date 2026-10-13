@@ -11,7 +11,7 @@ from shelflife.store import Store, default_db_path, query_words
 
 
 def test_remember_minimal_world_fact_gets_defaults(store):
-    claim = store.remember("The AWS AIP-C01 exam fee is $300", "world_fact")
+    claim = store.remember("Seoul has 25 districts", "world_fact")  # no rule applies
 
     assert len(claim.id) == 12
     assert claim.volatility is Volatility.FAST

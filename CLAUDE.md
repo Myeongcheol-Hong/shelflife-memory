@@ -22,6 +22,7 @@ The main contribution is the **eval**, not the feature list. Re-check tools alre
 - Never skip tests, the quote check or the eval rules below to go faster.
 - When the owner says a part is theirs to implement, leave a `TODO(mc)` stub with a failing or skipped test that describes the expected behavior.
 - If the design doc is wrong or unclear, say so and propose an edit instead of silently diverging.
+- One session per milestone or so. Before a session ends, update `docs/session-log.md`.
 
 ### Stop and ask (these do not speed up)
 

@@ -13,7 +13,7 @@ from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from shelflife import scheduler
+from shelflife import rules, scheduler
 from shelflife.models import (
     DEFAULT_VOLATILITY,
     CheckMethod,
@@ -280,21 +280,33 @@ class Store:
             raise ValueError("text must not be empty")
         kind_ = parse_enum(Kind, kind, "kind")
 
-        if f["volatility"] is None:
-            volatility, volatility_source = DEFAULT_VOLATILITY[kind_], FieldSource.DEFAULT
-        else:
+        # Fields the caller leaves empty: a rule where one applies (world facts only),
+        # else the default. A caller's value is never replaced (D5).
+        fact = kind_ is Kind.WORLD_FACT
+        if f["volatility"] is not None:
             volatility = parse_enum(Volatility, f["volatility"], "volatility")
             volatility_source = FieldSource.CALLER
-
-        if f["check_method"] is None:
-            method, method_source = CheckMethod.NONE, FieldSource.DEFAULT
+        elif fact and (ruled := rules.infer_volatility(f["attribute"], text_, f["value"])):
+            volatility, volatility_source = ruled, FieldSource.RULE
         else:
+            volatility, volatility_source = DEFAULT_VOLATILITY[kind_], FieldSource.DEFAULT
+
+        target = f["check_target"]
+        if f["check_method"] is not None:
             method = parse_enum(CheckMethod, f["check_method"], "check_method")
             method_source = FieldSource.CALLER
+        elif fact and (
+            ruled_check := rules.infer_check(
+                target, f["source_url"], f["attribute"], text_, f["value"]
+            )
+        ):
+            (method, target), method_source = ruled_check, FieldSource.RULE
+        else:
+            method, method_source = CheckMethod.NONE, FieldSource.DEFAULT
         if method is not CheckMethod.NONE:
             if kind_ in (Kind.PREFERENCE, Kind.DECISION):
                 raise ValueError(f"{kind_} claims are never checked; leave check_method empty")
-            if f["check_target"] is None:
+            if target is None:
                 raise ValueError(f"check_target is required when check_method is {method}")
 
         raw_deps = fields.get("depends_on") or []
@@ -307,8 +319,7 @@ class Store:
         now = self._now()
         today = now.date()
         observed = _parse_observed_at(f["observed_at"], today) if f["observed_at"] else today
-        # Nothing can check this fact. When M2 rules fill in a default check_method,
-        # they must recompute the status.
+        # Nothing can check this fact (no check_method from the caller or a rule).
         unverifiable = kind_ is Kind.WORLD_FACT and method is CheckMethod.NONE
 
         return Claim(
@@ -322,7 +333,7 @@ class Store:
             volatility_source=volatility_source,
             check_method=method,
             check_method_source=method_source,
-            check_target=f["check_target"],
+            check_target=target,
             source_url=f["source_url"],
             source_quote=f["source_quote"],
             observed_at=observed,

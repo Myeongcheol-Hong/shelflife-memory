@@ -98,7 +98,7 @@ Claude Code: "This project decided to use library X.
 | `kind` | `world_fact` / `decision` / `preference` / `note` | world_fact |
 | `subject`, `attribute`, `value` | Structured form of a checkable fact (optional) | AIP-C01 / exam_fee / $300 |
 | `volatility` | `fast` / `medium` / `slow` / `none` | fast |
-| `volatility_source`, `check_method_source` | Who set volatility and check_method: `caller` / `default` (later `rule`). Rules never overwrite a caller's value | caller |
+| `volatility_source`, `check_method_source` | Who set volatility and check_method: `caller` / `rule` / `default`. Rules fill only empty fields and never overwrite a caller's value | caller |
 | `check_method` | `pypi` / `github_release` / `web_page` / `none` | web_page |
 | `check_target` | Package name, owner/repo, or URL | https://aws.amazon.com/certification/... |
 | `source_url`, `source_quote` | Evidence at write time | One verbatim line from the source |
@@ -121,7 +121,7 @@ A `decision` claim points to its supporting claims through `depends_on`. If any 
 
 ### 4.4 Check log
 
-Every check is recorded in the `checks` table: when, which method, result (same / changed / cannot_tell), old value, new value, evidence quote and cost. This is the audit trail for "why did it answer this way", which matters in regulated domains.
+Every check is recorded in the `checks` table: when, which method, result (same / changed / cannot_tell / error), old value, new value, evidence quote and cost. This is the audit trail for "why did it answer this way", which matters in regulated domains.
 
 ## 5. Architecture
 
@@ -176,7 +176,7 @@ Search works for Korean (D8). The trigram index matches substrings, so a particl
 
 | Tool | Input | What it does |
 |---|---|---|
-| `remember` | text, kind; optional: subject, attribute, value, volatility, check_method, check_target, source_url, source_quote, observed_at, depends_on | Stores a claim. Unknown enum values are rejected, and system-managed fields (id, recorded_at, last_checked_at, next_check_at, status, volatility_source, check_method_source) are never accepted. `text` is the user's sentence as given, in whatever language (D2). The model leaves volatility and check_method empty unless it is confident; empty ones get a default, later refined by rules (M2), and the `*_source` columns record who set them. Claude sets volatility only here, at write time (D4). The user can correct them |
+| `remember` | text, kind; optional: subject, attribute, value, volatility, check_method, check_target, source_url, source_quote, observed_at, depends_on | Stores a claim. Unknown enum values are rejected, and system-managed fields (id, recorded_at, last_checked_at, next_check_at, status, volatility_source, check_method_source) are never accepted. `text` is the user's sentence as given, in whatever language (D2). The model leaves volatility and check_method empty unless it is confident; for a world fact, empty ones are filled by write-time rules where one applies (`src/shelflife/rules.py`), else by a default, and the `*_source` columns record who set them. Claude sets volatility only here, at write time (D4). The user can correct them |
 | `recall` | query, verify = auto / never / always | Searches and returns claims (Korean and English; names in their original spelling, D8). With `auto`, due claims are checked before they are served, and results are annotated with "checked today" or "changed: old -> new" |
 | `due` | days? | Lists claims that are due or changed, and decisions to revisit |
 | `verify` | claim_id | Checks a claim now |

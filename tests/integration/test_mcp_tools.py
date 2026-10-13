@@ -91,7 +91,7 @@ async def test_remember_then_recall_and_due(client, clock):
         check_target="mcp",
     )
     assert stored["volatility"] == "fast"
-    assert stored["volatility_source"] == "default"
+    assert stored["volatility_source"] == "rule"  # "latest version"
     assert stored["check_method_source"] == "caller"
     assert stored["next_check_at"] == "2026-10-19"
 
