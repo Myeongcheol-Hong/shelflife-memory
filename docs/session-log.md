@@ -6,7 +6,7 @@ Handoff notes between working sessions. Newest entry first. Each entry says wher
 
 ### State at the end of the session
 
-- The owner decided D1-D4. `docs/decisions.md` records each with the option chosen, why, and a "Revisit if" line. D5-D7 also have a "Revisit if" line now; Claude drafted those three, and they wait for the owner's check. D5's "Why" refers to the recorded D4 instead of assuming it.
+- The owner decided D1-D4. `docs/decisions.md` records each with the option chosen, why, and a "Revisit if" line. D5-D7 also have a "Revisit if" line now; Claude drafted those three, marked them as drafts in the log, and they wait for the owner's check. D5's "Why" refers to the recorded D4 instead of assuming it.
 - D3 is applied: the server instructions and the `remember` description say Claude may offer ("Want me to remember this?") but never calls `remember` until the user confirms. This answers proposal 2 in #3.
 - `docs/design.md` (5.2, 5.3, 6.0, 8) and `docs/roadmap.md` no longer call D1-D4 open. Both "(owner) ... recorded" roadmap items are ticked. Design 6.0-2 calls extraction recall and precision a stretch goal (D2).
 - These are new commits on M1c (#3), because three PRs are already open. #1-#3 are still unmerged.

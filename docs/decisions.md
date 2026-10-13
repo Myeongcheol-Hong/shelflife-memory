@@ -43,18 +43,18 @@ One entry per decision: the options, the option chosen, why, and when to revisit
 - Status: decided by the owner, 2026-10-12 (recorded from the session that built M1)
 - Chosen: `text` and `kind` are required. Optional: `subject`, `attribute`, `value`, `volatility`, `check_method`, `check_target`, `source_url`, `source_quote`, `observed_at`, `depends_on`. System-managed fields (`id`, `recorded_at`, `last_checked_at`, `next_check_at`, `status`) are never accepted, and unknown enum values are rejected. `volatility_source` and `check_method_source` record who set each value (`caller` or `default`, later `rule` or `llm`), so later stages never overwrite a caller's value and the write eval can tell them apart. The tool description tells the model to leave volatility and check_method empty unless it is confident.
 - Why: design 5.2 listed only four inputs, but a claim (design 4.1) needs more. Under D4 above, LLM judgments happen in the conversation, not on the server, so Claude supplies volatility through these parameters. (Reworded on 2026-10-13: the first version assumed D4 (b) before D4 was decided.)
-- Revisit if: the labeled write eval (design 6.0-2) shows that the volatility or check_method Claude supplies is wrong more often than the default it replaces, or daily use needs a field `remember` does not accept.
+- Revisit if (drafted by Claude, 2026-10-13; owner to confirm): the labeled write eval (design 6.0-2) shows that the volatility or check_method Claude supplies (`*_source` = `caller`) does worse than what the M2 rules set when the field is left empty, counting a fast claim labeled slower as the expensive error; or daily use needs a field `remember` does not accept. Then tell the model to leave both fields empty.
 
 ## D6: MCP SDK version
 
 - Status: decided by the owner, 2026-10-12
 - Chosen: `mcp>=2.3,<3` with `MCPServer`.
 - Why: v2 is the current stable line; it renamed `FastMCP` to `MCPServer`.
-- Revisit if: `mcp` 3.0 is released (the `<3` pin then holds the server back), or Claude Desktop or Claude Code stops working with a 2.x server.
+- Revisit if (drafted by Claude, 2026-10-13; owner to confirm): `mcp` 3.0 is released (the `<3` pin then holds the server back), or Claude Desktop or Claude Code stops working with a 2.x server.
 
 ## D7: `next_check_at` in M1
 
 - Status: decided by the owner, 2026-10-12
 - Chosen: `next_check_at` = `observed_at` + the per-class interval from design 4.2 (`none` gives no date), as a pure function; the clock is injected. M2 extends it.
 - Why: `due` ships in M1 and needs a date to compare against.
-- Revisit if: M2 adds checks (from then on the next date must count from the last check, not from `observed_at`), or the 6.1 replay shows another policy beats the per-class intervals on the held-out test split.
+- Revisit if (drafted by Claude, 2026-10-13; owner to confirm): M2 adds checks, since this entry covers only M1 and M2 extends it; or the 6.1 replay shows another policy beats the per-class intervals on the held-out test split.
