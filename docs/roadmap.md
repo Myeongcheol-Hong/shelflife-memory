@@ -5,7 +5,7 @@ Milestones are listed in dependency order. Each milestone ships as its own PR (o
 Items marked **(owner)** are done by the maintainer by hand: ground-truth labels and open decisions. Tooling for them can be built ahead of time.
 
 ## M1: Core store and MCP server
-- [ ] Package skeleton: `uv` package `shelflife-memory`, import name `shelflife`, pytest, ruff, SessionStart hook (`uv sync`)
+- [x] Package skeleton: `uv` package `shelflife-memory`, import name `shelflife`, pytest, ruff, SessionStart hook (`uv sync`)
 - [ ] SQLite schema (design 5.1) with FTS5
 - [ ] `remember` / `recall` (no verification yet) with unit tests
 - [ ] stdio MCP server exposing `remember`, `recall`, `due`
