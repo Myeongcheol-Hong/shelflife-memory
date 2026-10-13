@@ -173,6 +173,8 @@ def test_recall_finds_korean_claims(store, korean, query, expected):
         ("Hindsight에서", ["Hindsight"]),
         ("GPT4는", ["GPT4"]),
         ("AI모델", ["AI", "모델"]),  # not a particle: both parts kept
+        ("AI모델v2", ["AI", "모델", "v2"]),  # split at every boundary
+        ("모델v2", ["모델", "v2"]),  # Hangul first
         ("Chatbox로 chatbox", ["Chatbox"]),  # deduplicated ignoring case
         ("가격은", ["가격은"]),  # Hangul only: not split
         ("3월", ["3월"]),  # no Latin letter: not split
@@ -180,6 +182,15 @@ def test_recall_finds_korean_claims(store, korean, query, expected):
 )
 def test_query_words_split_latin_and_hangul(query, words):
     assert query_words(query) == words
+
+
+# The owner's list (D8), written out here so a change to PARTICLES fails a test.
+@pytest.mark.parametrize(
+    "particle",
+    ["은", "는", "이", "가", "을", "를", "의", "로", "으로", "에", "에서", "와", "과", "도", "만"],
+)
+def test_query_words_drop_each_listed_particle(particle):
+    assert query_words("Chatbox" + particle) == ["Chatbox"]
 
 
 def test_recall_drops_a_particle_after_a_latin_name(store, korean):
