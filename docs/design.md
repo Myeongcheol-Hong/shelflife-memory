@@ -100,11 +100,11 @@ Claude Code: "This project decided to use library X.
 | `volatility` | `fast` / `medium` / `slow` / `none` | fast |
 | `volatility_source`, `check_method_source` | Who set volatility and check_method: `caller` / `rule` / `default`. Rules fill only empty fields and never overwrite a caller's value | caller |
 | `check_method` | `pypi` / `github_release` / `web_page` / `none` | web_page |
-| `check_target` | Package name, owner/repo, or URL | https://aws.amazon.com/certification/... |
+| `check_target` | Package name, owner/repo, or URL. Required with a check method; `pypi` and `github_release` also need a `value` to compare | https://aws.amazon.com/certification/... |
 | `source_url`, `source_quote` | Evidence at write time | One verbatim line from the source |
 | `observed_at` | When the fact was confirmed true | 2026-10-08 |
 | `next_check_at` | Next scheduled check | 2026-10-15 |
-| `status` | `fresh` / `due` / `changed` / `unverifiable` / `retired` | fresh |
+| `status` | `fresh` / `changed` / `unverifiable` / `retired`. "Due" is not a status: a claim is due when its `next_check_at` is today or earlier, derived and never stored | fresh |
 
 ### 4.2 Volatility classes (defaults; later replaced by adaptive scheduling)
 
@@ -176,7 +176,7 @@ Search works for Korean (D8). The trigram index matches substrings, so a particl
 
 | Tool | Input | What it does |
 |---|---|---|
-| `remember` | text, kind; optional: subject, attribute, value, volatility, check_method, check_target, source_url, source_quote, observed_at, depends_on | Stores a claim. Unknown enum values are rejected, and system-managed fields (id, recorded_at, last_checked_at, next_check_at, status, volatility_source, check_method_source) are never accepted. `text` is the user's sentence as given, in whatever language (D2). The model leaves volatility and check_method empty unless it is confident; for a world fact, empty ones are filled by write-time rules where one applies (`src/shelflife/rules.py`), else by a default, and the `*_source` columns record who set them. Claude sets volatility only here, at write time (D4). The user can correct them |
+| `remember` | text, kind; optional: subject, attribute, value, volatility, check_method, check_target, source_url, source_quote, observed_at, depends_on | Stores a claim. Unknown enum values are rejected, and system-managed fields (id, recorded_at, last_checked_at, next_check_at, status, volatility_source, check_method_source) are never accepted. `text` is the user's sentence as given, in whatever language (D2). The model leaves volatility and check_method empty unless it is confident; for a world fact, empty ones are filled by write-time rules where one applies (`src/shelflife/rules.py`), else by a default, and the `*_source` columns record who set them. The check-method rule fires only when the attribute names a latest-version or latest-release fact (D5). A `pypi` or `github_release` claim needs a `value`. Claude sets volatility only here, at write time (D4). The user can correct them |
 | `recall` | query, verify = auto / never / always | Searches and returns claims (Korean and English; names in their original spelling, D8). With `auto`, due claims are checked before they are served, and results are annotated with "checked today" or "changed: old -> new" |
 | `due` | days? | Returns `{"due", "changed", "needs_check_method"}` (D9): claims whose next check is due (within `days`), each with its last check; claims a check found changed, each with that check; world facts with no check method. Decisions to revisit join in M4 |
 | `verify` | claim_id | Checks a claim now with its rule-based verifier (pypi, github_release), records the check and returns `{"claim", "check"}`. The claim keeps its value; `changed` sets its status, and `next_check_at` follows D9. web_page claims are judged in the conversation (`record_check`, D4) |

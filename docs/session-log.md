@@ -2,6 +2,28 @@
 
 Handoff notes between working sessions. Newest entry first. Each entry says where the work stands, what waits on the owner, and what the next session should do first.
 
+## 2026-10-13: M2d, the owner's follow-ups to #8-#10
+
+### State at the end of the session
+
+- Merged into `main`: #8-#10 (M2a-M2c), so M2 is done apart from these follow-ups.
+- Open: "M2d: follow-ups from the owner's review of #8-#10", branch `claude/tender-mayer-wts8cd-m2d`, base `main`. It applies the owner's answers to the questions in the entry below:
+  1. The check-method rule reads only the attribute. A claim whose text alone mentions the latest version gets no check method and waits under `due`'s `needs_check_method`. A bare year or a date (2025, 2024-06, 2024-06-20, 2024/06/20) is not a version string; dotted calendar versions (2024.08.30) still are.
+  2. `remember` refuses a `pypi` or `github_release` claim without a `value`; `verify` still refuses one too. `web_page` may have no value.
+  3. `add_check` and `forget` run in `BEGIN IMMEDIATE` transactions (`Store._write`), with a test where a second connection retires the claim while a check starts.
+  4. `Status.DUE` is gone; design 4.1 says "due" is derived from `next_check_at`.
+  5. D9's revisit line is confirmed; the `change` field on changed items is approved as built. Both recorded in `docs/decisions.md` (D5 and D9).
+
+### Waiting on the owner
+
+- Review and merge of the M2d PR.
+- One choice in M2d the owner may overrule: a bare `version` or `release` attribute (no "latest") still counts as a latest-version fact, as in #8, because a version stated from a PyPI project or GitHub repository page is its current one.
+
+### Next session: start here
+
+1. Check the M2d PR (merged? review comments? CI?).
+2. With M2d merged, show a short plan for M3 (web_page verifier, `record_check` with the verbatim-quote check, the four write checks) and wait for approval.
+
 ## 2026-10-13: M2 complete as #8-#10 (handoff)
 
 ### State at the end of the session

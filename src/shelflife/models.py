@@ -31,8 +31,9 @@ class CheckMethod(StrEnum):
 
 
 class Status(StrEnum):
+    """Stored status. "Due" is not one: it is derived from next_check_at (design 4.1)."""
+
     FRESH = "fresh"
-    DUE = "due"
     CHANGED = "changed"
     UNVERIFIABLE = "unverifiable"
     RETIRED = "retired"

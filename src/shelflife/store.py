@@ -8,7 +8,8 @@ import sqlite3
 import threading
 import time
 import uuid
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping
+from contextlib import contextmanager
 from dataclasses import asdict
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
@@ -286,7 +287,7 @@ class Store:
         one without a check method.
         """
         now = self._now()
-        with self._lock, self._conn:
+        with self._lock, self._write():
             claim = self._get_checkable(claim_id)
             check = Check(
                 id=uuid.uuid4().hex[:12],
@@ -326,11 +327,29 @@ class Store:
         Forgetting a retired claim again changes nothing. Raises ValueError for an
         unknown id.
         """
-        with self._lock, self._conn:
+        with self._lock, self._write():
             if not self._exists(claim_id):
                 raise ValueError(f"no claim with id {claim_id!r}")
             self._conn.execute("UPDATE claims SET status = 'retired' WHERE id = ?", (claim_id,))
             return self._get(claim_id)
+
+    @contextmanager
+    def _write(self) -> Iterator[None]:
+        """A transaction that takes SQLite's write lock at its start (BEGIN IMMEDIATE).
+
+        Claude Desktop and Claude Code each run a server process on this file. A write that
+        first reads the claim must not let another process change it in between; a
+        deferred transaction would read without the lock and could overwrite, for
+        example, a forget committed meanwhile. BEGIN IMMEDIATE waits up to the busy
+        timeout for the lock.
+        """
+        self._conn.execute("BEGIN IMMEDIATE")
+        try:
+            yield
+        except BaseException:
+            self._conn.rollback()
+            raise
+        self._conn.commit()
 
     def checkable(self, claim_id: str) -> Claim:
         """The claim, if a check of it may be recorded; else ValueError, as add_check."""
@@ -390,9 +409,7 @@ class Store:
             method = parse_enum(CheckMethod, f["check_method"], "check_method")
             method_source = FieldSource.CALLER
         elif fact and (
-            ruled_check := rules.infer_check(
-                target, f["source_url"], f["attribute"], text_, f["value"]
-            )
+            ruled_check := rules.infer_check(target, f["source_url"], f["attribute"], f["value"])
         ):
             (method, target), method_source = ruled_check, FieldSource.RULE
         else:
@@ -402,6 +419,11 @@ class Store:
                 raise ValueError(f"{kind_} claims are never checked; leave check_method empty")
             if target is None:
                 raise ValueError(f"check_target is required when check_method is {method}")
+            # A version check compares the value; without one, verify refuses the claim
+            # and it would stay due for ever. web_page may have no value (D4: judged in
+            # the conversation).
+            if method in (CheckMethod.PYPI, CheckMethod.GITHUB_RELEASE) and f["value"] is None:
+                raise ValueError(f"value is required when check_method is {method}")
 
         raw_deps = fields.get("depends_on") or []
         if not isinstance(raw_deps, list | tuple):

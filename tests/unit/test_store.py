@@ -75,6 +75,14 @@ def test_remember_treats_blank_strings_as_missing(store):
         ({"volatility": "daily"}, "volatility must be one of: fast, medium, slow, none"),
         ({"check_method": "rss"}, "check_method must be one of"),
         ({"check_method": "pypi"}, "check_target is required when check_method is pypi"),
+        (
+            {"check_method": "pypi", "check_target": "mcp"},
+            "value is required when check_method is pypi",
+        ),
+        (
+            {"check_method": "github_release", "check_target": "a/b", "value": " "},
+            "value is required when check_method is github_release",
+        ),
         ({"observed_at": "2026/10/08"}, "observed_at must be a date in YYYY-MM-DD form"),
         ({"observed_at": "2026-10-08T10:00:00"}, "YYYY-MM-DD"),
         ({"observed_at": "2026-02-30"}, "observed_at is not a valid date"),
@@ -93,6 +101,14 @@ def test_remember_rejects_invalid_input(store, kwargs, message):
     args = {"text": "A fact", "kind": "world_fact"} | kwargs
     with pytest.raises(ValueError, match=message):
         store.remember(**args)
+
+
+def test_a_web_page_claim_needs_no_value(store):
+    # D4: a web_page claim is judged in the conversation, so it may have no value.
+    claim = store.remember(
+        "The fee is $300", "world_fact", check_method="web_page", check_target="https://a.b"
+    )
+    assert (claim.check_method, claim.value) == (CheckMethod.WEB_PAGE, None)
 
 
 def test_decision_depends_on_existing_claims(store):
@@ -250,7 +266,7 @@ def test_recall_respects_limit(store):
 
 
 def test_due_lists_checkable_claims_past_next_check_at(store, clock):
-    pypi = {"check_method": "pypi", "check_target": "mcp", "volatility": "fast"}
+    pypi = {"check_method": "pypi", "check_target": "mcp", "value": "1.0", "volatility": "fast"}
     old = store.remember("Old version", "world_fact", observed_at="2026-10-01", **pypi)
     recent = store.remember("New version", "world_fact", observed_at="2026-10-10", **pypi)
 
@@ -270,9 +286,8 @@ def test_due_leaves_out_claims_nothing_can_check(store, clock):
 
 def test_dates_follow_the_clocks_time_zone(store, clock):
     clock.now = datetime(2026, 10, 13, 8, 0, 0, 123456, tzinfo=timezone(timedelta(hours=9)))
-    fact = store.remember(
-        "A version", "world_fact", check_method="pypi", check_target="x", observed_at="2026-10-06"
-    )
+    pypi = {"check_method": "pypi", "check_target": "x", "value": "1.0"}
+    fact = store.remember("A version", "world_fact", observed_at="2026-10-06", **pypi)
     note = store.remember("A note", "note")
 
     assert note.observed_at == date(2026, 10, 13)  # local date, not UTC (still 10-12)
@@ -300,7 +315,7 @@ def test_needs_check_method_lists_world_facts_nothing_can_check(store, clock):
     first = store.remember("Seoul has 25 districts", "world_fact")
     clock.now += timedelta(minutes=1)
     second = store.remember("A fee with no check method", "world_fact")
-    store.remember("A version", "world_fact", check_method="pypi", check_target="x")
+    store.remember("A version", "world_fact", check_method="pypi", check_target="x", value="1")
     store.remember("I like short answers", "preference")
     store.remember("A note", "note")
     retired = store.remember("A forgotten fact", "world_fact")

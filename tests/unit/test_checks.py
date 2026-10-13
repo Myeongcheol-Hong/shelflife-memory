@@ -1,5 +1,7 @@
 """Recording checks (D9) and retiring claims."""
 
+import sqlite3
+import threading
 from datetime import UTC, date, datetime, timedelta, timezone
 
 import pytest
@@ -143,6 +145,37 @@ def test_checks_are_refused_for_claims_that_cannot_be_checked(store, claim):
         with pytest.raises(ValueError, match=message):
             store.checkable(claim_id)
     assert store._conn.execute("SELECT count(*) FROM checks").fetchone()[0] == 0
+
+
+def test_a_check_reads_the_claim_after_another_process_has_written(store, claim, tmp_path):
+    # Another server process on the same file (Claude Desktop next to Claude Code) is
+    # retiring the claim when the check starts. The check must wait for that write before
+    # it reads the claim; a check that read first would record itself and make the
+    # retired claim fresh again.
+    other = sqlite3.connect(
+        tmp_path / "shelflife.db", isolation_level=None, check_same_thread=False
+    )
+    other.execute("BEGIN IMMEDIATE")
+    other.execute("UPDATE claims SET status = 'retired' WHERE id = ?", (claim.id,))
+    threading.Timer(0.3, lambda: other.execute("COMMIT")).start()
+    with pytest.raises(ValueError, match="is retired"):
+        store.add_check(claim.id, CheckResult.SAME, "2.3.0", "2.3.0")
+    other.close()
+    assert store.get(claim.id).status is Status.RETIRED
+    assert checks(store, claim.id) == []
+
+
+def test_a_check_that_fails_halfway_leaves_nothing_behind(store, claim, monkeypatch):
+    def broken(*args):
+        raise RuntimeError("scheduler failed")
+
+    monkeypatch.setattr("shelflife.scheduler.next_check_after", broken)
+    with pytest.raises(RuntimeError):
+        store.add_check(claim.id, CheckResult.SAME, "2.3.0", "2.3.0")  # after the INSERT
+    assert checks(store, claim.id) == []
+    monkeypatch.undo()
+    updated, _ = store.add_check(claim.id, CheckResult.SAME, "2.3.0", "2.3.0")
+    assert updated.status is Status.FRESH and len(checks(store, claim.id)) == 1
 
 
 def test_last_check_is_the_newest_or_the_newest_with_a_result(store, claim):
