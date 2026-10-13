@@ -7,7 +7,7 @@ import re
 import sqlite3
 import threading
 import uuid
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -176,8 +176,43 @@ class Store:
         """
         claim = self._new_claim(uuid.uuid4().hex[:12], text, kind, fields)
         with self._lock, self._conn:
-            self._insert(claim)
+            self._insert_row(claim)
+            self._insert_depends_on(claim)
         return claim
+
+    def import_claims(self, records: Iterable[Mapping[str, Any]]) -> tuple[int, int]:
+        """Store claims that carry their own ids, such as examples/seed_claims.jsonl.
+
+        Records are validated like `remember` input, plus an `id`. Ids already stored are
+        skipped, so importing a file twice is harmless. The import is one transaction: if
+        any record is invalid, nothing is stored. Returns (imported, skipped).
+        """
+        claims: list[Claim] = []
+        seen: set[str] = set()
+        for n, record in enumerate(records, start=1):
+            fields = dict(record)
+            try:
+                claim_id = _clean(fields.pop("id", None), "id")
+            except ValueError as e:
+                raise ValueError(f"record {n}: {e}") from None
+            if claim_id is None:
+                raise ValueError(f"record {n}: id is required")
+            if claim_id in seen:
+                raise ValueError(f"record {n}: duplicate id {claim_id!r}")
+            seen.add(claim_id)
+            try:
+                text, kind = fields.pop("text", None), fields.pop("kind", None)
+                claims.append(self._new_claim(claim_id, text, kind, fields))
+            except ValueError as e:
+                raise ValueError(f"record {n} ({claim_id}): {e}") from None
+
+        with self._lock, self._conn:
+            new = [c for c in claims if not self._exists(c.id)]
+            for claim in new:  # all rows first, so depends_on may point later in the file
+                self._insert_row(claim)
+            for claim in new:
+                self._insert_depends_on(claim)
+        return len(new), len(claims) - len(new)
 
     def _new_claim(self, claim_id: str, text: str, kind: str, fields: Mapping[str, Any]) -> Claim:
         """Apply validation and defaults. Does not touch the database."""
@@ -244,16 +279,25 @@ class Store:
             depends_on=deps,
         )
 
-    def _insert(self, claim: Claim) -> None:
-        """Insert one claim and its depends_on rows. Caller holds the lock and transaction."""
-        for dep in claim.depends_on:
-            if self._conn.execute("SELECT 1 FROM claims WHERE id = ?", (dep,)).fetchone() is None:
-                raise ValueError(f"depends_on refers to unknown claim {dep!r}")
+    def _exists(self, claim_id: str) -> bool:
+        row = self._conn.execute("SELECT 1 FROM claims WHERE id = ?", (claim_id,)).fetchone()
+        return row is not None
+
+    def _insert_row(self, claim: Claim) -> None:
+        """Caller holds the lock and the transaction."""
         row = claim.to_dict()
         row.pop("depends_on")
         columns = ", ".join(row)
         placeholders = ", ".join(f":{c}" for c in row)
         self._conn.execute(f"INSERT INTO claims ({columns}) VALUES ({placeholders})", row)
+
+    def _insert_depends_on(self, claim: Claim) -> None:
+        """Caller holds the lock and the transaction."""
+        for dep in claim.depends_on:
+            if dep == claim.id:
+                raise ValueError(f"claim {claim.id!r} cannot depend on itself")
+            if not self._exists(dep):
+                raise ValueError(f"depends_on refers to unknown claim {dep!r}")
         self._conn.executemany(
             "INSERT INTO depends_on (decision_id, claim_id) VALUES (?, ?)",
             [(claim.id, dep) for dep in claim.depends_on],
