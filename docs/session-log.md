@@ -2,6 +2,61 @@
 
 Handoff notes between working sessions. Newest entry first. Each entry says where the work stands, what waits on the owner, and what the next session should do first.
 
+## 2026-10-13: Review-rules rework and the rest of M3 approved (handoff)
+
+### State at the end of the session
+
+- Merged into `main` (f612b2c): #15 (the previous handoff entry).
+- Open: [#16](https://github.com/Myeongcheol-Hong/shelflife-memory/pull/16), branch `claude/tender-mayer-wts8cd-review-rules`, base `main`, one commit (0f11cab): a "Review rules" section in `CLAUDE.md` plus `REVIEW.md`. The owner asked for a rework (STEP 1 below); **nothing of it is done yet**.
+- The owner approved the plan for the rest of M3 (five PRs, below) with additions. No code for it exists yet.
+
+### STEP 1: rework #16 (new commits on its branch, no rebase)
+
+The owner's instructions, close to verbatim:
+
+- Delete `REVIEW.md` (only the managed Code Review product reads it, and the owner does not use it). Split the rules by how each piece loads:
+- a) `CLAUDE.md` "Review rules": only what applies while writing code, about 6 lines: PR size (~400 changed lines excluding tests and fixtures); the PR description template (f); the code the owner always reads (`store.py` schema and transactions, MCP tool interfaces, quote and `record_check` validation, eval scoring); prefer the simpler fix and say what was removed; packages need the owner's approval and a PyPI check. Keep `CLAUDE.md` under 200 lines (it is 109 now on #16's branch).
+- b) `.claude/skills/pr-review/SKILL.md`: the review checklist. Flag only gaps that affect correctness, security or `docs/decisions.md`; everything else goes in one optional list and is not fixed by default. Check: could it be simpler, what can be deleted, duplicated helpers, changes outside the PR's scope, tests that pass for the wrong reason, tests that duplicate others or test cases that cannot happen (propose tests to delete), defensive code for impossible cases, new dependencies. Output: a must-fix list and an optional list.
+- c) `.claude/agents/pr-reviewer.md`: a read-only reviewer subagent (Read, Grep, Glob, and Bash only to run tests) that preloads the pr-review skill and sees only the diff, the PR description and docs. Claude's review workflow uses it from now on (the two skeptics per finding may stay).
+- d) CI in `.github/workflows` (today only `ci.yml`): one job fails when the dependencies in `pyproject.toml` change unless the PR has the label `deps-approved` (the owner adds it); one job reports changed lines excluding `tests/` and fixtures, and fails above 600.
+- e) A Stop hook in `.claude/settings.json` (today it has only the SessionStart hook) that runs ruff and pytest, so a session cannot end with failing checks.
+- f) PR description template. Top part, at most 10 lines: What changed; Read these first (1-3 core files or functions); Decisions needed; Removed or simplified. Then: **Proof** (tests added and what each asserts, one line each; commands run and results), **Confidence** (high / medium / low per part, with a reason for anything not high), **Rollback** (how to undo it; write ONE-WAY DOOR if it changes the DB schema or stored data). Then **Details**.
+- Rewrite #16's description in the new template, then tell the owner #16 is updated; the owner merges it right after. Building ahead on pushed branches is allowed meanwhile; open PRs in order, at most 3 open. No need to watch #16.
+
+### STEP 2: the rest of M3, one PR each, in this order
+
+The owner's answers from before the plan (not yet written into the docs; PR 1 does that):
+
+- D10 open questions: 1 (a) a `reason` column in the v2 migration; 2 (a) quote rules only for a web_page claim without a value; 3 (a) also fold numbers in the value check (60% = 60.0%); 4 confirmed: values are compared after folding, so "300 USD" is no change from "$300", and write check 2 uses the same matcher; 5 (a) keep dropping struck-through text, revisit if 6.2 shows misjudgments from the missing "was ... now ..." context; 8 the proxy rule is confirmed. Remove the draft marker from D10's revisit line.
+- On #14: M4 hashes `Section.core`; the price synonym group is approved, add `수수료`; drop a trailing D8 particle from a pure-Hangul word only if at least 2 characters remain ("가격은" to "가격", but "속도" and "회의" stay), one shared helper, used by section selection now; switch `recall` to it in a separate small PR after the M3 stack lands (that closes D8's "가격이 vs 가격은").
+- Add a note to `tests/fixtures/README.md`: the recorded pages are third-party content kept only as test input, with each page's source URL and recording date.
+
+The approved plan (rough size: src+docs / tests):
+
+| PR | Content | Size |
+|---|---|---|
+| 1. M3c follow-ups | The answers above into D10, D8 and design 4.4, 5.1 and 5.3; the fixtures README note; `수수료` in the price group; one `drop_particle()` helper in `store.py` next to `PARTICLES` (drops a trailing particle only if at least 2 characters remain, longest particle first: `으로` before `로`); section `terms()` uses it on every Hangul run. | ~60 / ~40 |
+| 2. M3d `judgment.py` | The versioned template (a test pins its hash), page text fenced as untrusted data; `render()`, `Judgment`, `validate()`. Quote rules: at least about 20 characters and 3 words, exactly once on the page, inside the section. Value matcher: folds dashes, quote marks, money with currency and numbers (60% = 60.0%; "2.3.0"-style versions are not folded). A claim without a value gets the quote rules only, but a given `new_value` must still appear in the quote (owner: yes). No model-output parser: that goes to M8 (owner: agreed). | ~200 / ~250 |
+| 3. M3e tools, schema v2 | **ONE-WAY DOOR.** Schema v2: `prompt_version`, `page_sha256`, `section_sha256` (hash of `Section.core`) and `reason` on `checks`, with the v1 to v2 migration tested on a v1 file. Before migrating, copy the DB file to `shelflife.db.bak-v1` next to it and say so in the output; list the migration under "Read these first". `verify` on web_page returns `judge`, or records `error` when the fetch fails. `record_check` holds the page for 30 minutes and refuses a stale fetch inside the write transaction. `needs_check_method` leaves out a caller-set `none`. Tool descriptions pinned by tests. | ~230 / ~300 |
+| 4. M3f write checks + seeds | The four checks as pure functions with an injected fetch, plus a read-only CLI that writes JSON lines with pass, fail, skip and blocked counts. Seed edits: MemGuard becomes `none`, the MetagenomicsBench value becomes "60%", the eligibility value becomes a phrase copied from the page. `source_quote` proposals copied from the fixtures for the owner to approve. Tick the M3 boxes. | ~200 / ~200 |
+| 5. After the stack lands | `recall` switches to `drop_particle()`. | ~15 / ~20 |
+
+Roadmap edits the owner asked for (fit them into PR 1 or PR 4):
+
+- M4: `recall(verify=auto)` ships behind a setting that is off by default (`SHELFLIFE_RECALL_VERIFY=never`); note it in D9-5.
+- M9: a launch-readiness pass before release: an agent audit (performance, bugs, security, fit to `docs/design.md`) and the owner's own cleanup and refactor pass.
+
+### Waiting on the owner
+
+- Merge of #16 once STEP 1 is pushed, and of this handoff PR.
+- Nothing else: the plan, the open D10 questions and the M3e backup rule are all answered above.
+
+### Next session: start here
+
+1. Check #16 and this handoff PR (merged? comments?).
+2. Do STEP 1 on `claude/tender-mayer-wts8cd-review-rules` with new commits, update #16's description, tell the owner.
+3. Build PR 1 (M3c follow-ups) on `claude/tender-mayer-wts8cd-m3c-followups`, then M3d, M3e, M3f, reviewing each with the new `pr-reviewer` subagent. Keep at most 3 PRs open.
+
 ## 2026-10-13: M3a-M3c merged (handoff)
 
 ### State at the end of the session
