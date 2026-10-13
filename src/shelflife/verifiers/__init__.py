@@ -7,6 +7,7 @@ calling the live network.
 from __future__ import annotations
 
 import http.client
+import re
 import urllib.error
 import urllib.request
 from collections.abc import Callable, Mapping
@@ -44,10 +45,48 @@ def http_get(url: str, headers: Mapping[str, str]) -> bytes:
         raise FetchError(f"cannot reach {url}: {e}") from None
 
 
-def normalize_version(version: str) -> str:
-    """Compare "v0.10.3" and "0.10.3" as equal; versions are otherwise compared exactly."""
-    version = version.strip().lower()
-    return version[1:] if version[:1] == "v" and version[1:2].isdigit() else version
+# A version as packages and release tags write it: an optional tag prefix ending in a
+# separator ("release-", "graphiti-", "pkg@"), an optional "v", the numeric release
+# segments, then an optional suffix ("rc1", "-beta.1", "+local"). The release never gives
+# digits back to the suffix, so "3.9+" and "1.0." are not versions.
+VERSION = re.compile(
+    r"(?:(?P<prefix>[a-z][\w.@/=-]*?)[-_/@=]+)?v?(?P<release>\d++(?:\.\d++)*+)"
+    r"(?P<suffix>[-_.+]?[a-z0-9][\w.+-]*)?",
+    re.IGNORECASE,
+)
+
+
+def parse_version(text: str) -> tuple[str | None, str, str] | None:
+    """(tag prefix, release, suffix) of a version string; None if it is not one.
+
+    As in PEP 440, the release drops leading zeros in each segment and trailing ".0"
+    segments ("1.0" and "1.0.0" give the same release), and the suffix drops a leading
+    "-", "_" or "." ("1.0-rc1" and "1.0rc1" give the same suffix).
+    """
+    m = VERSION.fullmatch(text.strip())
+    if m is None:
+        return None
+    segments = [int(s) for s in m["release"].split(".")]
+    while len(segments) > 1 and segments[-1] == 0:
+        segments.pop()
+    prefix = m["prefix"].lower() if m["prefix"] else None
+    suffix = (m["suffix"] or "").lower()
+    return prefix, ".".join(map(str, segments)), suffix[1:] if suffix[:1] in "-_." else suffix
+
+
+def same_version(a: str, b: str) -> bool:
+    """Whether two version strings name the same version.
+
+    Equivalent forms are equal: "v0.10.3" and "0.10.3", "1.0" and "1.0.0", "release-1.0"
+    and "1.0". Two different tag prefixes are not ("pkg-a-v1.0" and "pkg-b-v1.0" name
+    releases of different packages in one repository). Anything that is not a version
+    string is compared exactly, ignoring case and surrounding spaces.
+    """
+    pa, pb = parse_version(a), parse_version(b)
+    if pa is None or pb is None:
+        return a.strip().lower() == b.strip().lower()
+    prefixes_agree = pa[0] is None or pb[0] is None or pa[0] == pb[0]
+    return prefixes_agree and pa[1:] == pb[1:]
 
 
 def compare_version(claimed: str | None, found: object, body: str) -> Outcome:
@@ -60,6 +99,5 @@ def compare_version(claimed: str | None, found: object, body: str) -> Outcome:
         return Outcome(CheckResult.CANNOT_TELL)
     if claimed is None:
         return Outcome(CheckResult.CANNOT_TELL, new_value=found, evidence=found)
-    same = normalize_version(claimed) == normalize_version(found)
-    result = CheckResult.SAME if same else CheckResult.CHANGED
+    result = CheckResult.SAME if same_version(claimed, found) else CheckResult.CHANGED
     return Outcome(result, new_value=found, evidence=found)

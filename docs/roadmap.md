@@ -16,8 +16,8 @@ Items marked **(owner)** are done by the maintainer by hand: ground-truth labels
 - [x] Recall follow-ups (M1e): particles split off Latin names in queries, `recall` asks for 2-5 key words, `FieldSource.LLM` removed
 
 ## M2: Volatility and rule-based verifiers
-- [x] Volatility classification: rules first. The LLM part is Claude setting volatility at write time through `remember` when confident; no new tool (D4). Rules also fill check_method for version facts with a PyPI or GitHub URL
-- [x] `pypi` and `github_release` verifiers (no LLM) with recorded fixtures (GitHub fixtures written by hand until `tests/fixtures/record.py` runs where the GitHub API is reachable)
+- [x] Volatility classification: rules first. The LLM part is Claude setting volatility at write time through `remember` when confident; no new tool (D4). Rules also fill check_method for latest-version facts whose source_url is a PyPI project or GitHub repository page
+- [x] `pypi` and `github_release` verifiers (no LLM) with fixtures (PyPI recorded; GitHub written by hand and checked against the live API by the owner on 2026-10-13. `tests/fixtures/record.py` re-records both where the GitHub API is reachable)
 - [x] `due` returns claims past `next_check_at` (done early in M1: `next_check_at` = `observed_at` + the class interval from design 4.2, and only claims with a check method are listed. M2 extends it: recompute after each check and also list `changed` claims)
 - [ ] `verify` tool
 - [ ] `forget` tool (design 5.2)

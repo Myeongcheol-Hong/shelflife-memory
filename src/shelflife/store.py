@@ -296,7 +296,9 @@ class Store:
             method = parse_enum(CheckMethod, f["check_method"], "check_method")
             method_source = FieldSource.CALLER
         elif fact and (
-            ruled_check := rules.infer_check(target, f["source_url"], f["attribute"], text_)
+            ruled_check := rules.infer_check(
+                target, f["source_url"], f["attribute"], text_, f["value"]
+            )
         ):
             (method, target), method_source = ruled_check, FieldSource.RULE
         else:
