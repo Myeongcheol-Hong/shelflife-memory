@@ -6,13 +6,18 @@ Handoff notes between working sessions. Newest entry first. Each entry says wher
 
 ### State at the end of the session
 
-- The owner reviewed #1-#3 and merges them bottom-up with merge commits.
-- Everything from that review is on `claude/tender-mayer-wts8cd-m1d`, built on the M1c head. It becomes the PR "M1d: follow-ups" against `main` once the merges land: rebase it onto `main` first, then open it. It is not part of #3.
+- #1 merged into `main`. #2 and #3 were merged into their stack branches (their bases were still the branches below them), so the owner landed M1b + M1c on `main` through #5. `main`'s tree equals the reviewed M1c head.
+- [#4](https://github.com/Myeongcheol-Hong/shelflife-memory/pull/4) "M1d: follow-ups" is open against `main`. It was rebuilt on `main` by cherry-picking the M1d commit, then got one more commit with fixes from its review.
 - M1d contents:
   - Korean search (D8): `claims_fts` uses the `trigram` tokenizer; query words shorter than 3 characters use LIKE; ranking is by matched words, then bm25. Schema changed in place at version 1.
-  - WAL and a 5-second busy timeout, since Claude Desktop and Claude Code each run a server process on the same file.
+  - WAL, so Claude Desktop and Claude Code can each run a server process on the same file. Switching a new file to WAL is retried while another process holds a write lock. The 5-second busy timeout was already Python's default; it is now an explicit constant.
   - Tool wording: `text` is the user's sentence as given (D2), an offer shows the exact sentence and the yes approves it (D3), and `recall` asks for names in their original spelling (D8).
-  - Docs: the owner's answers to the proposals in #1-#3 and to questions 1-4 below, D5-D7 revisit lines confirmed, D8 recorded, the stale "open decisions" pointer in CLAUDE.md fixed.
+  - Docs: the owner's answers to the proposals in #1-#3 and to questions 1-4 of the entry below, D5-D7 revisit lines confirmed, D8 recorded, the stale "open decisions" pointer in CLAUDE.md fixed.
+
+### Working rules added by the owner
+
+- Do not rebase or recreate commits that are already in an open or merged PR. Add new commits instead.
+- When the PR below a stacked PR is merged, check the upper PR's base at once: a PR merged into a stack branch does not reach `main`.
 
 ### Owner answers recorded (2026-10-13)
 
@@ -21,9 +26,16 @@ Handoff notes between working sessions. Newest entry first. Each entry says wher
 - Question 1: `text` is the user's sentence as given, in whatever language; never rewritten or translated. Question 2: the offer shows the exact sentence. Question 3: option (i), volatility is set only at write time through `remember`, no new tool (recorded under D4). Question 4: a write-eval item is one given sentence plus the surrounding turn and source URL; the trap list is in design 6.0-2.
 - M2 adds a "needs a check method" section to `due`. M5's release timelines are collected by a script the owner runs on the Mac (roadmap M5).
 
+### Questions for the owner
+
+1. A particle in a query word must match the stored particle: "Chatbox의" does not find "Chatbox로 정했다", and "가격이" does not find "가격은". Options: (a) tell the model in the `recall` description to search with bare words ("Chatbox 가격", not "Chatbox의 가격은"); (b) split query words where Latin script meets Hangul ("Chatbox의" becomes "Chatbox" + "의"); (c) leave it, as D8's revisit line already names it.
+2. Ranking by matched-word count can put filler-word matches above the right claim for natural-language English questions: "What is the price of Chatbox Pro?" ranks a claim that only shares "the", "is" and "of" above "Chatbox Pro costs $19.99 per month". Keyword queries still rank correctly. Options: (a) tell the model to search with a few key words; (b) stop counting a word that matches most of the store; (c) leave it.
+3. `FieldSource.LLM` is now unused (D4 option (i) records Claude's volatility as `caller`). Remove it, or keep it reserved?
+4. D8's trade-offs and "Revisit if" line are Claude's drafts; confirm or rewrite them.
+
 ### Next session: start here
 
-1. If #1-#3 are merged and the M1d PR is not open yet: rebase `claude/tender-mayer-wts8cd-m1d` onto `main`, run the checks, and open "M1d: follow-ups" against `main`.
+1. Check #4 (merged? review comments? CI?) and the answers to the questions above.
 2. Show the owner a short plan for M2 and wait for approval. M2 items are in `docs/roadmap.md`; keep at most 3 unmerged PRs open.
 
 ## 2026-10-13: owner decisions D1-D4

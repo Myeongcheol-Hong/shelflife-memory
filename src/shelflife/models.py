@@ -41,8 +41,9 @@ class Status(StrEnum):
 class FieldSource(StrEnum):
     """Who set a claim's volatility or check_method.
 
-    Later stages (rules in M2, an LLM per D4) may replace a DEFAULT value but never a
-    CALLER value. The write eval (design 6.0) uses this to tell the two apart.
+    M2 rules may replace a DEFAULT value but never a CALLER value. The write eval
+    (design 6.0) uses this to tell the two apart. Nothing sets LLM yet: under D4, Claude
+    sets volatility only at write time through remember, which records CALLER.
     """
 
     CALLER = "caller"

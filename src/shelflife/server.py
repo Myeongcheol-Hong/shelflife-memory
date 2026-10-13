@@ -123,8 +123,7 @@ def build_server(store: Store) -> MCPServer:
 
         Use before answering a question that a remembered fact or decision might cover.
         Do not use it to find what needs re-checking (use due). Korean and English both
-        work, and a particle attached to a word is fine. Search for names in their
-        original spelling (Hindsight, not 힌드사이트).
+        work. Search for names in their original spelling (Hindsight, not 힌드사이트).
 
         In this version status is fresh or unverifiable (nothing can check the claim), and
         nothing re-checks claims or updates their status. A claim whose next_check_at is

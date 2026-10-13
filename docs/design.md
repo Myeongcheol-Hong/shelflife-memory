@@ -98,7 +98,7 @@ Claude Code: "This project decided to use library X.
 | `kind` | `world_fact` / `decision` / `preference` / `note` | world_fact |
 | `subject`, `attribute`, `value` | Structured form of a checkable fact (optional) | AIP-C01 / exam_fee / $300 |
 | `volatility` | `fast` / `medium` / `slow` / `none` | fast |
-| `volatility_source`, `check_method_source` | Who set volatility and check_method: `caller` / `default` (later `rule` / `llm`). Rules and the LLM never overwrite a caller's value | caller |
+| `volatility_source`, `check_method_source` | Who set volatility and check_method: `caller` / `default` (later `rule`; `llm` is unused, see D4). Rules never overwrite a caller's value | caller |
 | `check_method` | `pypi` / `github_release` / `web_page` / `none` | web_page |
 | `check_target` | Package name, owner/repo, or URL | https://aws.amazon.com/certification/... |
 | `source_url`, `source_quote` | Evidence at write time | One verbatim line from the source |

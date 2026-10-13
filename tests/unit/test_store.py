@@ -1,4 +1,5 @@
 import sqlite3
+import threading
 from datetime import UTC, date, datetime, timedelta, timezone
 
 import pytest
@@ -116,6 +117,7 @@ def test_recall_matches_text_and_subject_case_insensitively(store):
 
     assert [c.id for c in store.recall("EXAM")] == [fee.id]
     assert [c.id for c in store.recall("aip-c01")] == [fee.id]
+    assert [c.id for c in store.recall("AI")] == [fee.id]  # short word, subject only
     assert store.recall("python") == []
 
 
@@ -159,6 +161,7 @@ def korean(store):
         ("Chatbox로", ["decision"]),  # the particle is part of the query word
         ("aip-c01 시험", ["exam"]),
         ("챗박스", []),  # a name is found only in its original spelling
+        ("Chatbox의", []),  # a particle in a query word must match the stored one (D8)
     ],
 )
 def test_recall_finds_korean_claims(store, korean, query, expected):
@@ -174,6 +177,26 @@ def test_recall_ranks_more_matched_words_above_a_common_short_word(store):
         store.remember(f"가격 메모 {i}", "note")
     target = store.remember("Chatbox Pro 가격은 월 $19.99이다", "world_fact")
     assert store.recall("Chatbox 가격")[0].id == target.id
+
+
+def test_recall_breaks_equal_word_counts_by_bm25(store):
+    # Ids sort opposite to the bm25 order, so ranking without bm25 fails every time.
+    store.import_claims(
+        [
+            {
+                "id": "a",
+                "text": "chatbox appears once in this long note about other apps",
+                "kind": "note",
+            },
+            {"id": "b", "text": "chatbox chatbox", "kind": "note"},
+        ]
+    )
+    assert [c.id for c in store.recall("chatbox")] == ["b", "a"]
+
+
+def test_recall_keeps_the_spelling_of_short_non_ascii_words(store):
+    claim = store.remember("ЕС санкции", "note")  # LIKE folds ASCII case only
+    assert [c.id for c in store.recall("ЕС")] == [claim.id]
 
 
 def test_recall_like_fallback_treats_underscore_literally(store):
@@ -246,6 +269,19 @@ def test_claims_survive_reopening(tmp_path, clock):
 def test_connection_uses_wal_and_a_busy_timeout(store):
     assert store._conn.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
     assert store._conn.execute("PRAGMA busy_timeout").fetchone()[0] == 5000
+
+
+def test_switch_to_wal_waits_for_another_writer(tmp_path, clock):
+    # A second process creating the schema holds a write lock; the WAL switch does not
+    # use the busy handler, so the store must retry instead of failing at once.
+    path = tmp_path / "shelflife.db"
+    other = sqlite3.connect(path, isolation_level=None, check_same_thread=False)
+    other.execute("CREATE TABLE other (x)")
+    other.execute("BEGIN IMMEDIATE")
+    threading.Timer(0.3, lambda: other.execute("COMMIT")).start()
+    with Store(path, now=clock) as s:
+        assert s._conn.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
+    other.close()
 
 
 def test_schema_creation_is_idempotent(tmp_path, clock):

@@ -6,6 +6,7 @@ import os
 import re
 import sqlite3
 import threading
+import time
 import uuid
 from collections.abc import Callable, Iterable, Mapping
 from datetime import UTC, date, datetime, timedelta
@@ -146,7 +147,7 @@ class Store:
         self._lock = threading.Lock()
         self._clock = now
         try:
-            self._conn.execute("PRAGMA journal_mode = WAL")
+            self._enable_wal()
             self._migrate()
         except BaseException:
             self._conn.close()
@@ -160,6 +161,23 @@ class Store:
 
     def __exit__(self, *exc: object) -> None:
         self.close()
+
+    def _enable_wal(self) -> None:
+        """Switch the file to WAL, retrying for up to the busy timeout.
+
+        The switch does not wait on the busy handler: while another process holds a write
+        lock (for example a second server creating the schema in a new file), it fails at
+        once with "database is locked".
+        """
+        deadline = time.monotonic() + BUSY_TIMEOUT_SECONDS
+        while True:
+            try:
+                self._conn.execute("PRAGMA journal_mode = WAL")
+                return
+            except sqlite3.OperationalError as e:
+                if "locked" not in str(e) or time.monotonic() >= deadline:
+                    raise
+                time.sleep(0.05)
 
     def _migrate(self) -> None:
         version = self._conn.execute("PRAGMA user_version").fetchone()[0]
@@ -330,7 +348,8 @@ class Store:
         top results. Words are always quoted, so FTS5 syntax in a query is never
         interpreted.
         """
-        words = list(dict.fromkeys(w.lower() for w in re.findall(r"\w+", query)))
+        # Dedupe ignoring case, but keep each word's spelling: LIKE folds ASCII case only.
+        words = list({w.casefold(): w for w in re.findall(r"\w+", query)}.values())
         if not words:
             return []
         hit_terms, params = [], []
