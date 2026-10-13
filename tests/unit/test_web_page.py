@@ -2,14 +2,28 @@ import email.message
 import hashlib
 import http.client
 import io
+import json
 import socket
+import time
 import urllib.error
 import urllib.request
+from pathlib import Path
 
 import pytest
 
 from shelflife.verifiers import FetchError, web_page
-from shelflife.verifiers.web_page import check_url, decode, fetch_page
+from shelflife.verifiers.web_page import (
+    Block,
+    check_url,
+    decode,
+    extract,
+    fetch_page,
+    normalize,
+    page_text,
+)
+
+PAGES = Path(__file__).parents[1] / "fixtures" / "pages"
+INDEX = json.loads((PAGES / "index.json").read_text(encoding="utf-8"))
 
 
 def resolver(*addresses):
@@ -408,3 +422,214 @@ def test_decode(body, charset, text):
 def test_the_header_charset_wins_over_meta():
     body = b"<meta charset='utf-8'>" + "가".encode("cp949")
     assert decode(body, "euc-kr").endswith("가")
+
+
+# --- normalize ------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("raw", "normalized"),
+    [
+        ("Exam fee:  $300\n\tUSD ", "Exam fee: $300 USD"),  # NBSP, runs, line breaks
+        ("Foun­dations​ fee", "Foundations fee"),  # soft hyphen, zero-width space
+        ("﻿‎Global⁠ Premier ", "Global Premier"),  # BOM, LRM, joiner
+        ("Café", "Café"),  # NFC
+        ("Developer – Foundations “Pro”", "Developer – Foundations “Pro”"),  # kept as is
+        ("USD 300", "USD 300"),  # case kept
+        ("１０² ﬁ", "１０² ﬁ"),  # NFC, not NFKC: compatibility forms are kept
+    ],
+)
+def test_normalize(raw, normalized):
+    assert normalize(raw) == normalized
+
+
+# --- extract --------------------------------------------------------------------------
+
+
+def texts(html):
+    return [block.text for block in extract(html)]
+
+
+@pytest.mark.parametrize(
+    "dropped",
+    [
+        "<script>var fee = '$300';</script>",
+        "<style>.fee::after { content: '$300' }</style>",
+        "<noscript>Enable JavaScript to see $300</noscript>",
+        "<template><p>$300</p></template>",
+        "<svg><text>$300</text></svg>",
+        "<select><option>$300</option></select>",
+        "<p hidden>$300</p>",
+        "<p aria-hidden='true'>$300</p>",
+        "<p style='DISPLAY: none'>$300</p>",
+        "<p style='color:red;visibility:hidden'>$300</p>",
+        "<del>$300</del>",
+        "<s>$300</s>",
+        "<strike>$300</strike>",
+        "<div hidden><div><p>$300</p></div><p>$300</p></div>",  # nested elements of one name
+        "<div hidden><span hidden>icon</span>$300</div>",  # hidden inside hidden
+        "<div aria-hidden='true'><script>x</script>$300</div>",
+        "<p hidden='false'>$300</p>",  # a boolean attribute: any value hides
+        "<p style='color:red;display:\tnone'>$300</p>",
+        "<p style='visibility: collapse'>$300</p>",
+        "<dialog><p>$300</p></dialog>",  # a dialog that is not open
+        "<title>$300</title>",
+        "<video>Your browser cannot play $300</video>",
+        "<audio>$300</audio>",
+        "<iframe>$300</iframe>",
+        "<object>$300</object>",
+        "<canvas>$300</canvas>",
+        "<math><mi>$300</mi></math>",
+        "<textarea>$300</textarea>",
+        "<datalist><option>$300</option></datalist>",
+        "<noembed>$300</noembed>",
+        "<ruby><rp>($300)</rp></ruby>",  # ruby fallback parentheses
+    ],
+)
+def test_extract_drops_what_is_not_visible(dropped):
+    html = f"<html><head><title>Fee</title></head><body><p>Fee:</p>{dropped}<p>$250</p></body>"
+    assert texts(html) == ["Fee:", "$250"]
+
+
+def test_extract_keeps_what_is_visible():
+    html = """<body><header><nav><a>Home</a></nav></header>
+        <main><article><h2>Exam fee</h2><p>300&nbsp;USD &amp; tax</p></article>
+        <p hidden="until-found">Found by search</p><input hidden><img aria-hidden="true">
+        <p aria-hidden="false">Shown</p><dialog open><p>Open dialog</p></dialog>
+        <p>Price: <s>$300</s> $250</p></main>
+        <footer><p>© 2026</p></footer></body>"""
+    assert extract(html) == [
+        Block("Home", "nav", ("header", "nav")),
+        Block("Exam fee", "h2", ("main", "article")),
+        Block("300 USD & tax", "p", ("main", "article")),
+        Block("Found by search", "p", ("main",)),
+        Block("Shown", "p", ("main",)),
+        Block("Open dialog", "p", ("main",)),
+        Block("Price: $250", "p", ("main",)),
+        Block("© 2026", "p", ("footer",)),
+    ]
+
+
+def test_extract_joins_table_cells_and_splits_rows():
+    html = """<table><tr><th>Rank</th><th>Agent</th><th>Score</th></tr>
+        <tr><td>1</td><td>Claude Code</td><td>60.0%</td></tr>
+        <tr><td></td><td>Pi</td><td>58.1%</td></tr></table>"""
+    assert texts(html) == ["Rank | Agent | Score", "1 | Claude Code | 60.0%", "Pi | 58.1%"]
+
+
+def test_extract_splits_blocks_at_line_breaks_and_unclosed_tags():
+    html = "<ul><li>Associate<br>$99<li>Developer<br/>$125</ul><p>Next"
+    assert texts(html) == ["Associate", "$99", "Developer", "$125", "Next"]
+    assert normalize(page_text(extract(html))) == "Associate $99 Developer $125 Next"
+
+
+def test_a_self_closed_hidden_element_is_empty():
+    # As XHTML reads it. HTML would hide the rest of its parent; reading it as empty
+    # keeps a stray "/>" from dropping text.
+    assert texts("<main><div hidden/><p>Fee: $250</p></main>") == ["Fee: $250"]
+
+
+@pytest.mark.parametrize(
+    ("html", "expected"),
+    [
+        # End tags a page leaves out end a dropped element too, not the rest of the page.
+        ("<body><p hidden>secret<p>Fee: $200<p>Next</body>", ["Fee: $200", "Next"]),
+        ("<ul><li hidden>secret<li>Fee: $200<li>Next</ul>", ["Fee: $200", "Next"]),
+        ("<table><tr><td hidden>secret<td>Fee<td>$200</table>", ["Fee | $200"]),
+        ("<dl><dt hidden>secret<dt>Fee<dd>$200</dl>", ["Fee", "$200"]),
+        ("<ul><li>Pro<span hidden>secret<li>Fee: $200</ul>", ["Pro", "Fee: $200"]),
+        ("<div><p>Fee <del>$300</div><p>After</p>", ["Fee", "After"]),  # closed with its parent
+        ("<div>Fee <del>$300</div>After", ["Fee", "After"]),
+        ("<p>Price: <s>$300 <p>Now $250</p>", ["Price:", "Now $250"]),
+        ("<ul><li><p>One<li>Two</ul><p>After", ["One", "Two", "After"]),
+        # A page may leave out </head>, or put body content in <head>.
+        ("<head><title>T</title><body><p>Fee: $200</p>", ["Fee: $200"]),
+        ("<html><head><title>T</title><meta charset=utf-8><p>Fee $200", ["Fee $200"]),
+        ("<head><title>T</title><p>Fee $200</head><body><p>More", ["Fee $200", "More"]),
+    ],
+)
+def test_extract_implies_end_tags(html, expected):
+    assert texts(html) == expected
+
+
+@pytest.mark.parametrize(
+    ("html", "tags"),
+    [
+        ("<p>One<div>Two</div>Three", ["p", "div", "body"]),  # <div> ended the <p>
+        ("<ul><li><p>One<li>Two</li>Three</ul>", ["p", "li", "ul"]),  # <li> ended both
+        ("<dl><dt>Fee<dd>$300<dt>Length<dd>120 minutes</dl>Next", ["dt", "dd", "dt", "dd", "body"]),
+    ],
+)
+def test_implied_end_tags_close_the_element(html, tags):
+    assert [b.tag for b in extract(html)] == tags
+
+
+def test_blocks_carry_their_tag_and_landmarks():
+    html = """<details><summary>Who can take it?</summary><p>Partners.</p></details>
+        <dl><dt>Exam fee</dt><dd>$300</dd></dl><aside><p>Ad</p></aside>
+        <nav><ul><li>Home<li>About</ul></nav><main><p>Fee<br>$250</p></main>"""
+    assert [(b.text, b.tag, b.landmarks) for b in extract(html)] == [
+        ("Who can take it?", "summary", ()),
+        ("Partners.", "p", ()),
+        ("Exam fee", "dt", ()),
+        ("$300", "dd", ()),
+        ("Ad", "p", ("aside",)),
+        ("Home", "li", ("nav",)),
+        ("About", "li", ("nav",)),
+        ("Fee", "p", ("main",)),
+        ("$250", "p", ("main",)),
+    ]
+
+
+@pytest.mark.parametrize(
+    "html",
+    [
+        "<div>" * 100_000 + "x" + "</div>" * 100_000,  # deep nesting
+        "<p>para text" * 40_000,  # end tags left out
+        "<ul>" + "<li>item" * 40_000 + "</ul>",
+        "<main>x" * 40_000,  # landmarks inside landmarks
+        "<div>" * 40_000 + "</p>" * 40_000,  # end tags that match nothing
+        "<table><tr>" + "<td>cell" * 40_000 + "</table>",
+    ],
+)
+def test_extraction_time_grows_linearly(html):
+    # A hostile page under the 10 MB cap must not hang the check. Quadratic code took
+    # minutes on these; linear code takes well under a second.
+    started = time.perf_counter()
+    blocks = extract(html)
+    assert time.perf_counter() - started < 5
+    assert all(len(b.landmarks) <= web_page.MAX_DEPTH for b in blocks)
+
+
+# --- the recorded seed pages ----------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("name", "evidence"),
+    [
+        ("skilljar-faq", "Certification is currently available only to organizations in the "
+         "Claude Partner Network."),
+        ("skilljar-partner", "Claude Certified Developer – Foundations Foundations $125 USD"),
+        ("skilljar-partner", "Claude Certified Architect – Foundations Foundations $125 USD"),
+        ("aws-aip-c01", "300 USD. Visit Exam pricing for additional cost information"),
+        ("databricks-genai", "Registration fee: $200"),
+        ("benchmarks-metagenomics", "1 | Claude Sonnet 5.5 | Claude Code | Anthropic | 60.0%"),
+    ],
+)  # fmt: skip
+def test_the_seed_evidence_survives_extraction(name, evidence):
+    html = decode((PAGES / f"{name}.html").read_bytes())
+    assert evidence in normalize(page_text(extract(html)))
+
+
+def test_text_inside_scripts_is_never_extracted():
+    assert INDEX["aws-aip-c01"]["scripts_kept"]
+    html = decode((PAGES / "aws-aip-c01.html").read_bytes())
+    text = page_text(extract(html))
+    assert "imageSrc" in html and "imageSrc" not in text
+    assert text.count("300 USD") == 1  # the page, not the JSON in its scripts
+
+
+def test_the_partner_page_lists_one_price_for_two_exams():
+    # Section selection (M3b) must tell these apart: the value alone matches both.
+    html = decode((PAGES / "skilljar-partner.html").read_bytes())
+    assert page_text(extract(html)).count("$125 USD") == 2
