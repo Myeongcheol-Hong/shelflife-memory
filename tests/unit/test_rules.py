@@ -105,15 +105,17 @@ GH = CheckMethod.GITHUB_RELEASE
     [
         (None, PYPI, "latest_version", "2.3.0", (CheckMethod.PYPI, "mcp")),
         (None, PYPI, "최신 버전", "2.3.0", (CheckMethod.PYPI, "mcp")),
-        (None, "https://pypi.org/project/mcp/2.3.0/", "version", "2.3.0",
+        (None, "https://pypi.org/project/mcp/2.3.0/", "latest_version", "2.3.0",
          (CheckMethod.PYPI, "mcp")),  # a versioned PyPI page
-        (None, "https://github.com/x/y.git", "release", "1.0", (GH, "x/y")),
+        (None, "https://github.com/x/y.git", "latest_release", "1.0", (GH, "x/y")),
         (None, "https://www.github.com/getzep/graphiti", "latest_release", "v0.30.2",
          (GH, "getzep/graphiti")),
         (None, "https://pypi.org/project/certifi/", "latest_version", "2024.08.30",
          (CheckMethod.PYPI, "certifi")),  # a dotted calendar version is a version
+        (None, PYPI, "latest_version", "20240620",
+         (CheckMethod.PYPI, "mcp")),  # so is a compact date (owner, 2026-10-13)
         # A check_target naming the same project is kept exactly as given.
-        ("MCP", PYPI, "version", "2.3.0", (CheckMethod.PYPI, "MCP")),
+        ("MCP", PYPI, "latest_version", "2.3.0", (CheckMethod.PYPI, "MCP")),
         ("claude_agent_sdk", "https://pypi.org/project/claude-agent-sdk/", "latest_version",
          "0.2.165", (CheckMethod.PYPI, "claude_agent_sdk")),  # PEP 503 names
         ("GetZep/Graphiti", RELEASE, "latest_release", "v0.30.2", (GH, "GetZep/Graphiti")),
@@ -125,7 +127,8 @@ GH = CheckMethod.GITHUB_RELEASE
         (None, PYPI, "latest_stable_version", "2.3.0", (CheckMethod.PYPI, "mcp")),
         (None, PYPI, "Latest-Version", "2.3.0", (CheckMethod.PYPI, "mcp")),
         (None, RELEASE, "최신 릴리스", "v0.30.2", (GH, "getzep/graphiti")),
-        (None, RELEASE, "버전", "v0.30.2", (GH, "getzep/graphiti")),
+        (None, RELEASE, "최신버전", "v0.30.2", (GH, "getzep/graphiti")),
+        (None, PYPI, "Current Versions", "2.3.0", (CheckMethod.PYPI, "mcp")),
         # A repository page with a query or fragment.
         (None, "https://github.com/getzep/graphiti?tab=readme-ov-file", "latest_release",
          "v0.30.2", (GH, "getzep/graphiti")),
@@ -141,14 +144,22 @@ def test_infer_check(check_target, source_url, attribute, value, expected):
     ("check_target", "source_url", "attribute", "value"),
     [
         # The check_target is never replaced.
-        ("other", PYPI, "version", "2.3.0"),
-        (PYPI, PYPI, "version", "2.3.0"),  # a URL does not name a project
-        ("https://example.com/changelog", PYPI, "version", "2.3.0"),
+        ("other", PYPI, "latest_version", "2.3.0"),
+        (PYPI, PYPI, "latest_version", "2.3.0"),  # a URL does not name a project
+        ("https://example.com/changelog", PYPI, "latest_version", "2.3.0"),
         ("x/my_repo", "https://github.com/x/my-repo", "latest_release", "1.0"),  # not PEP 503
         # No attribute: the text never makes a latest-version fact (owner, 2026-10-13).
         (None, PYPI, None, "2.3.0"),
         (None, RELEASE, None, "v0.30.2"),
-        # The attribute does not name a latest version or release.
+        # The attribute does not name a latest version or release. Without latest,
+        # newest, current or 최신 it may be a pinned version (owner, 2026-10-13).
+        (None, PYPI, "version", "2.3.0"),
+        (None, RELEASE, "release", "v0.30.2"),
+        (None, PYPI, "stable_version", "2.3.0"),
+        (None, PYPI, "pinned_version", "2.3.0"),
+        (None, RELEASE, "버전", "v0.30.2"),
+        (None, RELEASE, "릴리스", "v0.30.2"),
+        (None, PYPI, "latest", "2.3.0"),
         (None, "https://github.com/ac12644/MemGuard", "published_eval", "none"),
         (None, PYPI, "python_version", "3.10"),
         (None, PYPI, "release_date", "2026-03-01"),
@@ -165,9 +176,9 @@ def test_infer_check(check_target, source_url, attribute, value, expected):
         (None, "https://github.com/marketplace/actions/checkout", "latest_version", "v4.2.2"),
         (None, "https://github.com/topics/mcp", "latest_release", "v1.0"),
         (None, "https://github.com/advisories/GHSA-abcd-efgh-ijkl", "latest_release", "2.3.1"),
-        (None, "https://example.org/project/mcp/", "version", "1.0"),
-        (None, "https://example.com/pricing", "version", "1.0"),
-        (None, None, "version", "1.0"),
+        (None, "https://example.org/project/mcp/", "latest_version", "1.0"),
+        (None, "https://example.com/pricing", "latest_version", "1.0"),
+        (None, None, "latest_version", "1.0"),
     ],
 )  # fmt: skip
 def test_infer_check_does_not_apply(check_target, source_url, attribute, value):
@@ -224,6 +235,19 @@ def test_rules_read_the_attribute_and_value_at_write_time(store, text, fields, e
     assert claim.next_check_at == date(2026, 10, 12) + timedelta(
         days=7 if expected[0] is FAST else 30
     )
+
+
+def test_a_pinned_version_gets_no_check(store):
+    # Owner, 2026-10-13: a bare "version" attribute may be a pinned version, which a
+    # check would report as changed on every release.
+    claim = store.remember(
+        "We pinned mcp version 2.3.0",
+        "world_fact",
+        attribute="version",
+        value="2.3.0",
+        source_url=PYPI,
+    )
+    assert (claim.check_method, claim.status) == (CheckMethod.NONE, Status.UNVERIFIABLE)
 
 
 def test_a_version_in_the_text_alone_gets_no_check(store):

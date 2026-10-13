@@ -42,15 +42,18 @@ MONEY = re.compile(
 )
 
 # A fact about the newest version or release of a package or repository: the whole
-# attribute names it ("latest_version", "release", "최신 버전"). The text alone never
-# qualifies (owner, 2026-10-13): such a claim gets no check method and shows under due's
-# needs_check_method, the cheap error.
+# attribute names it ("latest_version", "latest_release", "최신 버전"). It must say latest,
+# newest, current or 최신: a bare "version" or "release" may be a pinned one ("we pinned
+# mcp version 2.3.0"), which a check would report as changed on every release. The text
+# alone never qualifies. Such claims get no check method and show under due's
+# needs_check_method, the cheap error (owner, 2026-10-13).
 VERSION_ATTRIBUTE = re.compile(
-    r"(?:(?:latest|newest|current)\s+(?:stable\s+)?)?(?:version|release)s?"
-    r"|(?:최신\s*)?(?:버전|릴리스)"
+    r"(?:latest|newest|current)\s+(?:stable\s+)?(?:version|release)s?"
+    r"|최신\s*(?:버전|릴리스)"
 )
 # A bare year or a date (2025, 2024-06, 2024-06-20, 2024/06/20) is not a version string,
-# although it parses as one. Dotted calendar versions (certifi's 2024.08.30) still count.
+# although it parses as one. Dotted calendar versions (certifi's 2024.08.30) and compact
+# dates (20240620) still count (owner, 2026-10-13).
 YEAR_OR_DATE = re.compile(r"\d{4}(?:([-/])\d{1,2}(?:\1\d{1,2})?)?")
 PYPI_URL = re.compile(r"https?://pypi\.org/project/([A-Za-z0-9][A-Za-z0-9._-]*)/?.*", re.I)
 GITHUB_URL = re.compile(
@@ -100,9 +103,9 @@ def infer_volatility(attribute: str | None, text: str, value: str | None) -> Vol
 def is_version_fact(attribute: str | None, value: str | None) -> bool:
     """Whether a claim states the latest version or release, as a version string.
 
-    The attribute must name it ("latest_version", not "python_version" or "release_date"),
-    and the value must be a version string ("2.3 or later", "2025" and "2024-06-20" are
-    not).
+    The attribute must name it ("latest_version", not "version", "python_version" or
+    "release_date"), and the value must be a version string ("2.3 or later", "2025" and
+    "2024-06-20" are not).
     """
     if not attribute or not value or YEAR_OR_DATE.fullmatch(value.strip()):
         return False
