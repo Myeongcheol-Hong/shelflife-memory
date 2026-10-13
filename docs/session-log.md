@@ -2,6 +2,40 @@
 
 Handoff notes between working sessions. Newest entry first. Each entry says where the work stands, what waits on the owner, and what the next session should do first.
 
+## 2026-10-13: M2 complete as #8-#10 (handoff)
+
+### State at the end of the session
+
+All three PRs are open, stacked and pushed. Each was reviewed by a Fable workflow (one reviewer per angle, then a skeptic per angle), and the confirmed findings are fixed in new commits:
+
+| PR | Branch | Base | Content |
+|---|---|---|---|
+| [#8](https://github.com/Myeongcheol-Hong/shelflife-memory/pull/8) `[stack 1/3] M2a` | `claude/tender-mayer-wts8cd-m2a` | `main` | Write-time rules, `pypi` and `github_release` verifiers. Findings 1-8 of the entry below fixed (`ce89a20`), then the Fable round (`5aa054d`). Description rewritten |
+| [#9](https://github.com/Myeongcheol-Hong/shelflife-memory/pull/9) `[stack 2/3] M2b` | `claude/tender-mayer-wts8cd-m2b` | M2a branch | `verify` tool, check log, scheduling after a check; D9 |
+| [#10](https://github.com/Myeongcheol-Hong/shelflife-memory/pull/10) `[stack 3/3] M2c` | `claude/tender-mayer-wts8cd-m2c` | M2b branch | `forget` tool; `due` returns the due, changed and needs_check_method lists |
+
+The owner's answers from this session:
+- The keyword table and "a price amount means fast" are approved as heuristics (design 6.0-3 measures them); `최신` was added to the fast keywords.
+- D8's example ("가격이" against "가격은") is confirmed.
+- The owner checked the hand-written GitHub fixtures against the live API, and supplied `name` and `published_at`. `record.py` still re-records them; running it on the Mac does not block #8.
+- The five M2b interface questions and `forget`'s output are recorded as D9. The owner added the retry cap (3 inconclusive results in a row) and the M4 `supersede` item.
+
+### Waiting on the owner
+
+1. #8: the text path of the check-method rule (no attribute) is too loose. "The latest mcp release requires Python 3.10" (value 3.10) and "The latest API version is 2024-06-20" get a check and a false `changed`, and a bare year counts as a version. The options are in the chat. Until the owner decides, the text path stays as in #8.
+2. D9's "Revisit if" line is Claude's draft.
+3. Two choices Claude made that the owner may overrule:
+   - #9: `verify` refuses a claim without a value.
+   - #10: each changed item carries `change`, the check that found the new value.
+4. Design 4.1 lists a `due` status that nothing sets, because due-ness comes from `next_check_at`. Should 4.1 say so, or should M4 store it?
+5. Optional: `BEGIN IMMEDIATE` in `add_check`, against a forget from another process landing between its read and its write (judged far-fetched in review).
+
+### Next session: start here
+
+1. Check #8-#10 (merged? review comments? CI?). When a lower PR merges, check the upper PR's base at once.
+2. Apply the owner's text-path decision as a new commit on `claude/tender-mayer-wts8cd-m2a` (never rebase commits that are in a PR).
+3. With M2 merged, show a short plan for M3 (web_page verifier, `record_check` with the verbatim-quote check, the four write checks) and wait for approval.
+
 ## 2026-10-13: M2a open as #8 (handoff)
 
 ### State at the end of the session
