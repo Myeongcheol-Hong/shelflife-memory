@@ -27,7 +27,7 @@ Items marked **(owner)** are done by the maintainer by hand: ground-truth labels
 ## M3: web_page verifier and write checks
 - [x] Fetch pages safely: http(s) and public addresses only, checked on every redirect, with size and time caps; `remember` rejects non-http(s) URLs (M3a, D10)
 - [x] Extract the visible page text: the whole body, without hidden or struck-through text; one shared `normalize()` for every comparison (M3b)
-- [ ] Select the relevant section
+- [x] Select the relevant section: deterministic, with its position, heading and scores for 6.2 (M3c)
 - [ ] Judgment per D4 (b): `record_check` with verbatim-quote validation in code, and a versioned judgment prompt template that `verify` returns for web_page claims and the eval harness reuses (D10)
 - [ ] `checks` table populated for every check
 - [ ] Four automatic write checks (design 6.0-1)
