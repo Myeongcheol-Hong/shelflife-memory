@@ -2,6 +2,29 @@
 
 Handoff notes between working sessions. Newest entry first. Each entry says where the work stands, what waits on the owner, and what the next session should do first.
 
+## 2026-10-13: M2d, the owner's follow-ups to #8-#10
+
+### State at the end of the session
+
+- Merged into `main`: #8-#10 (M2a-M2c), so M2 is done apart from these follow-ups.
+- Open: [#11](https://github.com/Myeongcheol-Hong/shelflife-memory/pull/11) "M2d: follow-ups from the owner's review of #8-#10", branch `claude/tender-mayer-wts8cd-m2d`, base `main`. It applies the owner's answers to the questions in the entry below:
+  1. The check-method rule reads only the attribute, which must say latest, newest, current or 최신 (`latest_version`, `latest_release`). A claim whose text alone mentions the latest version, or whose attribute is a bare `version` or `release`, gets no check method and waits under `due`'s `needs_check_method`. A bare year or a date (2025, 2024-06, 2024-06-20, 2024/06/20) is not a version string; dotted calendar versions (2024.08.30) and compact dates (20240620) still are.
+  2. `remember` refuses a `pypi` or `github_release` claim without a `value`; `verify` still refuses one too. `web_page` may have no value.
+  3. `add_check` and `forget` run in `BEGIN IMMEDIATE` transactions (`Store._write`), with a test where a second connection retires the claim while a check starts.
+  4. `Status.DUE` is gone; design 4.1 says "due" is derived from `next_check_at`.
+  5. D9's revisit line is confirmed; the `change` field on changed items is approved as built. Both recorded in `docs/decisions.md` (D5 and D9).
+
+### Waiting on the owner
+
+- Review and merge of #11.
+- Nothing else: the owner answered both questions on #11. The attribute must say latest, newest, current or 최신 (a bare `version`, `release`, `버전` or `릴리스` may be a pinned version), and a compact date (20240620) stays a version. Both are in D5.
+- Noticed in review, outside M2d: `import_claims` checks which ids exist before its write transaction, so two imports at once could raise an IntegrityError that the CLI prints as a traceback. Rare (the owner runs imports by hand); not fixed.
+
+### Next session: start here
+
+1. Check #11 (merged? review comments? CI?).
+2. With #11 merged, show a short plan for M3 (web_page verifier, `record_check` with the verbatim-quote check, the four write checks) and wait for approval.
+
 ## 2026-10-13: M2 complete as #8-#10 (handoff)
 
 ### State at the end of the session

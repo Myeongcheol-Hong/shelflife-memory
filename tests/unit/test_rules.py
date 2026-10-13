@@ -101,98 +101,92 @@ GH = CheckMethod.GITHUB_RELEASE
 
 
 @pytest.mark.parametrize(
-    ("check_target", "source_url", "attribute", "text", "value", "expected"),
+    ("check_target", "source_url", "attribute", "value", "expected"),
     [
-        (None, PYPI, "latest_version", "mcp is 2.3.0", "2.3.0", (CheckMethod.PYPI, "mcp")),
-        (None, PYPI, "최신 버전", "mcp", "2.3.0", (CheckMethod.PYPI, "mcp")),
-        (None, RELEASE, None, "The latest Graphiti release is v0.30.2", "v0.30.2",
-         (GH, "getzep/graphiti")),
-        (None, PYPI, None, "mcp 최신 버전은 2.3.0이다", "2.3.0", (CheckMethod.PYPI, "mcp")),
-        (None, "https://pypi.org/project/mcp/2.3.0/", "version", "x", "2.3.0",
+        (None, PYPI, "latest_version", "2.3.0", (CheckMethod.PYPI, "mcp")),
+        (None, PYPI, "최신 버전", "2.3.0", (CheckMethod.PYPI, "mcp")),
+        (None, "https://pypi.org/project/mcp/2.3.0/", "latest_version", "2.3.0",
          (CheckMethod.PYPI, "mcp")),  # a versioned PyPI page
-        (None, "https://github.com/x/y.git", "release", "y", "1.0", (GH, "x/y")),
-        (None, "https://www.github.com/getzep/graphiti", "latest_release", "x", "v0.30.2",
+        (None, "https://github.com/x/y.git", "latest_release", "1.0", (GH, "x/y")),
+        (None, "https://www.github.com/getzep/graphiti", "latest_release", "v0.30.2",
          (GH, "getzep/graphiti")),
+        (None, "https://pypi.org/project/certifi/", "latest_version", "2024.08.30",
+         (CheckMethod.PYPI, "certifi")),  # a dotted calendar version is a version
+        (None, PYPI, "latest_version", "20240620",
+         (CheckMethod.PYPI, "mcp")),  # so is a compact date (owner, 2026-10-13)
         # A check_target naming the same project is kept exactly as given.
-        ("MCP", PYPI, "version", "mcp", "2.3.0", (CheckMethod.PYPI, "MCP")),
+        ("MCP", PYPI, "latest_version", "2.3.0", (CheckMethod.PYPI, "MCP")),
         ("claude_agent_sdk", "https://pypi.org/project/claude-agent-sdk/", "latest_version",
-         "x", "0.2.165", (CheckMethod.PYPI, "claude_agent_sdk")),  # PEP 503 names
-        ("GetZep/Graphiti", RELEASE, "latest_release", "x", "v0.30.2",
-         (GH, "GetZep/Graphiti")),
+         "0.2.165", (CheckMethod.PYPI, "claude_agent_sdk")),  # PEP 503 names
+        ("GetZep/Graphiti", RELEASE, "latest_release", "v0.30.2", (GH, "GetZep/Graphiti")),
         ("claude-agent-sdk", "https://pypi.org/project/claude_agent_sdk/", "latest_version",
-         "x", "0.2.165", (CheckMethod.PYPI, "claude-agent-sdk")),  # normalized URL side too
-        # Other spellings of a latest-version fact.
-        (None, PYPI, "current_version", "x", "2.3.0", (CheckMethod.PYPI, "mcp")),
-        (None, PYPI, "newest_release", "x", "2.3.0", (CheckMethod.PYPI, "mcp")),
-        (None, PYPI, "latest_stable_version", "x", "2.3.0", (CheckMethod.PYPI, "mcp")),
-        (None, PYPI, "Latest-Version", "x", "2.3.0", (CheckMethod.PYPI, "mcp")),
-        (None, PYPI, None, "The current version of mcp is 2.3.0", "2.3.0",
-         (CheckMethod.PYPI, "mcp")),
-        (None, PYPI, None, "The newest mcp release is 2.3.0", "2.3.0", (CheckMethod.PYPI, "mcp")),
-        (None, PYPI, None, "Latest Version of mcp: 2.3.0", "2.3.0", (CheckMethod.PYPI, "mcp")),
-        (None, RELEASE, "최신 릴리스", "x", "v0.30.2", (GH, "getzep/graphiti")),
-        (None, RELEASE, "버전", "x", "v0.30.2", (GH, "getzep/graphiti")),
-        (None, RELEASE, None, "Graphiti 최신 릴리스는 v0.30.2이다", "v0.30.2",
-         (GH, "getzep/graphiti")),
-        (None, RELEASE, None, "Graphiti의 최신 안정 버전은 v0.30.2이다", "v0.30.2",
-         (GH, "getzep/graphiti")),
+         "0.2.165", (CheckMethod.PYPI, "claude-agent-sdk")),  # normalized URL side too
+        # Other spellings of a latest-version attribute.
+        (None, PYPI, "current_version", "2.3.0", (CheckMethod.PYPI, "mcp")),
+        (None, PYPI, "newest_release", "2.3.0", (CheckMethod.PYPI, "mcp")),
+        (None, PYPI, "latest_stable_version", "2.3.0", (CheckMethod.PYPI, "mcp")),
+        (None, PYPI, "Latest-Version", "2.3.0", (CheckMethod.PYPI, "mcp")),
+        (None, RELEASE, "최신 릴리스", "v0.30.2", (GH, "getzep/graphiti")),
+        (None, RELEASE, "최신버전", "v0.30.2", (GH, "getzep/graphiti")),
+        (None, PYPI, "Current Versions", "2.3.0", (CheckMethod.PYPI, "mcp")),
         # A repository page with a query or fragment.
-        (None, "https://github.com/getzep/graphiti?tab=readme-ov-file", "latest_release", "x",
+        (None, "https://github.com/getzep/graphiti?tab=readme-ov-file", "latest_release",
          "v0.30.2", (GH, "getzep/graphiti")),
-        (None, "https://github.com/getzep/graphiti#readme", "latest_release", "x", "v0.30.2",
+        (None, "https://github.com/getzep/graphiti#readme", "latest_release", "v0.30.2",
          (GH, "getzep/graphiti")),
     ],
 )  # fmt: skip
-def test_infer_check(check_target, source_url, attribute, text, value, expected):
-    assert infer_check(check_target, source_url, attribute, text, value) == expected
+def test_infer_check(check_target, source_url, attribute, value, expected):
+    assert infer_check(check_target, source_url, attribute, value) == expected
 
 
 @pytest.mark.parametrize(
-    ("check_target", "source_url", "attribute", "text", "value"),
+    ("check_target", "source_url", "attribute", "value"),
     [
         # The check_target is never replaced.
-        ("other", PYPI, "version", "mcp", "2.3.0"),
-        (PYPI, PYPI, "version", "mcp", "2.3.0"),  # a URL does not name a project
-        ("https://example.com/changelog", PYPI, "version", "mcp", "2.3.0"),
-        ("x/my_repo", "https://github.com/x/my-repo", "latest_release", "x", "1.0"),  # not PEP 503
-        # Not a fact about the latest version or release.
-        (None, "https://github.com/ac12644/MemGuard", "published_eval",
-         "MemGuard has not published eval results", None),
-        (None, "https://github.com/ac12644/MemGuard", None,
-         "MemGuard has not released eval results", None),
-        (None, PYPI, "python_version", "mcp requires Python version 3.10 or later", "3.10"),
-        (None, PYPI, None, "mcp requires Python version 3.10 or later", "3.10"),
-        (None, PYPI, "release_date", "mcp 2.0 was released on 2026-03-01", "2026-03-01"),
-        (None, PYPI, None, "mcp 2.0 was released on 2026-03-01", "2026-03-01"),
-        (None, RELEASE, "license", "Graphiti is released under the Apache-2.0 license",
-         "Apache-2.0"),
-        (None, PYPI, None, "The versioning policy of mcp is SemVer", "SemVer"),
-        (None, PYPI, None, "The latest versioning policy of mcp is 2.0", "2.0"),
-        # The attribute decides, even when the text names a latest release.
-        (None, PYPI, "python_version", "The latest version of mcp requires Python 3.10",
-         "3.10"),
-        (None, PYPI, "release_date", "The latest mcp release came out on 2026-03-01",
-         "2026-03-01"),
-        # The text names a latest release, but the value is not a version.
-        (None, RELEASE, None, "The latest Graphiti release supports Python 3.10 or later",
-         "3.10 or later"),
-        (None, PYPI, "latest_version", "The latest version of mcp", None),  # no value
-        (None, PYPI, "latest_version", "The latest version of mcp", "2.3 or later"),
+        ("other", PYPI, "latest_version", "2.3.0"),
+        (PYPI, PYPI, "latest_version", "2.3.0"),  # a URL does not name a project
+        ("https://example.com/changelog", PYPI, "latest_version", "2.3.0"),
+        ("x/my_repo", "https://github.com/x/my-repo", "latest_release", "1.0"),  # not PEP 503
+        # No attribute: the text never makes a latest-version fact (owner, 2026-10-13).
+        (None, PYPI, None, "2.3.0"),
+        (None, RELEASE, None, "v0.30.2"),
+        # The attribute does not name a latest version or release. Without latest,
+        # newest, current or 최신 it may be a pinned version (owner, 2026-10-13).
+        (None, PYPI, "version", "2.3.0"),
+        (None, RELEASE, "release", "v0.30.2"),
+        (None, PYPI, "stable_version", "2.3.0"),
+        (None, PYPI, "pinned_version", "2.3.0"),
+        (None, RELEASE, "버전", "v0.30.2"),
+        (None, RELEASE, "릴리스", "v0.30.2"),
+        (None, PYPI, "latest", "2.3.0"),
+        (None, PYPI, "최신", "2.3.0"),
+        # The whole attribute must name it, not a part of it.
+        (None, PYPI, "latest_release_requires_python", "3.10"),
+        (None, PYPI, "최신 버전 출시일", "1.0"),
+        (None, "https://github.com/ac12644/MemGuard", "published_eval", "none"),
+        (None, PYPI, "python_version", "3.10"),
+        (None, PYPI, "release_date", "2026-03-01"),
+        (None, RELEASE, "license", "Apache-2.0"),
+        # The value is not a version string.
+        (None, PYPI, "latest_version", None),
+        (None, PYPI, "latest_version", "2.3 or later"),
+        (None, PYPI, "latest_version", "2025"),  # a bare year
+        (None, PYPI, "latest_version", "2024-06-20"),  # a date
+        (None, PYPI, "latest_version", "2024-06"),
+        (None, PYPI, "latest_version", "2024/06/20"),  # does not parse as a version at all
         # Not a PyPI project or GitHub repository page.
-        (None, "https://github.com/orgs/anthropics/repositories", "latest_release", "x",
-         "v1.0"),
-        (None, "https://github.com/marketplace/actions/checkout", "latest_version", "x",
-         "v4.2.2"),
-        (None, "https://github.com/topics/mcp", "latest_release", "x", "v1.0"),
-        (None, "https://github.com/advisories/GHSA-abcd-efgh-ijkl", "latest_release", "x",
-         "2.3.1"),
-        (None, "https://example.org/project/mcp/", "version", "x", "1.0"),
-        (None, "https://example.com/pricing", "version", "x", "1.0"),
-        (None, None, "version", "x", "1.0"),
+        (None, "https://github.com/orgs/anthropics/repositories", "latest_release", "v1.0"),
+        (None, "https://github.com/marketplace/actions/checkout", "latest_version", "v4.2.2"),
+        (None, "https://github.com/topics/mcp", "latest_release", "v1.0"),
+        (None, "https://github.com/advisories/GHSA-abcd-efgh-ijkl", "latest_release", "2.3.1"),
+        (None, "https://example.org/project/mcp/", "latest_version", "1.0"),
+        (None, "https://example.com/pricing", "latest_version", "1.0"),
+        (None, None, "latest_version", "1.0"),
     ],
 )  # fmt: skip
-def test_infer_check_does_not_apply(check_target, source_url, attribute, text, value):
-    assert infer_check(check_target, source_url, attribute, text, value) is None
+def test_infer_check_does_not_apply(check_target, source_url, attribute, value):
+    assert infer_check(check_target, source_url, attribute, value) is None
 
 
 # --- applied at write time ------------------------------------------------------------
@@ -245,6 +239,29 @@ def test_rules_read_the_attribute_and_value_at_write_time(store, text, fields, e
     assert claim.next_check_at == date(2026, 10, 12) + timedelta(
         days=7 if expected[0] is FAST else 30
     )
+
+
+def test_a_pinned_version_gets_no_check(store):
+    # Owner, 2026-10-13: a bare "version" attribute may be a pinned version, which a
+    # check would report as changed on every release.
+    claim = store.remember(
+        "We pinned mcp version 2.3.0",
+        "world_fact",
+        attribute="version",
+        value="2.3.0",
+        source_url=PYPI,
+    )
+    assert (claim.check_method, claim.status) == (CheckMethod.NONE, Status.UNVERIFIABLE)
+
+
+def test_a_version_in_the_text_alone_gets_no_check(store):
+    # Owner, 2026-10-13: without an attribute naming the latest version or release, the
+    # claim gets no check method and waits under needs_check_method (the cheap error).
+    claim = store.remember(
+        "The latest mcp release requires Python 3.10", "world_fact", value="3.10", source_url=PYPI
+    )
+    assert (claim.check_method, claim.status) == (CheckMethod.NONE, Status.UNVERIFIABLE)
+    assert [c.id for c in store.needs_check_method()] == [claim.id]
 
 
 @pytest.mark.parametrize(

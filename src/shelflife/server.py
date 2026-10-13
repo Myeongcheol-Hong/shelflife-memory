@@ -87,17 +87,20 @@ def build_server(store: Store, fetch: Fetch = http_get) -> MCPServer:
           translate it; only structure it into the other fields.
         - kind: world_fact, decision, preference or note.
         - subject, attribute, value: the structured form of a checkable fact, for example
-          "AWS AIP-C01", "exam_fee", "$300".
+          "AWS AIP-C01", "exam_fee", "$300". For the newest version or release of a
+          package or repository, use attribute latest_version or latest_release (not
+          just version or release) with the version as value.
         - volatility (fast, medium, slow, none) and check_method (pypi, github_release,
           web_page, none): leave both empty unless you are confident. For a world fact,
-          rules fill empty ones where they apply (a fact about the latest version or
-          release, with the version as value and a PyPI project or GitHub repository page
-          as source_url, gets a check_method; a price, or words such as version, policy or
+          rules fill empty ones where they apply (attribute latest_version or
+          latest_release, with the version as value and a PyPI project or GitHub repository
+          page as source_url, gets a check_method; a price, or words such as version, policy or
           history, give the volatility), else a default; a value you give, check_target
           included, is never overwritten. Without a check_method, a world fact is stored
           as unverifiable and is not scheduled for checks yet.
         - check_target: the PyPI package, GitHub owner/repo or URL to check. Required
-          when check_method is set.
+          when check_method is set; pypi and github_release also need the version as
+          value.
         - source_url, source_quote: where the fact came from, and one line copied
           verbatim from that source.
         - observed_at: the date (YYYY-MM-DD) the fact was confirmed true. Defaults to today.
@@ -137,8 +140,9 @@ def build_server(store: Store, fetch: Fetch = http_get) -> MCPServer:
         status is fresh, unverifiable (nothing can check the claim) or changed (a check
         found a different value at the source; the claim keeps the value it was stored
         with, so tell the user; due shows the value found). Claims are
-        checked only when verify is called. A claim whose next_check_at is today or
-        earlier is due: say how old it is (observed_at, last_checked_at).
+        checked only when verify is called. A claim with a check_method whose
+        next_check_at is today or earlier is due: say how old it is (observed_at,
+        last_checked_at).
         """
         return {"claims": [c.to_dict() for c in store.recall(query, limit=RECALL_LIMIT)]}
 

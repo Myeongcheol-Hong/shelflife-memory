@@ -115,6 +115,7 @@ async def test_remember_then_recall_and_due(client, clock):
         kind="world_fact",
         check_method="pypi",
         check_target="mcp",
+        value="2.3.0",
     )
     assert stored["volatility"] == "fast"
     assert stored["volatility_source"] == "rule"  # "latest version"
@@ -218,7 +219,7 @@ async def test_verify_error_keeps_the_claim_due(client, routes):
     assert (item["id"], item["last_check"]) == (claim["id"], verified["check"])
 
 
-async def test_verify_refuses_claims_it_cannot_check(client):
+async def test_verify_refuses_claims_it_cannot_check(client, store):
     page = await remember_version(
         client, check_method="web_page", check_target="https://example.com/pricing"
     )
@@ -226,7 +227,11 @@ async def test_verify_refuses_claims_it_cannot_check(client):
     assert "verify cannot check it yet" in await call_error(client, "verify", claim_id=page["id"])
     assert "has no check_method" in await call_error(client, "verify", claim_id=unverifiable["id"])
     assert "no claim with id 'nope'" in await call_error(client, "verify", claim_id="nope")
-    no_value = await remember_version(client, check_method="pypi", check_target="mcp")
+    # remember refuses a version claim without a value; a row written some other way
+    # is still refused here.
+    no_value = await remember_version(client, check_method="pypi", check_target="mcp", value="1")
+    with store._conn:
+        store._conn.execute("UPDATE claims SET value = NULL WHERE id = ?", (no_value["id"],))
     message = await call_error(client, "verify", claim_id=no_value["id"])
     assert "has no value to compare with the source" in message
 
@@ -236,7 +241,9 @@ async def test_due_returns_three_lists(client, routes):
     changed = await remember_version(
         client, check_method="github_release", check_target="getzep/graphiti", value="v0.30.1"
     )
-    never_checked = await remember_version(client, check_method="pypi", check_target="mcp")
+    never_checked = await remember_version(
+        client, check_method="pypi", check_target="mcp", value="2.3.0"
+    )
     unverifiable = await call(client, "remember", text="Seoul has 25 districts", kind="world_fact")
     verified = await call(client, "verify", claim_id=changed["id"])
 

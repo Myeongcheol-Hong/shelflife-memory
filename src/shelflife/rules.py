@@ -42,16 +42,19 @@ MONEY = re.compile(
 )
 
 # A fact about the newest version or release of a package or repository: the whole
-# attribute names it ("latest_version", "release", "최신 버전"), or, without an attribute,
-# the text says so ("the latest Graphiti release", "최신 릴리스").
+# attribute names it ("latest_version", "latest_release", "최신 버전"). It must say latest,
+# newest, current or 최신: a bare "version" or "release" may be a pinned one ("we pinned
+# mcp version 2.3.0"), which a check would report as changed on every release. The text
+# alone never qualifies. Such claims get no check method and show under due's
+# needs_check_method, the cheap error (owner, 2026-10-13).
 VERSION_ATTRIBUTE = re.compile(
-    r"(?:(?:latest|newest|current)\s+(?:stable\s+)?)?(?:version|release)s?"
-    r"|(?:최신\s*)?(?:버전|릴리스)"
+    r"(?:latest|newest|current)\s+(?:stable\s+)?(?:version|release)s?"
+    r"|최신\s*(?:버전|릴리스)"
 )
-VERSION_PHRASE = re.compile(
-    rf"(?<![a-z])(?:latest|newest|current)(?:\s+\S+){{0,3}}?\s+(?:version|release)s?(?![a-z])"
-    rf"|(?<![{HANGUL}])최신(?:\s+\S+){{0,2}}?\s*(?:버전|릴리스)"
-)
+# A bare year or a date (2025, 2024-06, 2024-06-20) is not a version string, although it
+# parses as one (2024/06/20 does not parse). Dotted calendar versions (certifi's
+# 2024.08.30) and compact dates (20240620) still count (owner, 2026-10-13).
+YEAR_OR_DATE = re.compile(r"\d{4}(?:-\d{1,2}(?:-\d{1,2})?)?")
 PYPI_URL = re.compile(r"https?://pypi\.org/project/([A-Za-z0-9][A-Za-z0-9._-]*)/?.*", re.I)
 GITHUB_URL = re.compile(
     r"https?://(?:www\.)?github\.com/([A-Za-z0-9-]+)/([A-Za-z0-9._-]+?)(?:\.git)?(?:[/?#].*)?",
@@ -97,19 +100,18 @@ def infer_volatility(attribute: str | None, text: str, value: str | None) -> Vol
     return None
 
 
-def is_version_fact(attribute: str | None, text: str, value: str | None) -> bool:
+def is_version_fact(attribute: str | None, value: str | None) -> bool:
     """Whether a claim states the latest version or release, as a version string.
 
-    The attribute decides when there is one ("latest_version", not "python_version" or
-    "release_date"); otherwise the text must say "latest version", "latest release" or
-    similar ("released in 2019" does not). Either way the value must be a version string
-    ("2.3 or later" and "Python 3.9" are not).
+    The attribute must name it ("latest_version", not "version", "python_version" or
+    "release_date"), and the value must be a version string ("2.3 or later", "2025" and
+    "2024-06-20" are not).
     """
-    if not value or parse_version(value) is None:
+    if not attribute or not value or YEAR_OR_DATE.fullmatch(value.strip()):
         return False
-    if attribute:
-        return VERSION_ATTRIBUTE.fullmatch(" ".join(_words(attribute).split())) is not None
-    return VERSION_PHRASE.search(_words(text)) is not None
+    if parse_version(value) is None:
+        return False
+    return VERSION_ATTRIBUTE.fullmatch(" ".join(_words(attribute).split())) is not None
 
 
 def same_project(method: CheckMethod, a: str, b: str) -> bool:
@@ -134,18 +136,19 @@ def infer_check(
     check_target: str | None,
     source_url: str | None,
     attribute: str | None,
-    text: str,
     value: str | None,
 ) -> tuple[CheckMethod, str] | None:
     """check_method and check_target for a latest-version fact whose source_url is a PyPI
     project or GitHub repository page; None if the rule does not apply.
+
+    Only the attribute can make a claim a latest-version fact (is_version_fact).
 
     A caller's check_target is never replaced: the rule fires only if it is empty (the
     project from source_url becomes the target) or names the same project, and then it is
     kept exactly as given. A check_target that is a URL does not name a project, so the
     rule leaves such a claim alone.
     """
-    if not source_url or not is_version_fact(attribute, text, value):
+    if not source_url or not is_version_fact(attribute, value):
         return None
     found = project_from_url(source_url)
     if found is None:
