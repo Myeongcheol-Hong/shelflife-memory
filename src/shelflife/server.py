@@ -16,13 +16,14 @@ from shelflife.store import Store
 
 RECALL_LIMIT = 10
 
-# D3 (when remember is called) is open; until the owner decides, only when asked.
+# D3: remember only when asked. Claude may offer, but waits for the user's confirmation.
 INSTRUCTIONS = """\
 Shelf Life is a memory whose claims carry a source, the date they were observed and a
 schedule for re-checking them. Call remember only when the user asks you to remember
-something. Call recall before answering a question a remembered claim might cover, and
-say how old the claim is (observed_at) when that matters. Nothing is re-checked
-automatically yet."""
+something. You may offer ("Want me to remember this?"), but never call remember until
+the user confirms. Call recall before answering a question a remembered claim might
+cover, and say how old the claim is (observed_at) when that matters. Nothing is
+re-checked automatically yet."""
 
 
 def build_server(store: Store) -> MCPServer:
@@ -73,8 +74,10 @@ def build_server(store: Store) -> MCPServer:
         """Store one claim in Shelf Life memory and return it with its id and next_check_at.
 
         Use only when the user asks you to remember something: a fact about the world
-        (a price, a version, a policy), a decision, a preference or a note. Write one
-        self-contained sentence per claim. Do not store guesses or whole conversations.
+        (a price, a version, a policy), a decision, a preference or a note. You may offer
+        ("Want me to remember this?"), but never call remember until the user confirms.
+        Write one self-contained sentence per claim. Do not store guesses or whole
+        conversations.
 
         - kind: world_fact, decision, preference or note.
         - subject, attribute, value: the structured form of a checkable fact, for example

@@ -41,9 +41,12 @@ async def test_lists_the_m1_tools(client):
     assert set(schema["required"]) == {"text", "kind"}
     assert set(schema["properties"]) == {"text", "kind", *OPTIONAL_FIELDS}
     assert "leave both empty unless you are confident" in tools["remember"].description
-    # D3 is open: until the owner decides, remember is called only when asked.
-    assert "only when the user asks" in tools["remember"].description
-    assert "only when the user asks" in client.instructions
+    # D3: remember only when asked; Claude may offer but must wait for confirmation.
+    for text in (tools["remember"].description, client.instructions):
+        text = " ".join(text.split())  # line wrapping is not part of the wording
+        assert "only when the user asks" in text
+        assert '"Want me to remember this?"' in text
+        assert "never call remember until the user confirms" in text
 
 
 async def test_remember_passes_every_optional_field_through(client):
