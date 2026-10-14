@@ -1,9 +1,11 @@
 import json
+import sqlite3
 from datetime import date
 from pathlib import Path
 
 import pytest
 
+from shelflife import store as store_module
 from shelflife.cli import main, read_jsonl
 from shelflife.models import FieldSource, Status
 
@@ -79,6 +81,31 @@ def test_cli_import(tmp_path, monkeypatch, capsys):
     path.write_bytes(b"\xff\xfe")
     assert main(["import", str(path)]) == 1
     assert "claims.jsonl: not UTF-8" in capsys.readouterr().err
+
+
+def test_a_byte_order_mark_is_ignored(tmp_path):
+    record = {"id": "n1", "text": "A note", "kind": "note"}
+    path = tmp_path / "claims.jsonl"
+    path.write_text(json.dumps(record) + "\n", encoding="utf-8-sig")  # as Notepad saves
+    assert path.read_bytes().startswith(b"\xef\xbb\xbf")
+    assert read_jsonl(path) == [record]
+
+
+def test_a_locked_database_is_an_error_line_not_a_traceback(tmp_path, monkeypatch, capsys):
+    db = tmp_path / "cli.db"
+    monkeypatch.setenv("SHELFLIFE_DB", str(db))
+    monkeypatch.setattr(store_module, "BUSY_TIMEOUT_SECONDS", 0.1)
+    path = tmp_path / "claims.jsonl"
+    path.write_text(json.dumps({"id": "n1", "text": "A note", "kind": "note"}) + "\n")
+    store_module.Store(db).close()
+    other = sqlite3.connect(db)
+    other.execute("BEGIN IMMEDIATE")  # another server process is writing
+    try:
+        assert main(["import", str(path)]) == 1
+    finally:
+        other.rollback()
+        other.close()
+    assert capsys.readouterr().err == "error: database is locked\n"
 
 
 def test_cli_import_of_a_missing_file_creates_no_database(tmp_path, monkeypatch, capsys):

@@ -9,6 +9,7 @@ from __future__ import annotations
 import http.client
 import re
 import urllib.error
+import urllib.parse
 import urllib.request
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
@@ -16,6 +17,7 @@ from dataclasses import dataclass
 from shelflife.models import CheckMethod, CheckResult
 
 TIMEOUT_SECONDS = 15
+MAX_BYTES = 10 * 2**20  # the largest response body read
 USER_AGENT = "shelflife-memory (+https://github.com/Myeongcheol-Hong/shelflife-memory)"
 
 # (url, extra headers) -> response body. Raises FetchError.
@@ -42,15 +44,38 @@ Verifier = Callable[[str, str | None, Fetch], Outcome]
 
 
 def http_get(url: str, headers: Mapping[str, str]) -> bytes:
-    """The real `Fetch`: a GET with a timeout and a User-Agent."""
+    """The real `Fetch`: a GET with a timeout and a User-Agent. A body over MAX_BYTES is
+    refused, and a redirect to another origin drops the Authorization header."""
     request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, **headers})
     try:
-        with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:
-            return response.read()
+        opener = urllib.request.build_opener(_SameOriginAuthorization)
+        with opener.open(request, timeout=TIMEOUT_SECONDS) as response:
+            body = response.read(MAX_BYTES + 1)
     except urllib.error.HTTPError as e:
         raise FetchError(f"HTTP {e.code} from {url}", status=e.code) from None
     except (OSError, http.client.HTTPException) as e:  # URLError and timeouts are OSErrors
         raise FetchError(f"cannot reach {url}: {e}") from None
+    if len(body) > MAX_BYTES:
+        raise FetchError(f"response larger than {MAX_BYTES // 2**20} MB from {url}")
+    return body
+
+
+class _SameOriginAuthorization(urllib.request.HTTPRedirectHandler):
+    """Follows redirects as urllib does, which copies every header, but drops
+    Authorization when a redirect changes the scheme, host or port, so a GitHub token
+    is never sent to another server."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):  # type: ignore[no-untyped-def]
+        new = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if new is not None and _origin(new.full_url) != _origin(req.full_url):
+            new.remove_header("Authorization")
+        return new
+
+
+def _origin(url: str) -> tuple[str, str | None, int | None]:
+    parts = urllib.parse.urlsplit(url)
+    default = {"http": 80, "https": 443}.get(parts.scheme)
+    return parts.scheme, parts.hostname, parts.port or default
 
 
 # A version as packages and release tags write it: an optional tag prefix ending in a
@@ -103,10 +128,10 @@ def compare_version(claimed: str | None, found: object, body: str) -> Outcome:
     """Compare a claimed version with the one found in a fetched body.
 
     The found version is the evidence, and it must appear verbatim in the fetched content
-    (CLAUDE.md); otherwise nothing can be concluded.
+    (CLAUDE.md); otherwise nothing can be concluded, and the evidence says so.
     """
     if not isinstance(found, str) or not found or found not in body:
-        return Outcome(CheckResult.CANNOT_TELL)
+        return Outcome(CheckResult.CANNOT_TELL, evidence="version not found verbatim")
     if claimed is None:
         return Outcome(CheckResult.CANNOT_TELL, new_value=found, evidence=found)
     result = CheckResult.SAME if same_version(claimed, found) else CheckResult.CHANGED

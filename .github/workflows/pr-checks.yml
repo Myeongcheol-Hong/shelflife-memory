@@ -17,7 +17,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 2
-      - name: Dependencies unchanged, or the PR has the deps-approved label
+      - name: Dependencies and uv.lock unchanged, or the PR has the deps-approved label
         env:
           APPROVED: ${{ contains(github.event.pull_request.labels.*.name, 'deps-approved') }}
         shell: python3 {0}
@@ -39,17 +39,28 @@ jobs:
                   "tool.uv": data.get("tool", {}).get("uv"),
               }
 
+          def lock(rev):
+              shown = subprocess.run(
+                  ["git", "show", f"{rev}:uv.lock"], capture_output=True, text=True
+              )
+              return shown.stdout if shown.returncode == 0 else None
+
           before, after = deps("HEAD^1"), deps("HEAD")
           changed = [key for key in before if before[key] != after[key]]
-          if not changed:
-              print("Dependencies in pyproject.toml are unchanged.")
-              sys.exit(0)
           for key in changed:
               print(f"{key}:\n  before: {before[key]}\n  after:  {after[key]}")
+          # The lock file pins every package installed, so a change to it is a dependency
+          # change even when pyproject.toml is untouched (an upgrade, a new transitive pin).
+          if lock("HEAD^1") != lock("HEAD"):
+              changed.append("uv.lock")
+              print("uv.lock changed.")
+          if not changed:
+              print("Dependencies in pyproject.toml and uv.lock are unchanged.")
+              sys.exit(0)
           if os.environ["APPROVED"] == "true":
               print("Changed, and the PR has the deps-approved label.")
               sys.exit(0)
-          print("::error::Dependencies in pyproject.toml changed. The owner approves by adding the deps-approved label.")
+          print("::error::Dependencies in pyproject.toml or uv.lock changed. The owner approves by adding the deps-approved label.")
           sys.exit(1)
 
   size:

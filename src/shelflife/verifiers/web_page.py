@@ -21,9 +21,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from html.parser import HTMLParser
 
-from shelflife.verifiers import TIMEOUT_SECONDS, USER_AGENT, FetchError
+from shelflife.verifiers import MAX_BYTES, TIMEOUT_SECONDS, USER_AGENT, FetchError
 
-MAX_BYTES = 10 * 1024 * 1024
 DEADLINE_SECONDS = 30
 MAX_REDIRECTS = 5
 PAGE_TYPES = frozenset({"text/html", "application/xhtml+xml", "text/plain"})
@@ -64,20 +63,35 @@ def fetch_page(
     Only http and https URLs whose host is a public address are fetched, and every
     redirect is checked the same way, so a stored URL cannot read a local file, the
     owner's network or a cloud metadata service (behind a proxy, see check_url). The body
-    is capped at MAX_BYTES. The fetch, redirects and body included, is stopped once it
-    passes DEADLINE_SECONDS; each network step also times out after TIMEOUT_SECONDS.
+    is capped at MAX_BYTES.
+
+    The time limit: no request, the first or a redirect, starts once DEADLINE_SECONDS
+    have passed, and each one's socket timeout is TIMEOUT_SECONDS or the time left when
+    it starts, whichever is less. The deadline is checked again when the headers have
+    arrived and after each chunk of the body. The timeout bounds each socket operation
+    (connecting, one read), not a whole request, so the limit is not exact: a server
+    that keeps sending a little at a time can overrun it by up to one timeout while the
+    body is read, and by more while it sends the headers.
     """
     check_url(url, resolve)
     request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     start = clock()
+
+    def left() -> float:
+        """Seconds left before the deadline; FetchError once it has passed."""
+        remaining = DEADLINE_SECONDS - (clock() - start)
+        if remaining <= 0:
+            raise FetchError(f"page took longer than {DEADLINE_SECONDS} s at {url}")
+        return remaining
+
     try:
-        with (opener or _opener(resolve)).open(request, timeout=TIMEOUT_SECONDS) as response:
-            if clock() - start > DEADLINE_SECONDS:
-                raise FetchError(f"page took longer than {DEADLINE_SECONDS} s at {url}")
+        timeout = min(TIMEOUT_SECONDS, left())
+        with (opener or _opener(resolve, left)).open(request, timeout=timeout) as response:
+            left()
             content_type = response.headers.get_content_type()
             if content_type not in PAGE_TYPES:
                 raise FetchError(f"not a web page ({content_type}) at {url}")
-            body = _read(response, url, start, clock)
+            body = _read(response, url, left)
             charset = response.headers.get_content_charset()
             return Page(url, response.geturl(), response.status, content_type, charset, body)
     except FetchError:
@@ -197,38 +211,45 @@ class _HTTPSHandler(urllib.request.HTTPSHandler):
 class _CheckedRedirects(urllib.request.HTTPRedirectHandler):
     max_redirections = MAX_REDIRECTS
 
-    def __init__(self, resolve: Resolve | None = None) -> None:
-        self.resolve = resolve
+    def __init__(
+        self, resolve: Resolve | None = None, left: Callable[[], float] | None = None
+    ) -> None:
+        self.resolve, self.left = resolve, left
 
     def redirect_request(self, req, fp, code, msg, headers, newurl):  # type: ignore[no-untyped-def]
         check_url(newurl, self.resolve)
+        if self.left is not None:
+            # urllib opens the redirect with req.timeout once this returns.
+            req.timeout = min(TIMEOUT_SECONDS, self.left())
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
-def _opener(resolve: Resolve | None = None) -> urllib.request.OpenerDirector:
-    """An opener for http and https only (no file:, data: or ftp: handlers)."""
+def _opener(
+    resolve: Resolve | None = None, left: Callable[[], float] | None = None
+) -> urllib.request.OpenerDirector:
+    """An opener for http and https only (no file:, data: or ftp: handlers). `left` gives
+    the seconds left before fetch_page's deadline, for each redirect."""
     opener = urllib.request.OpenerDirector()
     for handler in (
         urllib.request.ProxyHandler(),
         _HTTPHandler(),
         _HTTPSHandler(),
         urllib.request.HTTPDefaultErrorHandler(),
-        _CheckedRedirects(resolve),
+        _CheckedRedirects(resolve, left),
         urllib.request.HTTPErrorProcessor(),
     ):
         opener.add_handler(handler)
     return opener
 
 
-def _read(response, url: str, start: float, clock: Callable[[], float]) -> bytes:  # type: ignore[no-untyped-def]
+def _read(response, url: str, left: Callable[[], float]) -> bytes:  # type: ignore[no-untyped-def]
     chunks: list[bytes] = []
     size = 0
     while chunk := response.read1(64 * 1024):
         size += len(chunk)
         if size > MAX_BYTES:
             raise FetchError(f"page larger than {MAX_BYTES // 2**20} MB at {url}")
-        if clock() - start > DEADLINE_SECONDS:
-            raise FetchError(f"page took longer than {DEADLINE_SECONDS} s at {url}")
+        left()
         chunks.append(chunk)
     return b"".join(chunks)
 
@@ -327,6 +348,11 @@ IMPLIED_END = {
 }
 STRUCTURE = BLOCKS | {"td", "th"}  # what the stacks track; inline elements are left out
 MAX_DEPTH = 256  # open elements tracked; deeper ones are counted, not kept
+MAX_PARSED = 2 * 2**20  # characters of a page's decoded HTML that extract() reads
+# Inline styles that hide an element: zero opacity or font size, or moved off screen
+# (left, top or text-indent of -1000px, -100em or -100rem or further).
+ZERO = re.compile(r"[-+]?(?:0+\.?0*|\.0+)(?:[a-z]+|%)?")
+OFF_SCREEN = re.compile(r"-(\d+(?:\.\d*)?|\.\d+)(px|r?em)")
 
 
 def extract(html: str) -> list[Block]:
@@ -335,15 +361,19 @@ def extract(html: str) -> list[Block]:
     The whole body is kept, navigation and footers included: choosing the part of the
     page that matters is section selection's job, and a page's <main> or <article> may
     not hold the fact (on the Skilljar pages, <article> holds only an FAQ). Dropped:
-    SKIP elements, struck-through text, and hidden elements (the hidden attribute,
-    aria-hidden="true", an inline display:none or visibility:hidden, a closed <dialog>).
+    SKIP elements, struck-through text, and hidden elements: the hidden attribute,
+    aria-hidden="true", a closed <dialog>, and an inline style of display:none,
+    visibility:hidden, opacity:0 or font-size:0, or one that moves the element off
+    screen (left, top or text-indent of -1000px or -100em or further). Only inline
+    styles are read: an element hidden by a stylesheet class still counts as visible.
     aria-hidden is an approximation (screen readers skip it; browsers may show it), and
     a self-closed "<div hidden/>" is read as empty, as XHTML would. Table cells are
     joined with " | ". End tags a page leaves out are implied as HTML implies them, and
-    the work stays linear in the page's size, however deep its nesting.
+    the work stays linear in the page's size, however deep its nesting. Only the first
+    MAX_PARSED characters are read, so text past them is never found or quoted.
     """
     parser = _TextParser()
-    parser.feed(html)
+    parser.feed(html[:MAX_PARSED])
     parser.close()
     return parser.blocks
 
@@ -360,10 +390,21 @@ def _hidden(tag: str, attrs: list[tuple[str, str | None]]) -> bool:
         return True
     if values.get("aria-hidden") == "true":
         return True
-    style = re.sub(r"\s", "", values.get("style", ""))
-    return any(
-        rule in style for rule in ("display:none", "visibility:hidden", "visibility:collapse")
-    )
+    for declaration in re.sub(r"\s", "", values.get("style", "")).split(";"):
+        name, _, value = declaration.partition(":")
+        value = value.removesuffix("!important")
+        if (name, value) in (
+            ("display", "none"),
+            ("visibility", "hidden"),
+            ("visibility", "collapse"),
+        ):
+            return True
+        if name in ("opacity", "font-size") and ZERO.fullmatch(value):
+            return True
+        if name in ("left", "top", "text-indent") and (m := OFF_SCREEN.fullmatch(value)):
+            if float(m[1]) >= (1000 if m[2] == "px" else 100):
+                return True
+    return False
 
 
 class _Stack:

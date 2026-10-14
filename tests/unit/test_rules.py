@@ -301,3 +301,41 @@ def test_rules_apply_to_world_facts_only(store):
         CheckMethod.NONE,
         FieldSource.DEFAULT,
     )
+
+
+def test_volatility_none_skips_the_check_rule(store):
+    # The same claim gets a pypi check from the rule unless the caller says it never
+    # changes; then nothing checks it.
+    fields = {"attribute": "latest_version", "value": "2.3.0", "source_url": PYPI}
+    ruled = store.remember("The latest version of mcp is 2.3.0", "world_fact", **fields)
+    assert ruled.check_method is CheckMethod.PYPI
+    claim = store.remember(
+        "The latest version of mcp is 2.3.0", "world_fact", volatility="none", **fields
+    )
+    assert (claim.check_method, claim.check_method_source) == (
+        CheckMethod.NONE,
+        FieldSource.DEFAULT,
+    )
+    assert (claim.next_check_at, claim.check_target) == (None, None)
+
+
+@pytest.mark.parametrize(
+    ("kind", "fields"),
+    [
+        ("world_fact", {"volatility": "none"}),
+        ("note", {}),  # a note's volatility is none by default
+    ],
+)
+def test_volatility_none_with_a_check_method_is_refused(store, kind, fields):
+    with pytest.raises(ValueError, match="volatility none means the claim never changes"):
+        store.remember(
+            "mcp 2.3.0 is out",
+            kind,
+            check_method="pypi",
+            check_target="mcp",
+            value="2.3.0",
+            **fields,
+        )
+    # check_method none says the same thing, so it is accepted.
+    claim = store.remember("mcp 2.3.0 is out", kind, check_method="none", **fields)
+    assert (claim.volatility, claim.check_method) == (Volatility.NONE, CheckMethod.NONE)
