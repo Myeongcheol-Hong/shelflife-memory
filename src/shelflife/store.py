@@ -103,6 +103,20 @@ COMMIT;
 # ("Chatbox의"), a Hangul part that is one of these is dropped (D8).
 PARTICLES = frozenset("은 는 이 가 을 를 의 로 으로 에 에서 와 과 도 만".split())
 _SCRIPT_RUNS = re.compile(r"[\uac00-\ud7a3]+|[^\uac00-\ud7a3]+")
+_LONGEST_FIRST = sorted(PARTICLES, key=len, reverse=True)
+
+
+def drop_particle(word: str) -> str:
+    """Drop a trailing particle from a pure-Hangul word if at least 2 characters remain (D8).
+
+    "가격은" gives "가격" and "학교으로" gives "학교" (the longest particle is tried first),
+    but "속도" and "회의" stay. Any other word is returned as it is.
+    """
+    if re.fullmatch(r"[\uac00-\ud7a3]+", word):
+        for particle in _LONGEST_FIRST:
+            if word.endswith(particle) and len(word) - len(particle) >= 2:
+                return word[: -len(particle)]
+    return word
 
 
 def query_words(query: str) -> list[str]:

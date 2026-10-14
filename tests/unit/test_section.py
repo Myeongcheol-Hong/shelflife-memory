@@ -31,7 +31,8 @@ SMALL = Weights(budget=200)
     ("text", "expected"),
     [
         ("The Exam_Fee is $300", {"exam", "fee", "300"}),
-        ("Chatbox의 가격은 월 9,900원", {"chatbox", "가격은", "월", "9,900", "원"}),
+        ("Chatbox의 가격은 월 9,900원", {"chatbox", "가격", "월", "9,900", "원"}),
+        ("AI모델은 속도가 회의", {"ai", "모델", "속도", "회의"}),  # 2 characters must remain
         ("mcp v2.3.0 and Claude Sonnet 5.5", {"mcp", "v2.3.0", "claude", "sonnet", "5.5"}),
         ("A b of the top 3 MCP", {"top", "3", "mcp"}),  # one-letter words, not digits, dropped
         (None, set()),
@@ -57,6 +58,7 @@ def test_terms(text, expected):
         ("5.5", "version 15.5", False),
         ("9,900", "월 9,900원", True),
         ("가격", "chatbox 가격은 월 9,900원", True),  # Hangul inside a word
+        ("가격", "시험 수수료는 300달러", True),  # a synonym
     ],
 )
 def test_how_words_match(word, text, found):
