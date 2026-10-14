@@ -37,7 +37,8 @@ sentence. Store the user's sentence as given, in their language. Call recall bef
 answering a question a remembered claim might cover, and say how old the claim is
 (observed_at) when that matters. Claims are checked against their source only when you
 call verify; nothing is re-checked automatically yet. For a web_page claim, verify
-returns a page section for you to judge, and record_check stores your judgment."""
+returns a page section for you to judge, and record_check stores your judgment. If a
+result has a notice, pass it on to the user."""
 
 
 @dataclass(frozen=True)

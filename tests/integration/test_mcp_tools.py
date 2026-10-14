@@ -470,10 +470,8 @@ async def test_verify_records_an_error_when_the_page_cannot_be_decoded(client, r
     page = Page(AWS, AWS, 200, "text/html", None, b'<meta charset="undefined"><p>Fee: $300</p>')
     async with Client(build_server(store, get_page=lambda url: page)) as other:
         verified = await call(other, "verify", claim_id=claim["id"])
-    assert (verified["check"]["result"], verified["check"]["evidence"]) == (
-        "error",
-        "undefined encoding",
-    )
+    assert verified["check"]["result"] == "error"
+    assert "undefined encoding" in verified["check"]["evidence"]  # 3.11 words it differently
 
 
 async def test_a_check_recorded_while_the_page_loads_is_newer_than_the_fetch(store, clock):
@@ -520,4 +518,4 @@ async def test_the_tool_interface_is_pinned(client):
     interface = [words(client.instructions)]
     interface += [[t.name, words(t.description), t.input_schema] for t in tools]
     digest = hashlib.sha256(json.dumps(interface, sort_keys=True).encode()).hexdigest()
-    assert digest == "75d10bdf38536af2f2ac562f5b797c14ea9ffecd5226b15988ef009204c9df7c"
+    assert digest == "c2f7040f1b3c3a1539392085881c439aa58af85c8c522c78df02f309ecfe25b8"

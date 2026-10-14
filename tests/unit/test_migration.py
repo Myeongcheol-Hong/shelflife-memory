@@ -185,8 +185,10 @@ async def test_the_next_tool_result_carries_the_upgrade_notice_once(v1_file, clo
         async with Client(build_server(store, now=clock)) as client:
             first = (await client.call_tool("due", {})).structured_content
             second = (await client.call_tool("due", {})).structured_content
+            instructions = " ".join(client.instructions.split())
     assert first["notice"] == f"database upgraded to schema v2; the v1 file is saved as {backup}"
     assert "notice" not in second
+    assert "If a result has a notice, pass it on to the user." in instructions
 
 
 @pytest.fixture
