@@ -25,6 +25,8 @@ from typing import Any
 from eval.replay import score
 from eval.replay.replay import (
     CLAIMS_PER_PROJECT,
+    FIXED,
+    JITTERED,
     POLICIES,
     QUESTION_RATES,
     SESSION,
@@ -41,10 +43,9 @@ SEEDS = [0, 1, 2, 3, 4]
 SCENARIOS = ("uniform", "sessions")
 HEADLINE = ("test", "uniform", "1 a week")
 LATE_LABELED = {"gohugoio/hugo", "jesseduffield/lazygit", "starship/starship", "zed-industries/zed"}
-JITTER = ("per-class", "fixed 7", "fixed 30")
 NOT_WORSE = 0.005  # the stale-answer rate may rise this much at its interval's upper end
 BUCKETS = ("0 changes a year", "under 6", "6 to 52", "over 52")
-ROWS = ("oracle", "every read", *(f"fixed {n}" for n in (3, 7, 14, 30, 60, 90, 180)))
+ROWS = ("oracle", "every read", *(f"fixed {n}" for n in FIXED))
 
 
 def run(timelines: list[Timeline], labels: dict[str, str], seeds: list[int] = SEEDS) -> dict:
@@ -89,8 +90,11 @@ def _summary(rows: list[Row], split: str, groups: dict[str, set[str]]) -> dict:
         projects = score.per_project(rows, name)
         peak, to_mean = score.peak(rows, name, split)
         out[name] = _metrics(projects) | {"peak per day": peak, "peak to mean": to_mean}
-        for group, members in groups.items():
-            out[name][group] = _metrics({p: c for p, c in projects.items() if p in members})
+        if groups:
+            out[name]["groups"] = {
+                group: _metrics({p: c for p, c in projects.items() if p in members})
+                for group, members in groups.items()
+            }
     return out
 
 
@@ -108,7 +112,7 @@ def _jitter(rows_by_scenario: dict[str, list[Row]], split: str) -> dict:
     zero and the stale-answer rate's rises at most NOT_WORSE at its interval's upper end."""
     out: dict[str, Any] = {}
     for scenario, rows in rows_by_scenario.items():
-        for name in JITTER:
+        for name in JITTERED:
             on, off = score.per_project(rows, f"{name} + jitter"), score.per_project(rows, name)
             peaks = (
                 score.peak(rows, f"{name} + jitter", split)[0] - score.peak(rows, name, split)[0]
@@ -136,14 +140,14 @@ def helps(found: dict) -> bool:
 def table(metrics: dict, run_id: str) -> str:
     """table.md: the headline, every read across question rates, jitter, the breakdowns."""
     head, dev = metrics[" / ".join(HEADLINE)], metrics["dev / uniform / 1 a week"]
-    lines = [f"# 6.1 replay, run {run_id}", "", _caption(*HEADLINE), "", *_policies(head)]
+    lines = [f"# 6.1 replay, run {run_id}", "", _caption(*HEADLINE, head), "", *_policies(head)]
     lines += ["", "## Every read at each question rate (test, uniform)", "", *_every_read(metrics)]
     lines += ["", "## Jitter, with minus without, paired (test, 1 a week)", ""]
     lines += _jitter_table(metrics["jitter"])
     lines += ["", "## By label and by observed change rate (test, uniform, 1 a week)", ""]
     lines += _groups_table(head)
     lines += ["", "## Dev split (not compared with test: dev claims live shorter)", ""]
-    lines += [_caption("dev", "uniform", "1 a week"), "", *_policies(dev)]
+    lines += [_caption("dev", "uniform", "1 a week", dev), "", *_policies(dev)]
     return "\n".join(lines) + "\n"
 
 
@@ -164,7 +168,12 @@ def _every_read(metrics: dict) -> list[str]:
 
 def _jitter_table(jitter: dict) -> list[str]:
     rows = [
-        [key, _num(v["peak per day"]), _pct(v["stale-answer rate"]), _pct(v["stale claim-days"])]
+        [
+            key + (" (primary)" if key == "sessions / per-class" else " (exploratory)"),
+            _num(v["peak per day"]),
+            _pct(v["stale-answer rate"]),
+            _pct(v["stale claim-days"]),
+        ]
         for key, v in jitter.items()
         if isinstance(v, dict)
     ]
@@ -183,14 +192,16 @@ def _groups_table(head: dict) -> list[str]:
     header += ["Fixed 30: stale claim-days", "Checks per claim-month"]
     rows = []
     for g in [*LABELS, *BUCKETS]:
-        a, b = head["per-class"][g], head["fixed 30"][g]
+        a, b = head["per-class"]["groups"][g], head["fixed 30"]["groups"][g]
         rows.append([g, str(a["projects"]), days(a), checks(a), days(b), checks(b)])
     return _table(header, rows)
 
 
-def _caption(split: str, scenario: str, rate: str) -> str:
+def _caption(split: str, scenario: str, rate: str, summary: dict) -> str:
+    claims, projects = summary["never"]["claims"], summary["never"]["projects"]
     return (
-        f"{split.capitalize()} split, {scenario} scenario, questions {rate} per claim. 95%"
+        f"{split.capitalize()} split, {scenario} scenario, questions {rate} per claim;"
+        f" {claims:.0f} claims about {projects} projects per seed. 95%"
         " intervals over resampled projects (D12). Days to detect counts only the changes"
         " found; the share left undetected follows it."
     )
@@ -198,7 +209,7 @@ def _caption(split: str, scenario: str, rate: str) -> str:
 
 def _policies(summary: dict) -> list[str]:
     rows = [[name, *(f(summary[name]) for f in COLUMNS)] for name in (*ROWS, "per-class")]
-    if late := summary["per-class"].get("without the late-labeled four"):
+    if late := summary["per-class"].get("groups", {}).get("without the late-labeled four"):
         rows.append(
             ["per-class without lazygit, starship, zed, hugo", *(f(late) for f in COLUMNS[:4]), "-"]
         )
@@ -241,11 +252,10 @@ def _table(header: list[str], rows: list[list[str]]) -> list[str]:
 def config(timelines_dir: Path, now: datetime) -> dict:
     """What ran: enough to tell two runs apart and to run this one again."""
     sha = _git("rev-parse", "HEAD")
-    digest = hashlib.sha256()
-    for path in sorted(timelines_dir.rglob("*")):
-        if path.is_file():
-            digest.update(path.relative_to(timelines_dir).as_posix().encode() + b"\0")
-            digest.update(path.read_bytes())
+    digest = hashlib.sha256()  # over the files load_projects() and load_all() read
+    for path in [timelines_dir / "projects.toml", *sorted(timelines_dir.glob("*/*.jsonl"))]:
+        digest.update(path.relative_to(timelines_dir).as_posix().encode() + b"\0")
+        digest.update(path.read_bytes())
     return {
         "run": f"{now:%Y-%m-%d}-{sha[:7]}",
         "ran at": now.isoformat(timespec="seconds"),
@@ -278,9 +288,12 @@ def main(
     args = parser.parse_args(argv)
     labels = {p.name: p.volatility for p in load_projects(args.data / "projects.toml")}
     cfg = config(args.data, now())
-    metrics = run(load_all(args.data), labels)
     folder = args.out / cfg["run"]
-    folder.mkdir(parents=True, exist_ok=True)
+    if folder.exists():
+        print(f"error: {folder} exists; a run never overwrites another", file=sys.stderr)
+        return 1
+    metrics = run(load_all(args.data), labels, cfg["seeds"])
+    folder.mkdir(parents=True)
     (folder / "config.json").write_text(json.dumps(cfg, indent=1) + "\n")
     (folder / "metrics.json").write_text(json.dumps(metrics, indent=1) + "\n")
     (folder / "table.md").write_text(table(metrics, cfg["run"]))

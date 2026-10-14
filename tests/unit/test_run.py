@@ -71,12 +71,18 @@ def test_the_smoke_run_writes_config_metrics_and_table(tmp_path, monkeypatch):
     headline = metrics["test / uniform / 1 a week"]
     assert headline["every read"]["stale-answer rate"]["value"] == 0
     assert headline["oracle"]["stale claim-days"]["value"] == 0
-    assert headline["per-class"]["medium"]["projects"] == 6  # the test's labels
+    assert headline["per-class"]["groups"]["medium"]["projects"] == 6  # the test's labels
     jitter = metrics["jitter"]
     assert jitter["primary: helps"] is run.helps(jitter["sessions / per-class"])
-    assert set(jitter) == {f"{s} / {p}" for s in run.SCENARIOS for p in run.JITTER} | {
+    assert set(jitter) == {f"{s} / {p}" for s in run.SCENARIOS for p in run.JITTERED} | {
         "primary: helps"
     }
     table = (folder / "table.md").read_text()
     assert table.startswith(f"# 6.1 replay, run {folder.name}")
     assert "Primary comparison (D12), sessions / per-class: jitter" in table
+    # Every row has its header's columns, so the Markdown renders.
+    for block in table.split("\n\n"):
+        rows = [line for line in block.splitlines() if line.startswith("|")]
+        assert len({row.count("|") for row in rows}) <= 1, block
+    # A run never overwrites another.
+    assert run.main(["--data", str(data), "--out", str(tmp_path / "out")], now=lambda: now) == 1
