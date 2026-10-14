@@ -4,31 +4,27 @@ Where the work stands. Each session's last PR overwrites this file (CLAUDE.md); 
 
 ## State
 
-- `main` has M1-M3, the hardening (#24), the repo presentation (#25), M5a (#26), its follow-ups (#27) and M6a (#28). Schema v2 (#21) is a one-way door; the rollback steps are in design 5.1.
+- `main` has M1-M3, the hardening (#24), the repo presentation (#25), M5a (#26), its follow-ups (#27), M6a (#28) and M6b (#29). Schema v2 (#21) is a one-way door; the rollback steps are in design 5.1.
 - Open:
-  - #29 (M6b, base `main`): D12's sessions rule, now decided.
-  - #30 (M6c, base #29's branch, with #29 merged in): `run.py`, the first run in `eval/results/2026-10-14-baf3a2c/`, and M6 ticked. D12, CLAUDE.md and design 6.3 say that 6.1 keeps no per-claim rows and that `raw.jsonl` is for model evals.
-  - #31 (base `main`): the outside-review fixes (stale verify results, PEP 440 spellings, a private DB file, the Mem0 wording, 6.2 traps, the Claude Desktop config) and the M5b proposal in `docs/dev/m5b-page-timelines.md`.
-- The first run (test, uniform scenario, 1 question a week):
-  - Jitter's primary comparison says jitter helps: the peak falls by 19.4 checks a day (-23.0 to -7.4), and the stale-answer rate's paired difference stays within -0.2 to +0.2 points.
-  - Per-class lies above the fixed-N curve: 1.12 checks per claim-month at a 46.5% stale-answer rate, against fixed 30's 0.95 at 37.9%. Slow-labeled projects are stale on 57.6% of claim-days, against 24.9% under fixed 30.
-  - A second run gave a byte-identical `metrics.json`.
+  - #30 (M6c, base `main`): `run.py` and the 6.1 run in `eval/results/2026-10-14-45eb42f/`, and M6 ticked. It replaces the first run (`baf3a2c`) with the same numbers plus two additions you asked for: per-class minus fixed 30, paired, and the jitter peaks without and with.
+  - #31 (base `main`): the outside-review fixes (stale verify results, PEP 440 spellings, a private DB file, the Mem0 wording, now cited, 6.2 traps, the Claude Desktop config), D10 follow-up 20 decided, and the M5b proposal in `docs/dev/m5b-page-timelines.md`.
+- The run (uniform scenario, 1 question a week; test unless named):
+  - Jitter's primary comparison says jitter helps: in the sessions scenario per-class peaks at 87.8 checks a day without jitter and 68.4 with it (-19.4, -23.0 to -7.4); the stale-answer rate's paired difference stays within -0.2 to +0.2 points.
+  - Per-class minus fixed 30, paired: +8.6 points of stale answers (2.4 to 14.5) in test and +10.5 (5.3 to 16.1) in dev, at more checks per claim-month (1.12 against 0.95 in test, 0.97 against 0.92 in dev). With the labels as they are, fixed 30 is fresher and cheaper in both splits. Slow-labeled projects are stale on 57.6% of claim-days, against 24.9% under fixed 30.
+  - No class interval or policy changes because of a test result (D12): any change is chosen on dev, in M7 or later.
+  - A rerun gives a byte-identical `metrics.json`.
 - Build order (roadmap): M1-M3, M5a, M6, M7, M4, M5b, M8, M9.
 
 ## Waiting on the maintainer
 
-1. Merge #29. Then check that #30's base is `main`, merge `main` into #30's branch (merge commits only), and merge #30. #31 can go before or after.
-2. #31: `docs.mem0.ai` is blocked in the cloud environment (the proxy answers 403), so the Mem0 wording follows your description and has no citation yet. Allow the host in the environment's network settings, or give the page and the date you checked it.
-3. #31: three choices in D10 follow-up 20 are mine, for you to confirm:
-   - The guard compares fetch times rather than record times, so the result fetched last wins in either order.
-   - A newer error or cannot_tell also refuses an older same or changed. The alternative is to compare only with the last same or changed check; for a page, the current rule discards a whole judgment.
-   - A refused `verify` returns the newer stored check as `check`. The alternative is `null`.
-4. The M5b proposal (`docs/dev/m5b-page-timelines.md`): the pages, the tracked values, and the D12 amendment for values that revert.
-5. Open, no rush: whether the github_release verifier should read a project's tag pattern too (D11).
+1. Merge #30 and #31, in either order.
+2. Before M7: its pre-registered selection caps the adaptive policy's cost at per-class's dev cost (0.97 checks per claim-month) and compares it with per-class. Whether M7 also reports the selected point against fixed 30, which is fresher than per-class on dev at 0.92, is yours to decide.
+3. The M5b proposal (`docs/dev/m5b-page-timelines.md`): the pages, the tracked values, and the D12 amendment for values that revert.
+4. Open, no rush: whether the github_release verifier should read a project's tag pattern too (D11).
 
 ## Next session: start here
 
-1. M7. The shared model runner (`claude -p`) comes first (roadmap), then the adaptive family, whose dev grid, selection rule and label-free exploratory run are pre-registered in D12. Its selection caps the cost at per-class's dev cost, which this run puts at 0.97 checks per claim-month.
+1. M7. The shared model runner (`claude -p`) comes first (roadmap), then the adaptive family, whose dev grid, selection rule and label-free exploratory run are pre-registered in D12.
 2. Every eval also runs on `eval/data/smoke/` in CI. Never fill a label.
 
 ## Notes for later milestones

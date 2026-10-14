@@ -1,4 +1,4 @@
-# 6.1 replay, run 2026-10-14-baf3a2c
+# 6.1 replay, run 2026-10-14-45eb42f
 
 Test split, uniform scenario, questions 1 a week per claim; 1400 claims about 70 projects per seed. 95% intervals over resampled projects (D12). Days to detect counts only the changes found; the share left undetected follows it.
 
@@ -17,6 +17,15 @@ Test split, uniform scenario, questions 1 a week per claim; 1400 claims about 70
 | per-class without lazygit, starship, zed, hugo | 1.08 (0.77 to 1.43) | 46.1% (39.6 to 53.1) | 46.0% (39.6 to 53.0) | 31.05 (10.9%) | - |
 | never | 0.00 (0.00 to 0.00) | 83.5% (78.0 to 88.6) | 83.5% (78.0 to 88.6) | - (100.0%) | 0 (x0.0) |
 
+## Per-class minus fixed 30, paired (uniform, 1 a week)
+
+| Split | Stale-answer rate | Stale claim-days | Checks per claim-month: per-class | Fixed 30 |
+|---|---|---|---|---|
+| dev | 10.5% (5.3 to 16.1) | 10.5% (5.3 to 15.9) | 0.97 (0.69 to 1.27) | 0.92 (0.92 to 0.92) |
+| test | 8.6% (2.4 to 14.5) | 8.5% (2.3 to 14.4) | 1.12 (0.82 to 1.45) | 0.95 (0.95 to 0.96) |
+
+Each difference is per-class minus fixed 30 on the same claims, in points, with its paired 95% interval over resampled projects (D12). Above 0: per-class is staler.
+
 ## Every read at each question rate (test, uniform)
 
 | Questions | Checks per claim-month | Stale claim-days | Days to detect (undetected) |
@@ -27,14 +36,14 @@ Test split, uniform scenario, questions 1 a week per claim; 1400 claims about 70
 
 ## Jitter, with minus without, paired (test, 1 a week)
 
-| Scenario / policy | Peak per day | Stale-answer rate | Stale claim-days |
-|---|---|---|---|
-| uniform / per-class (exploratory) | 0.20 (-5.60 to 5.80) | -0.0% (-0.3 to 0.2) | -0.0% (-0.2 to 0.2) |
-| uniform / fixed 7 (exploratory) | 5.00 (-2.00 to 19.60) | 0.2% (0.1 to 0.4) | 0.2% (0.1 to 0.4) |
-| uniform / fixed 30 (exploratory) | 2.60 (-2.40 to 8.20) | 0.0% (-0.2 to 0.3) | 0.0% (-0.2 to 0.2) |
-| sessions / per-class (primary) | -19.40 (-23.00 to -7.40) | -0.0% (-0.2 to 0.2) | 0.0% (-0.2 to 0.2) |
-| sessions / fixed 7 (exploratory) | -36.80 (-42.00 to -10.60) | 0.1% (-0.1 to 0.2) | 0.2% (0.0 to 0.4) |
-| sessions / fixed 30 (exploratory) | -32.00 (-34.40 to -18.20) | 0.0% (-0.2 to 0.2) | -0.1% (-0.2 to 0.1) |
+| Scenario / policy | Peak per day: without | With | With minus without | Stale-answer rate | Stale claim-days |
+|---|---|---|---|---|---|
+| uniform / per-class (exploratory) | 68.2 | 68.4 | 0.20 (-5.60 to 5.80) | -0.0% (-0.3 to 0.2) | -0.0% (-0.2 to 0.2) |
+| uniform / fixed 7 (exploratory) | 213.0 | 218.0 | 5.00 (-2.00 to 19.60) | 0.2% (0.1 to 0.4) | 0.2% (0.1 to 0.4) |
+| uniform / fixed 30 (exploratory) | 57.4 | 60.0 | 2.60 (-2.40 to 8.20) | 0.0% (-0.2 to 0.3) | 0.0% (-0.2 to 0.2) |
+| sessions / per-class (primary) | 87.8 | 68.4 | -19.40 (-23.00 to -7.40) | -0.0% (-0.2 to 0.2) | 0.0% (-0.2 to 0.2) |
+| sessions / fixed 7 (exploratory) | 264.0 | 227.2 | -36.80 (-42.00 to -10.60) | 0.1% (-0.1 to 0.2) | 0.2% (0.0 to 0.4) |
+| sessions / fixed 30 (exploratory) | 94.0 | 62.0 | -32.00 (-34.40 to -18.20) | 0.0% (-0.2 to 0.2) | -0.1% (-0.2 to 0.1) |
 
 Primary comparison (D12), sessions / per-class: jitter helps.
 
