@@ -4,6 +4,6 @@
 
 Fields follow the claim model in `docs/design.md` section 4.1. A few notes:
 
-- `source_quote` is left out. It is filled in on the first verification, and the quote check rejects any quote that does not appear verbatim on the page.
-- `depends_on` links a decision to the claims it rests on. If `seed-memguard-no-eval` changes, the decision `seed-decision-focus` is flagged for review.
+- `source_quote`, where given, is copied verbatim from the source page; `shelflife-memory check-writes examples/seed_claims.jsonl` checks that it is still there and that it contains the value (design 6.0-1).
+- `depends_on` links a decision to the claims it rests on (`seed-decision-focus` rests on `seed-memguard-no-eval`). That claim's `check_method` is `none`, set on purpose (an absence cannot be quoted, D10), so nothing checks it and the decision is flagged only if the claim is changed by hand.
 - `check_method: none` claims are stored but never re-checked.

@@ -165,7 +165,7 @@ def _clean(value: Any, field_name: str) -> str | None:
     return value.strip() or None
 
 
-def _is_http_url(value: str) -> bool:
+def is_http_url(value: str) -> bool:
     """Whether `value` is a full http(s) URL with a host (D5). Fetching checks more."""
     try:
         parts = urllib.parse.urlsplit(value)
@@ -477,7 +477,7 @@ class Store:
         if text_ is None:
             raise ValueError("text must not be empty")
         kind_ = parse_enum(Kind, kind, "kind")
-        if f["source_url"] is not None and not _is_http_url(f["source_url"]):
+        if f["source_url"] is not None and not is_http_url(f["source_url"]):
             raise ValueError("source_url must be a full http(s) URL")
 
         # Fields the caller leaves empty: a rule where one applies (world facts only),
@@ -506,7 +506,7 @@ class Store:
                 raise ValueError(f"{kind_} claims are never checked; leave check_method empty")
             if target is None:
                 raise ValueError(f"check_target is required when check_method is {method}")
-            if method is CheckMethod.WEB_PAGE and not _is_http_url(target):
+            if method is CheckMethod.WEB_PAGE and not is_http_url(target):
                 raise ValueError("check_target must be a full http(s) URL for web_page")
             # A version check compares the value; without one, verify refuses the claim
             # and it would stay due for ever. web_page may have no value (D4: judged in
