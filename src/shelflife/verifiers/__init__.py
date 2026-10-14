@@ -36,7 +36,7 @@ class FetchError(Exception):
 
 
 class TooLarge(FetchError):
-    """The response body was over the size cap; a smaller request may fit."""
+    """http_get's response body was over its size cap; a smaller request may fit."""
 
 
 @dataclass(frozen=True)

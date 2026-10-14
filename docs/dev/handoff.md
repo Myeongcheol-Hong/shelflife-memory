@@ -12,7 +12,7 @@ Where the work stands. Each session's last PR overwrites this file (CLAUDE.md); 
 ## Waiting on the maintainer
 
 1. Label lazygit, starship, zed and hugo in `projects.toml`.
-2. On the Mac, with `GITHUB_TOKEN` set (60 requests an hour without it is too few): `uv run python -m eval.replay.collect_timelines` again, then commit `eval/data/timelines/` to the M5a branch.
+2. On the Mac, delete the first run's `eval/data/timelines/pypi/` and `github/` (the collector never deletes a file, and helm, prometheus and pnpm are no longer listed), then with `GITHUB_TOKEN` set (60 requests an hour without it is too few): `uv run python -m eval.replay.collect_timelines` again, and commit `eval/data/timelines/` to the M5a branch.
 3. Read its `check:` lines and the tag patterns' "left out" lines. The rule stays for react, TypeScript and ollama (D11); for any other repository with disputed days, choose: cut it, keep the rule, or order by publication.
 
 ## Next session: start here

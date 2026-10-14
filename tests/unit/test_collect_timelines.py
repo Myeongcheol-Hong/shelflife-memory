@@ -147,6 +147,11 @@ def test_github_halves_the_page_size_down_to_10_then_gives_up():
     with pytest.raises(TooLarge):
         collect_github("o/r", fetch, token=None)
     assert [url for url, _ in fetch.calls] == tried
+    # Any other error is not retried: a rate limit fails at once.
+    fetch = fetcher({tried[0]: FetchError("HTTP 403", status=403)})
+    with pytest.raises(FetchError, match="403"):
+        collect_github("o/r", fetch, token=None)
+    assert len(fetch.calls) == 1
 
 
 def write_projects(folder, text):
