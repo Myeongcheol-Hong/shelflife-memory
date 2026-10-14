@@ -92,7 +92,10 @@ def test_the_smoke_run_writes_config_metrics_and_table(tmp_path, monkeypatch):
     table = (folder / "table.md").read_text()
     assert table.startswith(f"# 6.1 replay, run {folder.name}")
     assert "Primary comparison (D12), sessions / per-class: jitter" in table
-    assert all(f"| {key} |" in table for key in combos)  # each row's claim count
+    # Each row's claim count; the uniform scenario never drops a claim.
+    claims = {line.split(" | ")[0][2:]: line for line in table.splitlines() if " / " in line}
+    assert set(claims) >= combos
+    assert all(claims[k].endswith("| 0.0 |") for k in combos if "uniform" in k)
     # Every row has its header's columns, so the Markdown renders.
     for block in table.split("\n\n"):
         rows = [line for line in block.splitlines() if line.startswith("|")]

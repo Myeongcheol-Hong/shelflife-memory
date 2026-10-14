@@ -67,7 +67,7 @@ eval/
   data/             # timelines, Wayback pairs, labeled snippets (small, committed)
     README.md       # data card: sources, dates, licenses, labeling rules
     smoke/          # tiny synthetic set; every eval runs on it in seconds, no network
-  results/<run-id>/ # config.json, metrics.json; raw.jsonl for model evals
+  results/<run-id>/ # config.json, metrics.json, table.md; raw.jsonl for model evals
 tests/
   unit/
   integration/      # call the tools through an in-process MCP client
@@ -101,7 +101,7 @@ A Stop hook in `.claude/settings.json` runs ruff and pytest whenever a session t
 - Eval-only dependencies (plotting, dataframes) go in a uv dependency group named `eval`. The core install stays minimal.
 - Tests stub the model and run in CI. Evals call a real model, never run in CI, and run each LLM item 3 times so results are rates.
 - When comparing conditions, change one variable at a time; keep model and prompt version fixed otherwise.
-- Every eval run writes `eval/results/<run-id>/` with config, git SHA, model, prompt version, dataset hash, raw per-item outputs and metrics. Support rescoring from raw outputs without calling the model. Raw outputs (`raw.jsonl`) and rescoring from them apply to model evals, whose outputs do not repeat; a seeded, model-free replay (6.1) reruns instead and keeps no per-item rows (D12).
+- Every eval run writes `eval/results/<run-id>/` with config, git SHA, dataset hash and metrics. Model evals also record the model and prompt version and write raw per-item outputs (`raw.jsonl`), and support rescoring from them without calling the model, because their outputs do not repeat; a seeded, model-free replay (6.1) reruns instead and keeps no per-item rows (D12).
 - The 6.1 adaptive policy is tuned on the dev split only and reported on the held-out test split, over 5 seeds with bootstrap intervals.
 - Every eval must also run on `eval/data/smoke/` and that run is part of CI.
 

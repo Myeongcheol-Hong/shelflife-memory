@@ -1,5 +1,4 @@
-"""Metrics and intervals for the 6.1 replay (M6, D12), from replay() rows alone, so a run
-can be scored again without replaying it."""
+"""Metrics and intervals for the 6.1 replay (M6, D12), from replay() rows alone."""
 
 from __future__ import annotations
 
