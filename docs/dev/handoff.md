@@ -11,9 +11,8 @@ Where the work stands. Each session's last PR overwrites this file (CLAUDE.md); 
 
 ## Waiting on the maintainer
 
-1. M6a: confirm D12's "proposed" items: jitter's rounding (half up, so 7 days get ±1, 14%) and its adding up; one question draw per day; the peak taken per seed; the change-rate definition; 2,000 nearest-rank resamples; the +0.5 point margin for "not worse"; M7's adaptive family and dev grid.
-2. Merge #28.
-3. Open, no rush: whether the github_release verifier should read a project's tag pattern too (D11).
+1. Merge #28 (D12 is fully decided).
+2. Open, no rush: whether the github_release verifier should read a project's tag pattern too (D11).
 
 ## Next session: start here
 
