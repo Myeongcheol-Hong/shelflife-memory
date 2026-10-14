@@ -4,22 +4,21 @@ Where the work stands. Each session's last PR overwrites this file (CLAUDE.md); 
 
 ## State
 
-- `main` has M1-M3, the hardening (#24), the repo presentation (#25), M5a (#26) and its follow-ups (#27: created_at clamp, ollama and react cut, 70 projects, dedupe by id). Schema v2 (#21) is a one-way door; the rollback steps are in design 5.1.
-- Open: the M6a PR (#28, base `main`), which carries this file.
-- M6a: `eval/replay/replay.py` (claims, questions, the policies, the event loop) and `eval/replay/score.py` (metrics, intervals over projects, the peak per day), with D12. The smoke run's counts are pinned in `tests/unit/test_replay.py`. No real run yet.
+- `main` has M1-M3, the hardening (#24), the repo presentation (#25), M5a (#26) and its follow-ups (#27). Schema v2 (#21) is a one-way door; the rollback steps are in design 5.1.
+- #28 (M6a: the replay core, metrics and intervals, D12 fully decided) is approved for merge.
+- Stacked on #28: the M6b PR (the sessions scenario, `sessions()`; the change-rate breakdown; an interval for peak checks per day; D12's sessions rule, proposed) and the M6c PR on top of it, which carries this file: `eval/replay/run.py` writes `eval/results/<run-id>/` (config.json, metrics.json, table.md), and `eval/results/` joins the size job's exclusions. The smoke corpus runs the whole pipeline in CI. No real run yet.
 - Build order (roadmap): M1-M3, M5a, M6, M7, M4, M5b, M8, M9.
 
 ## Waiting on the maintainer
 
-1. Merge #28 (D12 is fully decided).
-2. Open, no rush: whether the github_release verifier should read a project's tag pattern too (D11).
+1. Confirm D12's sessions rule (written before any run). Then `uv run python -m eval.replay.run` gives the first results; they are committed under `eval/results/` in the M6c PR, and M6's roadmap items are ticked.
+2. Merge #28, then the M6b PR, then the M6c PR.
+3. Open, no rush: whether the github_release verifier should read a project's tag pattern too (D11).
 
 ## Next session: start here
 
-1. M6b: write D12's sessions rule (10 claims about 10 different projects on one day) before any run; then `eval/replay/run.py` writes `eval/results/<run-id>/` (config with git SHA, dataset hash and the `packaging` version; metrics; the markdown table) and can score again from rows; add `eval/results/` to the size job's exclusions.
-2. Then the first real run: test is the headline, every policy at the three question rates (every read as a line across them), both scenarios, the per-label (with n) and change-rate breakdowns, the per-class line without the four late-labeled repositories, and jitter's one primary comparison. Commit only config, metrics and the table; tick M6.
-3. The bootstrap for the peak per day needs per-project daily counts per seed; `score.peak()` gives only the point value today.
-4. The change-rate breakdown needs `changes_per_year()` (changes per year from the first day with a latest, a first release not counted; D12); it was cut from M6a for size and waits in M6b.
+1. If the M6c PR is merged: M7. Its adaptive family, dev grid, selection rule and the label-free exploratory run are pre-registered in D12; the shared model runner (`claude -p`) comes first (roadmap).
+2. Every eval also runs on `eval/data/smoke/` in CI; never fill a label.
 
 ## Notes for later milestones
 

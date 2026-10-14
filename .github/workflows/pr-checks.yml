@@ -75,7 +75,7 @@ jobs:
           import os, re, subprocess, sys
 
           LIMIT = 600
-          EXCLUDED = re.compile(r"^(tests/|eval/data/|uv\.lock$)|(^|/)fixtures/")
+          EXCLUDED = re.compile(r"^(tests/|eval/data/|eval/results/|uv\.lock$)|(^|/)fixtures/")
           # A file the PR deletes entirely needs no line-by-line review, so it is not counted.
           removed_files = set(subprocess.run(
               ["git", "diff", "--name-only", "--diff-filter=D", "-M", "-z", "HEAD^1", "HEAD"],
