@@ -84,12 +84,8 @@ def test_github_replays_a_created_at_later_than_the_publish_as_the_publish():
         Release("v2.0.0", at("2024-03-01T09:00"), created=at("2024-06-15")),
         Release("v2.0.1", at("2024-05-01T09:00"), created=at("2024-05-01")),
     )
-    assert changes(timeline("github", *releases), *DEV) == [
-        (date(2024, 3, 1), "v2.0.0"),
-        (date(2024, 5, 1), "v2.0.1"),
-    ]
-    # At collection GitHub read created_at as stored, so v2.0.0 agrees and v2.0.1 does not.
-    assert problems(timeline("github", *releases, latest="v2.0.0")) == []
+    # The smoke case smoke-org/moved-tag shows the replay; at collection GitHub read
+    # created_at as stored, so the source's latest must be v2.0.0, not v2.0.1.
     assert problems(timeline("github", *releases, latest="v2.0.1")) == [
         "latest by our rules is v2.0.0, the source said v2.0.1"
     ]
@@ -97,12 +93,13 @@ def test_github_replays_a_created_at_later_than_the_publish_as_the_publish():
 
 def test_same_second_releases_give_one_answer_whatever_their_order():
     a = Release("v1.1.0", at("2024-02-01T09:00"), created=at("2024-02-01T08:00"))
-    b = Release("v1.0.9", at("2024-02-01T09:00"), created=at("2024-01-20T08:00"))
+    b = Release("v1.2.0", at("2024-02-01T09:00"), created=at("2024-01-20T08:00"))
     c = Release("v1.1.1", at("2024-02-01T09:00"), created=at("2024-02-01T08:00"))
     for rows in ([a, b, c], [c, b, a]):
         t = timeline("github", Release("v1.0.0", at("2023-06-01")), *rows, latest="v1.1.1")
-        # Created and published in the same second: the larger tag. Published-last ties
-        # break on created_at the same way, so no day is disputed.
+        # Created and published in the same second: the tag later in string order.
+        # Published-last ties break on created_at first, so v1.2.0 loses there too and no
+        # day is disputed.
         assert (latest_on(t, date(2024, 2, 1)), problems(t)) == ("v1.1.1", [])
 
 

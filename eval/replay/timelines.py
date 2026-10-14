@@ -122,7 +122,7 @@ def problems(timeline: Timeline) -> list[str]:
       source's latest is outside the tag pattern (the github_release verifier reads it);
     - the first release comes after the replay starts (a young project, or a release
       list cut short);
-    - GitHub tags with several prefixes (a monorepo's per-package tags);
+    - GitHub tags with several prefixes (a monorepo's per-package tags), or listed twice;
     - GitHub days in the replay when the release created last, which the rule picks, is
       not the one published last. GitHub marks a newly published release latest by
       default (`make_latest`), so on those days a backport may have been the latest.
@@ -183,7 +183,7 @@ def _created(r: Release) -> datetime:
 
 def _created_last(releases: list[Release], created: Callable[[Release], datetime]) -> str | None:
     """The stable release created last; a tie goes to the one published last, then to the
-    larger tag, so the answer never depends on the order of the rows."""
+    tag later in string order, so the answer never depends on the order of the rows."""
     stable = [r for r in releases if not r.prerelease]
     if not stable:
         return None

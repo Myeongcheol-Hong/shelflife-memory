@@ -28,8 +28,8 @@
 # collector and latest_on() ignore every release whose tag does not match. Use '^v\d'
 # (or '^\d' for tags without a "v"), not '^v', which also matches "vscode-typescript/".
 #
-# The collector warns about tags with several prefixes, about a latest release that our
-# rules disagree with, and about a latest release outside the tag pattern.
+# The collector warns about tags with several prefixes or listed twice, about a latest
+# release that our rules disagree with, and about a latest release outside the tag pattern.
 
 pypi = [
   { name = "aiohttp", volatility = "medium" },

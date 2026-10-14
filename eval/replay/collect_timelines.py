@@ -36,7 +36,7 @@ from eval.replay.timelines import (
 )
 from shelflife.verifiers import Fetch, FetchError, TooLarge, http_get
 
-SCRIPT_VERSION = "t1"
+SCRIPT_VERSION = "t2"  # t2: a release on two pages is read once (by id)
 PER_PAGE = 100  # GitHub's largest page
 MIN_PER_PAGE = 10  # the smallest page tried when a page is over the size cap
 GITHUB_HEADERS = {"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}
@@ -65,9 +65,9 @@ def collect_github(
 ) -> tuple[str, str | None, list[dict[str, Any]]]:
     """(url, latest, releases) from GitHub's REST API, page by page. Drafts are left out
     (a token with push access would list them), and so is a release already read (by id).
-    Each release lists its assets, so a page
-    can be over the 10 MB cap (caddy's): then the listing starts again from page 1 with
-    half the page size, down to MIN_PER_PAGE, so the page offsets stay consistent."""
+    Each release lists its assets, so a page can be over the 10 MB cap (caddy's): then the
+    listing starts again from page 1 with half the page size, down to MIN_PER_PAGE, so the
+    page offsets stay consistent."""
     headers = GITHUB_HEADERS | ({"Authorization": f"Bearer {token}"} if token else {})
     base = f"https://api.github.com/repos/{repo}/releases"
     per_page = PER_PAGE
