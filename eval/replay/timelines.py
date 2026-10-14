@@ -33,6 +33,7 @@ class Project:
     source: str  # pypi | github
     name: str  # a PyPI project name, or owner/repo
     volatility: str  # the maintainer's label, "" until labeled
+    tag: str | None = None  # GitHub: a regex a release's tag must match, else ignored
 
     @property
     def path(self) -> str:
@@ -56,6 +57,15 @@ class Timeline:
     collected_at: datetime
     latest_at_collection: str | None  # what the source called latest when collected
     releases: tuple[Release, ...]
+    tag: str | None = None  # the project's tag pattern when it was collected
+
+
+def counted(timeline: Timeline) -> list[Release]:
+    """The releases the rules read: all of them, or with a tag pattern only those whose
+    tag matches it (`re.search`), so a repository's other products are left out."""
+    if timeline.tag is None:
+        return list(timeline.releases)
+    return [r for r in timeline.releases if re.search(timeline.tag, r.version)]
 
 
 def latest_on(timeline: Timeline, day: date) -> str | None:
@@ -64,10 +74,11 @@ def latest_on(timeline: Timeline, day: date) -> str | None:
     PyPI, as its `info.version`: the highest version by PEP 440 among those uploaded by
     then and not yanked, leaving out pre-releases unless there is nothing else; a version
     PEP 440 cannot read is left out. GitHub, as `/releases/latest`: among releases
-    published by then and not marked pre-release, the one created last.
+    published by then and not marked pre-release, the one created last. Releases outside
+    the tag pattern never count (counted()).
     """
     end = datetime.combine(day, time.max, UTC)
-    out = [r for r in timeline.releases if r.published <= end]
+    out = [r for r in counted(timeline) if r.published <= end]
     if timeline.source == "github":
         stable = [r for r in out if not r.prerelease]
         if not stable:
@@ -106,7 +117,8 @@ def changes(timeline: Timeline, start: date, end: date) -> list[tuple[date, str 
 def problems(timeline: Timeline) -> list[str]:
     """What the collector reports for the maintainer to look at:
     - the rules disagree with what the source called latest when it was collected (a
-      version PEP 440 cannot read, a GitHub release marked latest by hand);
+      version PEP 440 cannot read, a GitHub release marked latest by hand), or the
+      source's latest is outside the tag pattern (the github_release verifier reads it);
     - the first release comes after the replay starts (a young project, or a release
       list cut short);
     - GitHub tags with several prefixes (a monorepo's per-package tags);
@@ -116,14 +128,16 @@ def problems(timeline: Timeline) -> list[str]:
     """
     found = []
     ours = latest_on(timeline, timeline.collected_at.date())
-    if ours != timeline.latest_at_collection:
-        found.append(
-            f"latest by our rules is {ours}, the source said {timeline.latest_at_collection}"
-        )
-    if timeline.releases and (first := min(r.published for r in timeline.releases)).date() > DEV[0]:
+    theirs = timeline.latest_at_collection
+    if timeline.tag and theirs and not re.search(timeline.tag, theirs):
+        found.append(f"the source's latest, {theirs}, is outside the tag pattern {timeline.tag}")
+    elif ours != theirs:
+        found.append(f"latest by our rules is {ours}, the source said {theirs}")
+    releases = counted(timeline)
+    if releases and (first := min(r.published for r in releases)).date() > DEV[0]:
         found.append(f"first release on {first.date()}, after the replay starts")
     if timeline.source == "github":
-        prefixes = {_tag_prefix(r.version) for r in timeline.releases}
+        prefixes = {_tag_prefix(r.version) for r in releases}
         if len(prefixes) > 1:
             found.append(f"tags with several prefixes (per-package tags?): {sorted(prefixes)[:5]}")
         disputed = [
@@ -141,13 +155,13 @@ def problems(timeline: Timeline) -> list[str]:
 
 def _publish_days(timeline: Timeline) -> list[date]:
     """The days in the replay (DEV to TEST) on which a release was published."""
-    days = {r.published.date() for r in timeline.releases}
+    days = {r.published.date() for r in counted(timeline)}
     return sorted(d for d in days if DEV[0] <= d <= TEST[1])
 
 
 def _published_last(timeline: Timeline, day: date) -> str | None:
     end = datetime.combine(day, time.max, UTC)
-    stable = [r for r in timeline.releases if r.published <= end and not r.prerelease]
+    stable = [r for r in counted(timeline) if r.published <= end and not r.prerelease]
     return max(stable, key=lambda r: r.published).version if stable else None
 
 
@@ -158,26 +172,31 @@ def _tag_prefix(tag: str) -> str:
 
 
 def load_projects(path: Path) -> list[Project]:
-    """projects.toml: `pypi` and `github` lists of {name, volatility} tables. Raises
-    ValueError on an unknown key, a malformed name, an unknown label or a duplicate."""
+    """projects.toml: `pypi` and `github` lists of {name, volatility, tag} tables, `tag`
+    only for GitHub. Raises ValueError on an unknown key, a malformed name, an unknown
+    label, a tag pattern that is not a regular expression, or a duplicate."""
     data = tomllib.loads(path.read_text(encoding="utf-8"))
     if unknown := set(data) - set(SOURCES):
         raise ValueError(f"{path}: unknown keys {sorted(unknown)}")
     projects, seen = [], set()
     for source in SOURCES:
         for entry in data.get(source, []):
-            name, label = entry.get("name", ""), entry.get("volatility", "")
+            if unknown := set(entry) - {"name", "volatility", "tag"}:
+                raise ValueError(f"{path}: {entry.get('name')}: unknown keys {sorted(unknown)}")
+            name, label, tag = entry.get("name", ""), entry.get("volatility", ""), entry.get("tag")
             valid = pypi.NAME if source == "pypi" else github_release.REPO
             if not isinstance(name, str) or not valid.fullmatch(name):
                 raise ValueError(f"{path}: not a {source} name: {name!r}")
             if label not in ("", *LABELS):
                 raise ValueError(f"{path}: {name}: volatility must be one of {LABELS} or empty")
+            if tag is not None and (source != "github" or not _is_regex(tag)):
+                raise ValueError(f"{path}: {name}: tag must be a regular expression, for GitHub")
             folded = re.sub(r"[-_.]+", "-", name.lower()) if source == "pypi" else name.lower()
             key = (source, folded)  # PyPI names compare under PEP 503, GitHub's ignore case
             if key in seen:
                 raise ValueError(f"{path}: {name} is listed twice")
             seen.add(key)
-            projects.append(Project(source, name, label))
+            projects.append(Project(source, name, label, tag))
     return projects
 
 
@@ -203,9 +222,18 @@ def load(path: Path) -> Timeline:
             parse_utc(header["collected_at"]),
             header["latest_at_collection"],
             releases,
+            header.get("tag"),
         )
     except (KeyError, TypeError, ValueError) as e:
         raise ValueError(f"{path}: {e}") from None
+
+
+def _is_regex(text: object) -> bool:
+    try:
+        re.compile(text)  # type: ignore[arg-type]
+    except (re.error, TypeError):  # TypeError: not a string
+        return False
+    return True
 
 
 def load_all(folder: Path) -> list[Timeline]:

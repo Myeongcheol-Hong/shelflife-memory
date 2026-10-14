@@ -15,11 +15,19 @@
 # - GitHub repositories that publish GitHub Releases, which the github_release verifier
 #   reads, under one tag series: no monorepos whose releases are per-package tags. No
 #   repository is the same project as a PyPI entry.
+# - No repository that patches several release lines in parallel (cut by the maintainer
+#   after looking at each repository's last 100 releases): there "the stable release
+#   created last" keeps jumping between lines, which adds change days that bring no new
+#   release.
 # - Alphabetical, with no release counts, dates or guessed volatility.
 #
-# The GitHub tag formats are from memory: this session could not call the GitHub API.
-# The collector warns about tags with several prefixes, and about a latest release that
-# our rules disagree with.
+# `tag` (GitHub only, optional) is a regular expression a release's tag must match
+# (re.search), for a repository that also publishes releases of other products: the
+# collector and latest_on() ignore every release whose tag does not match. '^v\d', not
+# '^v': a bare "v" also matches "vscode-typescript/v1.0.1".
+#
+# The collector warns about tags with several prefixes, about a latest release that our
+# rules disagree with, and about a latest release outside the tag pattern.
 
 pypi = [
   { name = "aiohttp", volatility = "" },
@@ -82,23 +90,18 @@ github = [
   { name = "cli/cli", volatility = "" },
   { name = "denoland/deno", volatility = "" },
   { name = "docker/compose", volatility = "" },
-  { name = "etcd-io/etcd", volatility = "" },
-  { name = "facebook/react", volatility = "" },
-  { name = "getzep/graphiti", volatility = "" },
-  { name = "grafana/grafana", volatility = "" },
+  { name = "facebook/react", volatility = "", tag = '^v\d' },
+  { name = "getzep/graphiti", volatility = "", tag = '^v\d' },
   { name = "hashicorp/terraform", volatility = "" },
   { name = "helm/helm", volatility = "" },
   { name = "home-assistant/core", volatility = "" },
   { name = "jqlang/jq", volatility = "" },
-  { name = "kubernetes/kubernetes", volatility = "" },
-  { name = "microsoft/TypeScript", volatility = "" },
-  { name = "nodejs/node", volatility = "" },
+  { name = "microsoft/TypeScript", volatility = "", tag = '^v\d' },
   { name = "ollama/ollama", volatility = "" },
   { name = "pnpm/pnpm", volatility = "" },
   { name = "prettier/prettier", volatility = "" },
   { name = "prometheus/prometheus", volatility = "" },
   { name = "rust-lang/rust", volatility = "" },
   { name = "sharkdp/bat", volatility = "" },
-  { name = "traefik/traefik", volatility = "" },
   { name = "vectorize-io/hindsight", volatility = "" },
 ]

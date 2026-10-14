@@ -6,13 +6,13 @@ Where the work stands. Each session's last PR overwrites this file (CLAUDE.md); 
 
 - `main` has M1-M3, the hardening from the external review (#24) and the repo presentation (#25: README, "maintainer" wording, roadmap in build order). Schema v2 (#21) is a one-way door; the rollback steps are in design 5.1.
 - The M5a PR is the session's last PR and carries this file.
-- M5a so far: the candidate list (`eval/data/timelines/projects.toml`, 52 PyPI + 24 GitHub, labels empty), the collector, the "latest" rules and split (D11), the smoke corpus in CI and the data card. No timeline data yet.
+- M5a so far: the candidate list (`eval/data/timelines/projects.toml`, 52 PyPI + 19 GitHub after the maintainer's cut, labels empty; `tag = '^v\d'` for graphiti, TypeScript and react), the collector, the "latest" rules and split (D11), the smoke corpus in CI and the data card. No timeline data yet.
 - Build order (roadmap): M1-M3, M5a, M6, M7, M4, M5b, M8, M9.
 
 ## Waiting on the maintainer
 
 1. Add `deps-approved` to the M5a PR (`packaging` in the `eval` group).
-2. Cut `projects.toml` to about 50 + 20 and label each kept project's volatility while cutting, before collecting.
+2. Cut PyPI in `projects.toml` to about 50 (GitHub is cut to 19) and label each kept project's volatility, before collecting.
 3. On the Mac, with `GITHUB_TOKEN` set (60 requests an hour without it is too few): `uv run python -m eval.replay.collect_timelines`, then commit `eval/data/timelines/` to the M5a branch.
 4. Read its `check:` lines. For a GitHub repository with days when the release created last was not the one published last, choose: cut it, keep the rule, or order by publication (D11).
 

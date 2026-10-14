@@ -9,6 +9,7 @@ FOLDER (default eval/data/timelines) holds projects.toml. Each project's timelin
 written next to it, as pypi/<name>.jsonl or github/<owner>__<repo>.jsonl: a header line,
 then one line per release with only its version, dates and flags. It refuses to run
 while a project has no volatility label, so the labels are made before any data is seen.
+A GitHub project with a tag pattern keeps only the releases whose tag matches it.
 GITHUB_TOKEN, if set, raises GitHub's limit of 60 requests an hour.
 """
 
@@ -18,6 +19,7 @@ import argparse
 import itertools
 import json
 import os
+import re
 import sys
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -58,10 +60,11 @@ def collect_pypi(name: str, fetch: Fetch) -> tuple[str, str | None, list[dict[st
 
 
 def collect_github(
-    repo: str, fetch: Fetch, token: str | None
+    repo: str, fetch: Fetch, token: str | None, tag: str | None = None
 ) -> tuple[str, str | None, list[dict[str, Any]]]:
     """(url, latest, releases) from GitHub's REST API, page by page. Drafts are left out
-    (a token with push access would list them)."""
+    (a token with push access would list them), and with a tag pattern every release whose
+    tag does not match it (`re.search`). `latest` is GitHub's, pattern or not."""
     headers = GITHUB_HEADERS | ({"Authorization": f"Bearer {token}"} if token else {})
     base = f"https://api.github.com/repos/{repo}/releases"
     releases = []
@@ -75,7 +78,7 @@ def collect_github(
                 "prerelease": bool(r["prerelease"]),
             }
             for r in batch
-            if not r["draft"]
+            if not r["draft"] and (tag is None or re.search(tag, r["tag_name"]))
         ]
         if len(batch) < PER_PAGE:
             break
@@ -104,7 +107,7 @@ def write(
         "collected_at": utc_text(now),
         "latest_at_collection": latest,
         "script": SCRIPT_VERSION,
-    }
+    } | ({"tag": project.tag} if project.tag else {})
     rows = sorted(releases, key=lambda r: (r["published"], r["version"]))
     path = folder / project.path
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -137,13 +140,14 @@ def main(
             if project.source == "pypi":
                 url, latest, releases = collect_pypi(project.name, fetch)
             else:
-                url, latest, releases = collect_github(project.name, fetch, token)
+                url, latest, releases = collect_github(project.name, fetch, token, project.tag)
             path = write(args.folder, project, url, latest, releases, now())
         except (FetchError, KeyError, TypeError, ValueError) as e:
             print(f"error: {project.source} {project.name}: {e}", file=sys.stderr)
             failed += 1
             continue
-        print(f"{project.source} {project.name}: {len(releases)} releases")
+        matching = f" matching {project.tag}" if project.tag else ""
+        print(f"{project.source} {project.name}: {len(releases)} releases{matching}")
         for problem in problems(load(path)):
             print(f"  check: {problem}")
     return 1 if failed else 0
