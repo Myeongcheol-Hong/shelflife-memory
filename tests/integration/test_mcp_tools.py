@@ -332,7 +332,7 @@ async def test_verify_returns_a_judgment_prompt_and_records_nothing(client, rout
     assert store.last_check(claim["id"]) is None
 
 
-async def test_record_check_stores_a_quoted_judgment(client, routes, store):
+async def test_record_check_stores_a_quoted_judgment(client, routes, store, clock):
     claim = await remember_page(client, routes)
     await call(client, "verify", claim_id=claim["id"])
     recorded = await call(
@@ -347,6 +347,8 @@ async def test_record_check_stores_a_quoted_judgment(client, routes, store):
     assert stored.prompt_version == "j2"
     assert stored.page_sha256 == hashlib.sha256(body).hexdigest()
     assert stored.reason is None
+    # M4 tells a selector change from a page change by these two (D10).
+    assert (stored.selector_version, stored.fetched_at) == ("s2", clock.now)
     # M4 compares the section's core, not the section grown around it (D10).
     blocks = extract(decode(body))
     section = select_section(
@@ -475,6 +477,22 @@ async def test_verify_records_an_error_when_the_page_cannot_be_fetched(client, r
         f"HTTP 404 from {AWS}",
     )
     assert "judge" not in verified
+
+
+async def test_an_unknown_charset_is_read_as_utf8(store):
+    # An unknown charset label (LookupError) is not an error: the page is read as UTF-8.
+    claim = store.remember(
+        "The AWS AIP-C01 exam fee is $300",
+        "world_fact",
+        value="$300",
+        check_method="web_page",
+        check_target=AWS,
+    )
+    page = Page(AWS, AWS, 200, "text/html", "x-unknown-zzz", b"<p>The exam fee is $300.</p>")
+    async with Client(build_server(store, get_page=lambda url: page)) as client:
+        verified = await call(client, "verify", claim_id=claim.id)
+    assert verified["check"] is None
+    assert "The exam fee is $300." in verified["judge"]["prompt"]
 
 
 async def test_verify_records_an_error_when_the_page_cannot_be_decoded(client, routes, store):

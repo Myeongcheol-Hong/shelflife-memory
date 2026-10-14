@@ -149,6 +149,8 @@ class Check:
     page_sha256: str | None = None
     section_sha256: str | None = None
     reason: str | None = None
+    selector_version: str | None = None  # the section selector's version (M4 compares)
+    fetched_at: datetime | None = None  # when verify fetched the page judged
 
     @classmethod
     def from_row(cls, row: Mapping[str, Any]) -> Check:
@@ -166,6 +168,8 @@ class Check:
             page_sha256=row["page_sha256"],
             section_sha256=row["section_sha256"],
             reason=row["reason"],
+            selector_version=row["selector_version"],
+            fetched_at=datetime.fromisoformat(row["fetched_at"]) if row["fetched_at"] else None,
         )
 
     def to_dict(self) -> dict[str, Any]:
