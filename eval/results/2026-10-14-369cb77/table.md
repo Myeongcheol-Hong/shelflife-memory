@@ -1,4 +1,4 @@
-# 6.1 replay, run 2026-10-14-45eb42f
+# 6.1 replay, run 2026-10-14-369cb77
 
 Test split, uniform scenario, questions 1 a week per claim; 1400 claims about 70 projects per seed. 95% intervals over resampled projects (D12). Days to detect counts only the changes found; the share left undetected follows it.
 
@@ -19,12 +19,12 @@ Test split, uniform scenario, questions 1 a week per claim; 1400 claims about 70
 
 ## Per-class minus fixed 30, paired (uniform, 1 a week)
 
-| Split | Stale-answer rate | Stale claim-days | Checks per claim-month: per-class | Fixed 30 |
-|---|---|---|---|---|
-| dev | 10.5% (5.3 to 16.1) | 10.5% (5.3 to 15.9) | 0.97 (0.69 to 1.27) | 0.92 (0.92 to 0.92) |
-| test | 8.6% (2.4 to 14.5) | 8.5% (2.3 to 14.4) | 1.12 (0.82 to 1.45) | 0.95 (0.95 to 0.96) |
+| Split | Stale-answer rate | Stale claim-days | Checks per claim-month |
+|---|---|---|---|
+| test | 8.6% (2.4 to 14.5) | 8.5% (2.3 to 14.4) | 0.17 (-0.13 to 0.50) |
+| dev | 10.5% (5.3 to 16.1) | 10.5% (5.3 to 15.9) | 0.05 (-0.23 to 0.35) |
 
-Each difference is per-class minus fixed 30 on the same claims, in points, with its paired 95% interval over resampled projects (D12). Above 0: per-class is staler.
+Each column is per-class minus fixed 30 on the same claims (staleness in points), with its paired 95% interval over resampled projects (D12); above 0, per-class is staler or costs more. Added at the maintainer's request after the first run; not pre-registered.
 
 ## Every read at each question rate (test, uniform)
 

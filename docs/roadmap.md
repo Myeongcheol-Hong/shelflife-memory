@@ -43,7 +43,7 @@ Items marked **(maintainer)** are done by the maintainer by hand: ground-truth l
 - [x] Day-by-day replay over the timelines
 - [x] Policies: never, every read, fixed 3 to 180 days, per-class, oracle, jitter (D12)
 - [x] Metrics: stale-answer rate, stale claim-days, checks per claim-month, days to detect with the undetected share, peak checks per day; 5 seeds and bootstrap intervals over projects (D12)
-- [x] Results table: `eval/results/2026-10-14-45eb42f/table.md`
+- [x] Results table: `eval/results/2026-10-14-369cb77/table.md`
 
 ## M7: Adaptive and LLM-judged policies
 - [ ] Shared model runner (`claude -p --model`, repeats, run artifacts). It starts `claude -p` outside the repository, so the project's Stop hook and `CLAUDE.md` stay out of eval runs. M5b and M8 reuse it
