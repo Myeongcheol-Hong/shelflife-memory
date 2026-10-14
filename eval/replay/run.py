@@ -47,6 +47,7 @@ NOT_WORSE = 0.005  # the stale-answer rate may rise this much at its interval's 
 BUCKETS = ("0 changes a year", "under 6", "6 to 52", "over 52")
 ROWS = ("oracle", "every read", *(f"fixed {n}" for n in FIXED))
 VERSUS = "per-class minus fixed 30"  # paired, uniform scenario, 1 question a week
+STALE = ("stale-answer rate", "stale claim-days")
 
 
 def run(timelines: list[Timeline], labels: dict[str, str], seeds: list[int] = SEEDS) -> dict:
@@ -67,7 +68,8 @@ def run(timelines: list[Timeline], labels: dict[str, str], seeds: list[int] = SE
                     jitter_rows[scenario] = rows
                 if (scenario, rate) == HEADLINE[1:]:
                     on, off = (score.per_project(rows, p) for p in ("per-class", "fixed 30"))
-                    versus[f"{split} / {scenario} / {rate}"] = _paired(on, off)
+                    cost = (*STALE, "checks per claim-month")
+                    versus[f"{split} / {scenario} / {rate}"] = _paired(on, off, cost)
     out[VERSUS] = versus
     out["jitter"] = _jitter(jitter_rows, HEADLINE[0])
     return out
@@ -130,11 +132,13 @@ def _jitter(rows_by_scenario: dict[str, list[Row]], split: str) -> dict:
     return out
 
 
-def _paired(on: dict[str, Counts], off: dict[str, Counts]) -> dict:
-    """The stale-answer rate and stale claim-days of one policy minus another on the same
-    claims, each with its paired 95% interval over the same resampled projects."""
+def _paired(
+    on: dict[str, Counts], off: dict[str, Counts], metrics: tuple[str, ...] = STALE
+) -> dict:
+    """Metrics of one policy minus another on the same claims, each with its paired 95%
+    interval over the same resampled projects."""
     found = {}
-    for metric in ("stale-answer rate", "stale claim-days"):
+    for metric in metrics:
         value = score.value(metric, score.total(on)) - score.value(metric, score.total(off))
         found[metric] = {"value": value, "ci": score.ci(metric, on, minus=off)}
     return found
@@ -147,10 +151,11 @@ def helps(found: dict) -> bool:
 
 
 def table(metrics: dict, run_id: str) -> str:
-    """table.md: the headline, every read across question rates, jitter, the breakdowns."""
+    """table.md: the headline, per-class minus fixed 30, every read across question rates,
+    jitter, the breakdowns, dev, and each results row's claims."""
     head, dev = metrics[" / ".join(HEADLINE)], metrics["dev / uniform / 1 a week"]
     lines = [f"# 6.1 replay, run {run_id}", "", _caption(*HEADLINE, head), "", *_policies(head)]
-    lines += ["", "## Per-class minus fixed 30, paired (uniform, 1 a week)", "", *_versus(metrics)]
+    lines += ["", f"## {VERSUS.capitalize()}, paired (uniform, 1 a week)", "", *_versus(metrics)]
     lines += ["", "## Every read at each question rate (test, uniform)", "", *_every_read(metrics)]
     lines += ["", "## Jitter, with minus without, paired (test, 1 a week)", ""]
     lines += _jitter_table(metrics)
@@ -176,16 +181,16 @@ def _claims(metrics: dict) -> list[str]:
 
 
 def _versus(metrics: dict) -> list[str]:
-    checks = COLUMNS[0]
-    header = ["Split", "Stale-answer rate", "Stale claim-days"]
-    header += ["Checks per claim-month: per-class", "Fixed 30"]
+    header = ["Split", "Stale-answer rate", "Stale claim-days", "Checks per claim-month"]
     rows = []
-    for key, v in metrics[VERSUS].items():
-        stale = [_pct(v[m]) for m in ("stale-answer rate", "stale claim-days")]
-        cost = [checks(metrics[key][p]) for p in ("per-class", "fixed 30")]
-        rows.append([key.split(" / ")[0], *stale, *cost])
-    note = "Each difference is per-class minus fixed 30 on the same claims, in points, with"
-    note += " its paired 95% interval over resampled projects (D12). Above 0: per-class is staler."
+    for key in sorted(metrics[VERSUS], key=lambda k: not k.startswith(HEADLINE[0])):
+        v = metrics[VERSUS][key]
+        rows.append([key.split(" / ")[0], *(_pct(v[m]) for m in STALE)])
+        rows[-1].append(_num(v["checks per claim-month"]))
+    note = "Each column is per-class minus fixed 30 on the same claims (staleness in points),"
+    note += " with its paired 95% interval over resampled projects (D12); above 0, per-class is"
+    note += " staler or costs more. Added at the maintainer's request after the first run;"
+    note += " not pre-registered."
     return [*_table(header, rows), "", note]
 
 
@@ -212,9 +217,10 @@ def _jitter_table(metrics: dict) -> list[str]:
             summary = metrics[f"{HEADLINE[0]} / {scenario} / {HEADLINE[2]}"]
             peaks = [summary[p]["peak per day"] for p in (name, f"{name} + jitter")]
             label = " (primary)" if key == "sessions / per-class" else " (exploratory)"
-            stale = [_pct(v[m]) for m in ("stale-answer rate", "stale claim-days")]
-            rows.append([key + label, *(f"{x:.1f}" for x in peaks), _num(v["peak per day"])])
-            rows[-1] += stale
+            stale = [_pct(v[m]) for m in STALE]
+            rows.append(
+                [key + label, *(f"{x:.1f}" for x in peaks), _num(v["peak per day"]), *stale]
+            )
     verdict = "helps" if jitter["primary: helps"] else "does not help"
     header = ["Scenario / policy", "Peak per day: without", "With", "With minus without"]
     header += ["Stale-answer rate", "Stale claim-days"]

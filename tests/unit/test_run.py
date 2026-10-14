@@ -46,28 +46,33 @@ def test_jitter_helps_only_by_the_pre_registered_rule(peak_hi, stale_hi, verdict
 
 
 def test_paired_differences_take_the_same_resamples_of_both_policies():
-    on = dict.fromkeys("pq", Counts(1, 4, 2, days=10, stale_days=5))
-    off = dict.fromkeys("pq", Counts(1, 4, 1, days=10, stale_days=2))
-    # Every resample gives 0.5 - 0.25 and 0.5 - 0.2: the interval is the difference itself.
-    assert run._paired(on, off) == {
+    # The projects differ, but per-class beats fixed 30 by the same margin in each, so
+    # only paired resamples give an interval that collapses to that margin.
+    on = {"p": Counts(1, 4, 2, days=10, stale_days=5, checks=3)}
+    on["q"] = Counts(1, 4, 3, days=10, stale_days=7, checks=5)
+    off = {"p": Counts(1, 4, 1, days=10, stale_days=2, checks=1)}
+    off["q"] = Counts(1, 4, 2, days=10, stale_days=4, checks=3)
+    found = run._paired(on, off, (*run.STALE, "checks per claim-month"))
+    assert found == {
         "stale-answer rate": {"value": 0.25, "ci": (0.25, 0.25)},
-        "stale claim-days": {"value": 0.3, "ci": (0.3, 0.3)},
+        "stale claim-days": {"value": pytest.approx(0.3), "ci": pytest.approx((0.3, 0.3))},
+        "checks per claim-month": {"value": 6.0, "ci": (6.0, 6.0)},
     }
+    assert set(run._paired(on, off)) == set(run.STALE)  # what jitter reports
 
 
 def test_per_class_minus_fixed_30_is_in_that_order(monkeypatch):
-    # With every label fast, per-class checks every 7 days and is the fresher of the two.
+    # With every label fast, per-class checks every 7 days: fresher than fixed 30, and dearer.
     monkeypatch.setattr(score, "RESAMPLES", 20)
     timelines = load_all(SMOKE)
     metrics = run.run(timelines, {t.project: "fast" for t in timelines}, seeds=[0])
     for key, found in metrics[run.VERSUS].items():
-        row = metrics[key]
-        value = row["per-class"]["stale claim-days"]["value"]
-        assert (
-            found["stale claim-days"]["value"]
-            == value - row["fixed 30"]["stale claim-days"]["value"]
-        )
-        assert found["stale claim-days"]["value"] < 0, key
+        for m in (*run.STALE, "checks per claim-month"):
+            a, b = metrics[key]["per-class"][m]["value"], metrics[key]["fixed 30"][m]["value"]
+            assert found[m]["value"] == a - b
+        assert found["stale claim-days"]["value"] < 0 < found["checks per claim-month"]["value"]
+    table = run.table(metrics, "x")
+    assert table.index("| test |") < table.index("| dev |")  # test is the headline
 
 
 def test_the_claims_table_shows_each_rows_dropped_claims():
@@ -110,13 +115,7 @@ def test_the_smoke_run_writes_config_metrics_and_table(tmp_path, monkeypatch):
     assert headline["every read"]["stale-answer rate"]["value"] == 0
     assert headline["oracle"]["stale claim-days"]["value"] == 0
     assert headline["per-class"]["groups"]["medium"]["projects"] == 6  # the test's labels
-    # Per-class minus fixed 30 on the same claims, in each split (uniform, 1 a week).
-    for split in SPLITS:
-        row, versus = metrics[f"{split} / uniform / 1 a week"], metrics[run.VERSUS]
-        for m in ("stale-answer rate", "stale claim-days"):
-            found = versus[f"{split} / uniform / 1 a week"][m]
-            assert found["value"] == row["per-class"][m]["value"] - row["fixed 30"][m]["value"]
-            assert len(found["ci"]) == 2
+    assert set(metrics[run.VERSUS]) == {f"{s} / uniform / 1 a week" for s in SPLITS}
     jitter = metrics["jitter"]
     assert jitter["primary: helps"] is run.helps(jitter["sessions / per-class"])
     assert set(jitter) == {f"{s} / {p}" for s in run.SCENARIOS for p in run.JITTERED} | {
@@ -134,6 +133,9 @@ def test_the_smoke_run_writes_config_metrics_and_table(tmp_path, monkeypatch):
         f"{peaks[1]:.1f}",
         run._num(jitter["sessions / per-class"]["peak per day"]),
     ]
+    assert jitter["sessions / per-class"]["peak per day"]["value"] == pytest.approx(
+        peaks[1] - peaks[0]
+    )
     assert "## Per-class minus fixed 30, paired (uniform, 1 a week)" in table
     assert sum(line.startswith(("| test |", "| dev |")) for line in table.splitlines()) == 2
     # Each row's claim count; the uniform scenario never drops a claim.
