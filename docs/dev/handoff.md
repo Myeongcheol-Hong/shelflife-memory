@@ -19,7 +19,10 @@ Where the work stands. Each session's last PR overwrites this file (CLAUDE.md); 
 
 1. Merge #29. Then check that #30's base is `main`, merge `main` into #30's branch (merge commits only), and merge #30. #31 can go before or after.
 2. #31: `docs.mem0.ai` is blocked in the cloud environment (the proxy answers 403), so the Mem0 wording follows your description and has no citation yet. Allow the host in the environment's network settings, or give the page and the date you checked it.
-3. #31: confirm D10 follow-up 20, which compares fetch times rather than record times, so the result fetched last wins in either order. When a verify result is stale, `check` is the newer stored check; the alternative is `null`.
+3. #31: three choices in D10 follow-up 20 are mine, for you to confirm:
+   - The guard compares fetch times rather than record times, so the result fetched last wins in either order.
+   - A newer error or cannot_tell also refuses an older same or changed. The alternative is to compare only with the last same or changed check; for a page, the current rule discards a whole judgment.
+   - A refused `verify` returns the newer stored check as `check`. The alternative is `null`.
 4. The M5b proposal (`docs/dev/m5b-page-timelines.md`): the pages, the tracked values, and the D12 amendment for values that revert.
 5. Open, no rush: whether the github_release verifier should read a project's tag pattern too (D11).
 

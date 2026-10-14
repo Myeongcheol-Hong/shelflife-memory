@@ -173,7 +173,7 @@ CREATE TABLE checks (
   old_value TEXT, new_value TEXT, evidence TEXT, cost_usd REAL,
   prompt_version TEXT, page_sha256 TEXT, section_sha256 TEXT,  -- web_page (schema v2, D10)
   reason TEXT,                                                  -- cannot_tell (schema v2, D10)
-  selector_version TEXT, fetched_at TEXT                        -- web_page (schema v2, D10)
+  selector_version TEXT, fetched_at TEXT    -- web_page (schema v2, D10); fetched_at: every fetch (D10 follow-up 20)
 );
 CREATE VIRTUAL TABLE claims_fts USING fts5(text, subject, content='claims', tokenize='trigram');
 ```

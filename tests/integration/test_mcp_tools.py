@@ -586,7 +586,9 @@ async def test_an_unknown_charset_is_read_as_utf8(store):
     assert "The exam fee is $300." in verified["judge"]["prompt"]
 
 
-async def test_verify_records_an_error_when_the_page_cannot_be_decoded(client, routes, store):
+async def test_verify_records_an_error_when_the_page_cannot_be_decoded(
+    client, routes, store, clock
+):
     claim = await remember_page(client, routes)
     routes[AWS] = UnicodeError("label empty or too long")  # a host name idna refuses
     verified = await call(client, "verify", claim_id=claim["id"])
@@ -595,7 +597,8 @@ async def test_verify_records_an_error_when_the_page_cannot_be_decoded(client, r
         "label empty or too long",
     )
     page = Page(AWS, AWS, 200, "text/html", None, b'<meta charset="undefined"><p>Fee: $300</p>')
-    async with Client(build_server(store, get_page=lambda url: page)) as other:
+    clock.now += timedelta(seconds=1)  # a later fetch than the first error's
+    async with Client(build_server(store, get_page=lambda url: page, now=clock)) as other:
         verified = await call(other, "verify", claim_id=claim["id"])
     assert verified["check"]["result"] == "error"
     assert "undefined encoding" in verified["check"]["evidence"]  # 3.11 words it differently
@@ -666,4 +669,4 @@ async def test_the_tool_interface_is_pinned(client):
     interface = [words(client.instructions)]
     interface += [[t.name, words(t.description), t.input_schema] for t in tools]
     digest = hashlib.sha256(json.dumps(interface, sort_keys=True).encode()).hexdigest()
-    assert digest == "a35fe16c4cd0dce759c0e1fc728339a6c7becaedf8bcfe865bb535e717cb79e0"
+    assert digest == "d107d656acc4d1e40e99070364bcad1ca11ecfc8c031778f554a50d27d3adb7a"

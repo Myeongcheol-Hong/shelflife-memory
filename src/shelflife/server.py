@@ -230,8 +230,8 @@ def build_server(
         For a pypi or github_release claim, the check is recorded and returned as check.
         check.result is same (the source still gives the claim's value), changed (the
         source gives new_value), cannot_tell, or error (evidence says why). If another
-        check of the claim fetched its source after this one did, this one is not
-        recorded, and check is that newer check.
+        check of the claim fetched its source no earlier than this one (to the second),
+        this one is not recorded, and check is that newer check.
 
         For a web_page claim, check is null and judge holds a prompt with the relevant
         section of the page: follow it, then store your judgment with record_check within
