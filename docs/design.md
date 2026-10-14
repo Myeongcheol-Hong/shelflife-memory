@@ -262,7 +262,7 @@ The user decides what to remember and gives the claim sentence (D2, D3). When Cl
 ### 6.1 When to check (re-check policy comparison, no LLM cost)
 
 - **Data**: release histories of about 50 PyPI packages and 20 GitHub repos (exact dates). A mix of fast- and slow-changing projects. `eval/replay/timelines.py` says which version each source showed as latest on any day, by the rules the verifiers read (D11). A GitHub repository that also releases other products has a tag pattern, and its other releases never count; the github_release verifier does not read the pattern (yet), so on those repositories its latest can differ. `eval/data/README.md` describes the files.
-- **Simulation**: replay 2024-01 to 2026-09 day by day. Claims like "the latest version of X is ..." appear at random times, and questions arrive at random times. Each policy decides when to check, and the answer at question time is compared with ground truth.
+- **Simulation**: replay 2024-01 to 2026-09 day by day. Claims like "the latest version of X is ..." appear at random times (never before X's first release), and questions arrive at random times. Each policy decides when to check, and the answer at question time is compared with ground truth.
 - **Policies** (each mapped to who uses it today, so the comparison is against real prior-art behavior)
   - Never check: the default in Mem0, Zep and Hindsight, which react only to new input
   - Check on every read

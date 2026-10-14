@@ -15,16 +15,16 @@
 # - GitHub repositories that publish GitHub Releases, which the github_release verifier
 #   reads, under one tag series: no monorepos whose releases are per-package tags. No
 #   repository is the same project as a PyPI entry.
-# - No repository that patches several release lines in parallel (cut by the maintainer
-#   after looking at each repository's last 100 releases): there "the stable release
-#   created last" keeps jumping between lines, which adds change days that bring no new
-#   release.
+# - No repository that patches several release lines in parallel, or whose latest is
+#   set by hand (the maintainer's cut, from each repository's last 100 releases and the
+#   collector's first run): there "the stable release created last" keeps jumping
+#   between lines, or is not what GitHub shows as latest.
 # - Alphabetical, with no release counts, dates or guessed volatility.
 #
 # `tag` (GitHub only, optional) is a regular expression a release's tag must match
 # (re.search), for a repository that also publishes releases of other products: the
-# collector and latest_on() ignore every release whose tag does not match. '^v\d', not
-# '^v': a bare "v" also matches "vscode-typescript/v1.0.1".
+# collector and latest_on() ignore every release whose tag does not match. Use '^v\d'
+# (or '^\d' for tags without a "v"), not '^v', which also matches "vscode-typescript/".
 #
 # The collector warns about tags with several prefixes, about a latest release that our
 # rules disagree with, and about a latest release outside the tag pattern.
@@ -92,16 +92,17 @@ github = [
   { name = "docker/compose", volatility = "medium" },
   { name = "facebook/react", volatility = "medium", tag = '^v\d' },
   { name = "getzep/graphiti", volatility = "fast", tag = '^v\d' },
+  { name = "gohugoio/hugo", volatility = "" },
   { name = "hashicorp/terraform", volatility = "fast" },
-  { name = "helm/helm", volatility = "fast" },
-  { name = "home-assistant/core", volatility = "fast" },
+  { name = "home-assistant/core", volatility = "fast", tag = '^\d' },
+  { name = "jesseduffield/lazygit", volatility = "" },
   { name = "jqlang/jq", volatility = "slow" },
   { name = "microsoft/TypeScript", volatility = "slow", tag = '^v\d' },
   { name = "ollama/ollama", volatility = "slow" },
-  { name = "pnpm/pnpm", volatility = "slow" },
   { name = "prettier/prettier", volatility = "slow" },
-  { name = "prometheus/prometheus", volatility = "fast" },
   { name = "rust-lang/rust", volatility = "medium" },
   { name = "sharkdp/bat", volatility = "fast" },
+  { name = "starship/starship", volatility = "" },
   { name = "vectorize-io/hindsight", volatility = "fast" },
+  { name = "zed-industries/zed", volatility = "" },
 ]

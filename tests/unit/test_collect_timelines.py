@@ -7,7 +7,7 @@ import pytest
 from eval.replay import collect_timelines
 from eval.replay.collect_timelines import collect_github, collect_pypi, main
 from eval.replay.timelines import latest_on, load, problems
-from shelflife.verifiers import FetchError
+from shelflife.verifiers import FetchError, TooLarge
 
 FIXTURES = Path(__file__).parents[1] / "fixtures" / "timelines"
 NOW = datetime(2026, 10, 14, 12, 0, tzinfo=UTC)
@@ -115,6 +115,38 @@ def test_github_stops_at_a_short_page_and_reads_no_latest_as_none():
     )
     with pytest.raises(FetchError):
         collect_github("o/r", fetch, token=None)
+
+
+def test_github_starts_again_with_half_the_page_size_when_a_page_is_too_large(monkeypatch):
+    # Each release lists its assets, so a page of caddy's releases is over the 10 MB cap.
+    monkeypatch.setattr(collect_timelines, "PER_PAGE", 4)
+    monkeypatch.setattr(collect_timelines, "MIN_PER_PAGE", 2)
+    base = "https://api.github.com/repos/o/r/releases"
+
+    def page(*tags):
+        return [gh_release(tag, "2024-01-01") for tag in tags]
+
+    fetch = fetcher(
+        {
+            f"{base}?per_page=4&page=1": page("v6", "v5", "v4", "v3"),
+            f"{base}?per_page=4&page=2": TooLarge("response larger than 10 MB"),
+            f"{base}?per_page=2&page=1": page("v6", "v5"),
+            f"{base}?per_page=2&page=2": page("v4", "v3"),
+            f"{base}?per_page=2&page=3": page("v2"),
+            f"{base}/latest": {"tag_name": "v6"},
+        }
+    )
+    _, _, releases = collect_github("o/r", fetch, token=None)
+    assert [r["version"] for r in releases] == ["v6", "v5", "v4", "v3", "v2"]  # each once
+
+
+def test_github_halves_the_page_size_down_to_10_then_gives_up():
+    base = "https://api.github.com/repos/o/r/releases"
+    tried = [f"{base}?per_page={n}&page=1" for n in (100, 50, 25, 12, 10)]
+    fetch = fetcher({url: TooLarge("response larger than 10 MB") for url in tried})
+    with pytest.raises(TooLarge):
+        collect_github("o/r", fetch, token=None)
+    assert [url for url, _ in fetch.calls] == tried
 
 
 def write_projects(folder, text):

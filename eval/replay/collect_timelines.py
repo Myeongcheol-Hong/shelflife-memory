@@ -16,7 +16,6 @@ GITHUB_TOKEN, if set, raises GitHub's limit of 60 requests an hour.
 from __future__ import annotations
 
 import argparse
-import itertools
 import json
 import os
 import re
@@ -35,10 +34,11 @@ from eval.replay.timelines import (
     tag_prefix,
     utc_text,
 )
-from shelflife.verifiers import Fetch, FetchError, http_get
+from shelflife.verifiers import Fetch, FetchError, TooLarge, http_get
 
 SCRIPT_VERSION = "t1"
 PER_PAGE = 100  # GitHub's largest page
+MIN_PER_PAGE = 10  # the smallest page tried when a page is over the size cap
 GITHUB_HEADERS = {"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}
 
 
@@ -64,12 +64,35 @@ def collect_github(
     repo: str, fetch: Fetch, token: str | None
 ) -> tuple[str, str | None, list[dict[str, Any]]]:
     """(url, latest, releases) from GitHub's REST API, page by page. Drafts are left out
-    (a token with push access would list them)."""
+    (a token with push access would list them). Each release lists its assets, so a page
+    can be over the 10 MB cap (caddy's): then the listing starts again from page 1 with
+    half the page size, down to MIN_PER_PAGE, so the page offsets stay consistent."""
     headers = GITHUB_HEADERS | ({"Authorization": f"Bearer {token}"} if token else {})
     base = f"https://api.github.com/repos/{repo}/releases"
-    releases = []
-    for page in itertools.count(1):
-        batch = json.loads(fetch(f"{base}?per_page={PER_PAGE}&page={page}", headers))
+    per_page = PER_PAGE
+    while True:
+        try:
+            releases = _all_pages(base, per_page, fetch, headers)
+            break
+        except TooLarge:
+            if per_page <= MIN_PER_PAGE:
+                raise
+            per_page = max(per_page // 2, MIN_PER_PAGE)
+    try:
+        latest = json.loads(fetch(f"{base}/latest", headers))["tag_name"]
+    except FetchError as e:
+        if e.status != 404:  # 404: no release is marked latest
+            raise
+        latest = None
+    return base, latest, releases
+
+
+def _all_pages(
+    base: str, per_page: int, fetch: Fetch, headers: dict[str, str]
+) -> list[dict[str, Any]]:
+    releases, page = [], 1
+    while True:
+        batch = json.loads(fetch(f"{base}?per_page={per_page}&page={page}", headers))
         releases += [
             {
                 "version": r["tag_name"],
@@ -80,15 +103,9 @@ def collect_github(
             for r in batch
             if not r["draft"]
         ]
-        if len(batch) < PER_PAGE:
-            break
-    try:
-        latest = json.loads(fetch(f"{base}/latest", headers))["tag_name"]
-    except FetchError as e:
-        if e.status != 404:  # 404: no release is marked latest
-            raise
-        latest = None
-    return base, latest, releases
+        if len(batch) < per_page:
+            return releases
+        page += 1
 
 
 def write(
