@@ -226,7 +226,7 @@ Under D4 and D10, `verify` does steps 1 and 2 and returns the section with the v
 
 The three questions are measured **separately**, in the order a memory goes through them: write -> schedule -> verify. Separating them keeps costs low and shows where errors come from.
 
-**Principle: Claude does not grade Claude.** Grading comes from code checks, the owner's labels and real-world records (PyPI dates, Wayback snapshots). If an LLM judge is ever used, its agreement with the owner's labels is reported alongside.
+**Principle: Claude does not grade Claude.** Grading comes from code checks, the maintainer's labels and real-world records (PyPI dates, Wayback snapshots). If an LLM judge is ever used, its agreement with the maintainer's labels is reported alongside.
 
 ### 6.0 Write quality
 
@@ -238,7 +238,7 @@ The user decides what to remember and gives the claim sentence (D2, D3). When Cl
    - The check_target exists (PyPI package, GitHub repo, URL responds)
    - **Verify right after write returns `same`**: if a just-written claim verifies as changed or cannot_tell, either the claim or the verifier is wrong
    - Metric: write integrity rate (share of claims passing all four)
-   - How they run (D10): pure functions over `remember`-shaped records, so the M8 write eval runs them without a database, plus a read-only CLI (`shelflife-memory check-writes FILE`) that writes one JSON line per claim and check; never inside `remember`. Check 3 fails on HTTP 404 or 410 and on a malformed check_target; blocked is only for network or access problems, such as a 403, 429, 5xx or network error. For `web_page`, check 4 needs a judgment and is left out of the rate until M5. The report gives pass, fail and skip counts per check. In the rate, a claim with any failed check counts as failing, one that passed all four as passing, and the rest are left out
+   - How they run (D10): pure functions over `remember`-shaped records, so the M8 write eval runs them without a database, plus a read-only CLI (`shelflife-memory check-writes FILE`) that writes one JSON line per claim and check; never inside `remember`. Check 3 fails on HTTP 404 or 410 and on a malformed check_target; blocked is only for network or access problems, such as a 403, 429, 5xx or network error. For `web_page`, check 4 needs a judgment and is left out of the rate until M5b. The report gives pass, fail and skip counts per check. In the rate, a claim with any failed check counts as failing, one that passed all four as passing, and the rest are left out
 2. **Labeled set (small, hand-made)**
    - 40 items from my own research conversations (certifications, multi-LLM apps, memory frameworks; no employer data). An item is one sentence I gave, plus the surrounding turn and the source URL if any (D2). The gold labels are the fields Claude should fill: kind, subject/attribute/value, volatility, check_method/check_target, observed_at and source
    - Metrics: per-field accuracy for the given sentences, volatility confusion matrix. Recall (missed claims) and precision (invented or unneeded claims) measure extraction, which is a stretch goal under D2
@@ -253,7 +253,7 @@ The user decides what to remember and gives the claim sentence (D2, D3). When Cl
      - two similar values (monthly vs annual price)
    - A filled-in trap is a fabrication and is reported on its own line
 3. **Downstream impact (reuses the 6.1 replayer, almost free)**
-   - Swap the owner's volatility labels for Claude's in the 6.1 replay and measure how much the stale-answer rate rises
+   - Swap the maintainer's volatility labels for Claude's in the 6.1 replay and measure how much the stale-answer rate rises
    - Example finding: "When Claude assigns volatility, stale answers rise by X points compared with human labels"
 4. **(Stretch) 10 to 15 behavior scenarios**
    - Run scripted conversations with headless Claude Code (`claude -p`) connected to shelflife. The outside world is frozen with recorded responses (fake PyPI, fixed pages) so every run gives the same result
@@ -322,7 +322,7 @@ The user decides what to remember and gives the claim sentence (D2, D3). When Cl
 
 ## 8. Decisions D1-D4
 
-These were open when the design was written. The owner decided them on 2026-10-13; `docs/decisions.md` records the option chosen, why, and when to revisit each one. The options are kept here for context. Later decisions (D5 onward, such as D8 on Korean search) are recorded only in `docs/decisions.md`.
+These were open when the design was written. The maintainer decided them on 2026-10-13; `docs/decisions.md` records the option chosen, why, and when to revisit each one. The options are kept here for context. Later decisions (D5 onward, such as D8 on Korean search) are recorded only in `docs/decisions.md`.
 
 - **D1: Storage.** A single SQLite file with FTS5 and no embeddings to start. Enough at personal scale; embeddings can be added later if search quality needs it. **Decided:** SQLite + FTS5, no embeddings.
 - **D2: Who extracts claims.** The LLM, or the user giving sentences directly. Suggested: direct at first, since extraction quality is a separate problem. Revisit if manual entry turns out to be tedious enough that the tool goes unused. **Decided:** direct entry; Claude only structures the given sentence into fields.

@@ -9,8 +9,8 @@ The main contribution is the **eval**, not the feature list. Re-check tools alre
 - Design (source of truth): `docs/design.md`
 - Milestones, in order: `docs/roadmap.md`
 - Decision log: `docs/decisions.md` (D1 to D4 and later)
-- Session handoff notes: `docs/session-log.md` (read the newest entry first)
-- Owner: MC.
+- Handoff: `docs/dev/handoff.md` (where the work stands and what to do next; read it first)
+- Maintainer: MC.
 - Language: English only, everywhere (code, comments, docs, README, commit messages, PR descriptions, eval data labels).
 
 ## Working agreement
@@ -18,26 +18,28 @@ The main contribution is the **eval**, not the feature list. Re-check tools alre
 - Move as fast as the work allows. `docs/roadmap.md` sets the **order** of milestones, not the pace. When a milestone is done and its tests pass, tick its boxes in the roadmap and continue to the next one.
 - At the start of a session, show a short plan for the milestones you intend to finish and wait for approval. After that, keep going without asking again unless the plan has to change.
 - One PR per milestone (roughly one plan week). Do not mix milestones in one PR. Keep each PR within the size limit in "Review rules" below; split larger work into stacked PRs.
-- In each PR description, explain the design choices and trade-offs so the owner understands and can explain every line. They go under "Details" (see "Review rules").
+- In each PR description, explain the design choices and trade-offs so the maintainer understands and can explain every line. They go under "Details" (see "Review rules").
 - Never skip tests, the quote check or the eval rules below to go faster.
-- When the owner says a part is theirs to implement, leave a `TODO(mc)` stub with a skipped or `xfail(strict=True)` test that describes the expected behavior (a plain failing test would block the Stop hook).
+- When the maintainer says a part is theirs to implement, leave a `TODO(mc)` stub with a skipped or `xfail(strict=True)` test that describes the expected behavior (a plain failing test would block the Stop hook).
 - If the design doc is wrong or unclear, say so and propose an edit instead of silently diverging.
-- One session per milestone or so. Before a session ends, update `docs/session-log.md`.
+- One session per milestone or so. The session's last PR overwrites `docs/dev/handoff.md` with where the work stands; there are no separate handoff PRs.
 
-### Stop and ask (these do not speed up)
+### Needs maintainer approval
 
-- **Ground-truth labels belong to the owner.** Never create, fill in or edit labels in `eval/data/` (Wayback pair labels, write-eval snippet labels, human volatility labels). Build the files, schemas and labeling tools, then stop and hand over.
-- **Decisions belong to the owner.** Propose options for any new decision and for any change to the schema or MCP tool interfaces; do not decide them. Decisions are recorded in `docs/decisions.md` (D1-D4 came from `docs/design.md` section 8 and are decided). Items marked **(owner)** in the roadmap are never done by Claude.
+These do not speed up: "move as fast as the work allows" does not apply to them.
+
+- **Ground-truth labels belong to the maintainer.** Never create, fill in or edit labels in `eval/data/` (Wayback pair labels, write-eval snippet labels, human volatility labels). Build the files, schemas and labeling tools, then stop and hand over.
+- **Decisions belong to the maintainer.** Propose options for any new decision and for any change to the schema or MCP tool interfaces; do not decide them. Decisions are recorded in `docs/decisions.md` (D1-D4 came from `docs/design.md` section 8 and are decided). Items marked **(maintainer)** in the roadmap are never done by Claude.
 - **New dependencies** need approval, and a check that the package exists on PyPI.
 - **Blocked network access**: report it instead of working around it.
 
 ## Review rules
 
-- **Size:** under about 400 changed lines, excluding tests, fixtures, `eval/data/` and `uv.lock` (CI counts the same and fails above 600). Review fixes that would go over move to the next PR.
+- **Size:** under about 400 changed lines, excluding tests, fixtures, `eval/data/`, `uv.lock` and files the PR deletes entirely (CI counts the same and fails above 600). Review fixes that would go over move to the next PR.
 - **PR description:** a top part of at most 10 lines: **What changed**, **Read these first** (1-3 core files or functions), **Decisions needed**, **Removed or simplified**. Then **Proof** (each added test and what it asserts, one line each; commands run and their results), **Confidence** (high, medium or low per part, with a reason for anything not high), **Rollback** (how to undo it; write ONE-WAY DOOR if it changes the DB schema or stored data), then **Details**.
-- **Code the owner always reads:** the `store.py` schema and transactions, the MCP tool interfaces, quote and `record_check` validation, and eval scoring. A PR that changes one lists it under "Read these first".
+- **Code the maintainer always reads:** the `store.py` schema and transactions, the MCP tool interfaces, quote and `record_check` validation, and eval scoring. A PR that changes one lists it under "Read these first".
 - **Simpler:** prefer the simpler fix and deleting code, and say what was removed.
-- **Packages:** only with the owner's approval and after checking the package exists on PyPI. CI fails on a change to the dependencies in `pyproject.toml` or to `uv.lock` until the owner adds the `deps-approved` label.
+- **Packages:** only with the maintainer's approval and after checking the package exists on PyPI. CI fails on a change to the dependencies in `pyproject.toml` or to `uv.lock` until the maintainer adds the `deps-approved` label.
 - **Reviews:** use the `pr-reviewer` agent; its checklist is the `pr-review` skill.
 
 ## Tech constraints
@@ -75,6 +77,7 @@ docs/
   design.md
   roadmap.md
   decisions.md
+  dev/handoff.md    # where the work stands; overwritten by each session's last PR
 ```
 
 Keep this flat. Do not copy the structure of large projects (services/, repositories/, plugins/) until the code actually needs it.
@@ -94,7 +97,7 @@ A Stop hook in `.claude/settings.json` runs ruff and pytest whenever a session t
 - Unit tests never call a real LLM or the live network. Put network access behind small interfaces and test with recorded fixtures.
 - Tests must be deterministic: inject the clock (`now`) instead of calling `datetime.now()` inside logic.
 - A verifier result is only accepted if its quote appears verbatim in the fetched content. Enforce this in code, not in the prompt.
-- Do not grade Claude output with Claude. Grade with code checks, the owner's labels, or real-world history (PyPI dates, Wayback snapshots). If an LLM judge is ever used, also report its agreement with the owner's labels.
+- Do not grade Claude output with Claude. Grade with code checks, the maintainer's labels, or real-world history (PyPI dates, Wayback snapshots). If an LLM judge is ever used, also report its agreement with the maintainer's labels.
 - Eval-only dependencies (plotting, dataframes) go in a uv dependency group named `eval`. The core install stays minimal.
 - Tests stub the model and run in CI. Evals call a real model, never run in CI, and run each LLM item 3 times so results are rates.
 - When comparing conditions, change one variable at a time; keep model and prompt version fixed otherwise.
@@ -104,6 +107,6 @@ A Stop hook in `.claude/settings.json` runs ruff and pytest whenever a session t
 
 ## Cloud sessions
 
-- Each cloud session is a fresh VM, so any SQLite file created there is temporary. Daily use happens on the owner's Mac.
+- Each cloud session is a fresh VM, so any SQLite file created there is temporary. Daily use happens on the maintainer's Mac.
 - Dependencies are installed by the SessionStart hook in `.claude/settings.json` (`uv sync`).
 - Network: PyPI and GitHub are allowed by default. Wayback (`web.archive.org`) and other web pages need the environment's custom allowlist; if a request is blocked, say so instead of working around it.

@@ -21,7 +21,7 @@ from shelflife.verifiers.judgment import value_in
 from shelflife.verifiers.web_page import Page, extract, normalize, page_text
 
 PASS, FAIL, SKIP, BLOCKED = "pass", "fail", "skip", "blocked"
-NEEDS_JUDGMENT = "needs_judgment"  # check 4 for web_page, left out of the rate until M5
+NEEDS_JUDGMENT = "needs_judgment"  # check 4 for web_page, left out of the rate until M5b
 CHECKS = ("quote_on_source", "value_in_quote", "target_exists", "verifies_same")
 FIELDS = ("value", "source_url", "source_quote", "check_method", "check_target")
 GONE = (404, 410)  # a target that is gone fails check 3; network trouble is blocked

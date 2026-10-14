@@ -2,7 +2,7 @@ name: PR checks
 
 # Both jobs compare the PR's merge commit (HEAD) with its first parent, the base branch,
 # so they see exactly what merging the PR would change. labeled and unlabeled re-run
-# them when the owner adds or removes deps-approved.
+# them when the maintainer adds or removes deps-approved.
 on:
   pull_request:
     types: [opened, synchronize, reopened, labeled, unlabeled]
@@ -60,7 +60,7 @@ jobs:
           if os.environ["APPROVED"] == "true":
               print("Changed, and the PR has the deps-approved label.")
               sys.exit(0)
-          print("::error::Dependencies in pyproject.toml or uv.lock changed. The owner approves by adding the deps-approved label.")
+          print("::error::Dependencies in pyproject.toml or uv.lock changed. The maintainer approves by adding the deps-approved label.")
           sys.exit(1)
 
   size:
@@ -69,20 +69,25 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 2
-      - name: Changed lines, excluding tests, fixtures, eval data and uv.lock (limit 600)
+      - name: Changed lines, excluding tests, fixtures, eval data, uv.lock and deleted files (limit 600)
         shell: python3 {0}
         run: |
           import os, re, subprocess, sys
 
           LIMIT = 600
           EXCLUDED = re.compile(r"^(tests/|eval/data/|uv\.lock$)|(^|/)fixtures/")
+          # A file the PR deletes entirely needs no line-by-line review, so it is not counted.
+          removed_files = set(subprocess.run(
+              ["git", "diff", "--name-only", "--diff-filter=D", "-M", "-z", "HEAD^1", "HEAD"],
+              check=True, capture_output=True, text=True,
+          ).stdout.split("\0"))
           # -z writes "added\tdeleted\tpath\0", or for a rename "added\tdeleted\t\0old\0new\0",
           # so a moved file counts only the lines that changed in it.
           fields = subprocess.run(
               ["git", "diff", "--numstat", "-M", "-z", "HEAD^1", "HEAD"],
               check=True, capture_output=True, text=True,
           ).stdout.split("\0")
-          rows = []
+          rows, gone = [], []
           while len(fields) > 1:
               added, deleted, path = fields.pop(0).split("\t", 2)
               if not path:
@@ -90,10 +95,14 @@ jobs:
                   del fields[:2]
               if added == "-" or EXCLUDED.search(path):  # binary or excluded
                   continue
+              if path in removed_files:  # shown below, so a large deletion stays visible
+                  gone.append((int(deleted), path))
+                  continue
               rows.append((int(added) + int(deleted), path))
           total = sum(n for n, _ in rows)
-          report = [f"Changed lines (excluding tests, fixtures, eval data and uv.lock): {total} (limit {LIMIT})", ""]
+          report = [f"Changed lines (excluding tests, fixtures, eval data, uv.lock and deleted files): {total} (limit {LIMIT})", ""]
           report += [f"{n:6} {path}" for n, path in sorted(rows, reverse=True)]
+          report += [f"deleted, not counted: {n} lines {path}" for n, path in sorted(gone, reverse=True)]
           print("\n".join(report))
           with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
               summary.write("```\n" + "\n".join(report) + "\n```\n")

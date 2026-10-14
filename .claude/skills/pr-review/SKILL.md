@@ -13,7 +13,7 @@ Only gaps that affect:
 
 - **correctness**: the code does the wrong thing for an input it will really get;
 - **security**: for example an unchecked URL or address, a path or SQL built from input, a secret in the repo;
-- **a decision** in `docs/decisions.md`, or a "Stop and ask" rule in `CLAUDE.md` (labels, decisions, dependencies).
+- **a decision** in `docs/decisions.md`, or a "Needs maintainer approval" rule in `CLAUDE.md` (labels, decisions, dependencies).
 
 A must-fix finding names a real caller or input that reaches the problem. If you cannot name one, it belongs in the optional list.
 
@@ -27,7 +27,7 @@ A must-fix finding names a real caller or input that reaches the problem. If you
 | Does a test pass for the wrong reason (it would still pass if the code it covers were broken)? | optional; a bug it hides is a correctness finding |
 | Does a test duplicate another, or test a case that cannot happen? Propose tests to delete. | optional |
 | Is there defensive code for a case that cannot happen? | optional |
-| Is there a new dependency? | must fix without the owner's approval, otherwise optional |
+| Is there a new dependency? | must fix without the maintainer's approval, otherwise optional |
 | Does the description hide something: always-read code (see `CLAUDE.md`) changed but not under "Read these first", or a DB schema or stored-data change not marked ONE-WAY DOOR? | must fix |
 
 Run the tests with `uv run pytest -q` (or the changed test files) when a finding depends on what they do.

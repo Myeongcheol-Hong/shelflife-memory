@@ -62,7 +62,7 @@ def fetch_page(
 
     Only http and https URLs whose host is a public address are fetched, and every
     redirect is checked the same way, so a stored URL cannot read a local file, the
-    owner's network or a cloud metadata service (behind a proxy, see check_url). The body
+    local network or a cloud metadata service (behind a proxy, see check_url). The body
     is capped at MAX_BYTES.
 
     The time limit, DEADLINE_SECONDS: every request, the first and each redirect, is

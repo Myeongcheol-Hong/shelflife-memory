@@ -221,7 +221,7 @@ def test_query_words_split_latin_and_hangul(query, words):
     assert query_words(query) == words
 
 
-# The owner's list (D8), written out here so a change to PARTICLES fails a test.
+# The maintainer's list (D8), written out here so a change to PARTICLES fails a test.
 @pytest.mark.parametrize(
     "particle",
     ["은", "는", "이", "가", "을", "를", "의", "로", "으로", "에", "에서", "와", "과", "도", "만"],
