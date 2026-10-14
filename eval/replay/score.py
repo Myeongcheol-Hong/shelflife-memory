@@ -94,11 +94,14 @@ def peak_ci(
     """The 95% interval of peak(), or of its paired difference from another policy, over
     the same resamples of whole projects as ci(); the peak is taken per seed each time."""
     names = sorted(per_project(rows, policy))
-    a, b = _daily(rows, policy, split), _daily(rows, minus, split) if minus else None
+    a = _daily(rows, policy, split)
+    b = _daily(rows, minus, split) if minus is not None else None
+    if b is not None and not b:
+        raise ValueError(f"no rows for {minus!r}")
     found = []
     for pick in _resamples(len(names)):
         chosen = [names[i] for i in pick]
-        found.append(_peak(a, chosen) - (_peak(b, chosen) if b else 0))
+        found.append(_peak(a, chosen) - (_peak(b, chosen) if b is not None else 0))
     return percentiles(found)
 
 

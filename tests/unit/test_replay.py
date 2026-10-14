@@ -110,9 +110,11 @@ def test_claims_start_on_the_first_day_with_a_latest_and_repeat_exactly():
     assert stream(0, "dev", "x", 0).random() == 0.820566744119386
 
 
-def test_replay_refuses_a_project_without_a_label():
+def test_replay_refuses_a_project_without_a_label_or_an_unknown_scenario():
     with pytest.raises(ValueError, match="no volatility label"):
         replay(SMOKE, SMOKE_LABELS | {"smoke-quiet": ""}, "dev", [0], WEEKLY)
+    with pytest.raises(ValueError, match="no scenario 'session'"):
+        replay(SMOKE, SMOKE_LABELS, "dev", [0], WEEKLY, scenario="session")
 
 
 def test_sessions_make_days_of_ten_projects_each_spread_like_the_uniform_scenario():
@@ -165,6 +167,8 @@ def test_peak_ci_resamples_projects_and_pairs_the_policies():
     assert score.peak_ci(rows, "x", "dev", minus="x") == (0, 0)
     assert score.peak_ci(rows, "x", "dev") == (2, 4)  # two q's give 2, two p's give 4
     assert score.peak_ci(rows, "x", "dev", minus="y")[1] > 0
+    with pytest.raises(ValueError, match="no rows for 'typo'"):
+        score.peak_ci(rows, "x", "dev", minus="typo")
     # With a second seed the peak is averaged over the seeds: two p's give (4 + 2) / 2.
     rows += [row(1, "p", "x", d(1, 2)), row(1, "q", "x", d(1, 2))]
     assert score.peak_ci(rows, "x", "dev") == (2, 3)
