@@ -367,6 +367,7 @@ def build_server(
                 page_sha256=fetched.page_sha256,
                 section_sha256=fetched.section_sha256,
                 reason=judged.reason,
+                selector_version=fetched.section.version,
                 fetched_at=fetched.at,
             )
         except ValueError as e:  # InvalidJudgment included
