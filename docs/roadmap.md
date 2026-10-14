@@ -36,7 +36,7 @@ Items marked **(maintainer)** are done by the maintainer by hand: ground-truth l
 ## M5a: Release timelines, dev/test split, smoke corpus
 - [ ] PyPI/GitHub release timelines (about 50 packages, 20 repos), dev/test split. Collected by a script the maintainer runs on the Mac, because the cloud session cannot call the GitHub API for repositories not attached to it; the data is committed
 - [ ] `eval/data/README.md` data card: sources, dates and licenses of the timelines
-- [ ] Smoke corpus in `eval/data/smoke/`, wired into CI
+- [x] Smoke corpus in `eval/data/smoke/`, wired into CI (M5a: the timeline rules run on it in the test suite)
 - [ ] **(maintainer)** Label the volatility class of each replay claim (design 6.0-3). M6's per-class policy needs these classes, and labeling before any replay result keeps the labels blind
 
 ## M6: Replay simulator and baseline policies

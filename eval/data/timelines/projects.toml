@@ -1,0 +1,104 @@
+# Candidate projects for the M5a release timelines (D11).
+#
+# The maintainer cuts this list to about 50 PyPI projects and 20 GitHub repositories and
+# gives each kept project a volatility label (fast, medium or slow) while cutting, before
+# any data is collected, so the labels stay blind to the data. The collector refuses to
+# run while a label is empty. The labels are the maintainer's: Claude never fills them.
+#
+# How the candidates were chosen:
+# - Fields that release at very different paces: AI and LLM tooling, web frameworks and
+#   clients, data and science libraries, developer tools, a cloud SDK, long-standing
+#   utilities, and server and command-line software.
+# - PyPI projects first published before 2024, so the latest version on the replay's
+#   first day is known; and the projects the maintainer's own memory checks (mcp,
+#   claude-agent-sdk, Hindsight, Graphiti), whatever their age.
+# - GitHub repositories that publish GitHub Releases, which the github_release verifier
+#   reads, under one tag series: no monorepos whose releases are per-package tags. No
+#   repository is the same project as a PyPI entry.
+# - Alphabetical, with no release counts, dates or guessed volatility.
+#
+# The GitHub tag formats are from memory: this session could not call the GitHub API.
+# The collector warns about tags with several prefixes, and about a latest release that
+# our rules disagree with.
+
+pypi = [
+  { name = "aiohttp", volatility = "" },
+  { name = "anthropic", volatility = "" },
+  { name = "attrs", volatility = "" },
+  { name = "boto3", volatility = "" },
+  { name = "certifi", volatility = "" },
+  { name = "charset-normalizer", volatility = "" },
+  { name = "chromadb", volatility = "" },
+  { name = "claude-agent-sdk", volatility = "" },
+  { name = "click", volatility = "" },
+  { name = "datasets", volatility = "" },
+  { name = "django", volatility = "" },
+  { name = "duckdb", volatility = "" },
+  { name = "fastapi", volatility = "" },
+  { name = "flask", volatility = "" },
+  { name = "grpcio", volatility = "" },
+  { name = "httpx", volatility = "" },
+  { name = "huggingface-hub", volatility = "" },
+  { name = "instructor", volatility = "" },
+  { name = "jinja2", volatility = "" },
+  { name = "litellm", volatility = "" },
+  { name = "llama-index", volatility = "" },
+  { name = "matplotlib", volatility = "" },
+  { name = "mcp", volatility = "" },
+  { name = "mypy", volatility = "" },
+  { name = "numpy", volatility = "" },
+  { name = "openai", volatility = "" },
+  { name = "pandas", volatility = "" },
+  { name = "pip", volatility = "" },
+  { name = "poetry", volatility = "" },
+  { name = "polars", volatility = "" },
+  { name = "pre-commit", volatility = "" },
+  { name = "pyarrow", volatility = "" },
+  { name = "pydantic", volatility = "" },
+  { name = "pytest", volatility = "" },
+  { name = "python-dateutil", volatility = "" },
+  { name = "pytz", volatility = "" },
+  { name = "pyyaml", volatility = "" },
+  { name = "qdrant-client", volatility = "" },
+  { name = "redis", volatility = "" },
+  { name = "requests", volatility = "" },
+  { name = "ruff", volatility = "" },
+  { name = "scikit-learn", volatility = "" },
+  { name = "scipy", volatility = "" },
+  { name = "sentence-transformers", volatility = "" },
+  { name = "setuptools", volatility = "" },
+  { name = "six", volatility = "" },
+  { name = "sqlalchemy", volatility = "" },
+  { name = "starlette", volatility = "" },
+  { name = "tiktoken", volatility = "" },
+  { name = "tokenizers", volatility = "" },
+  { name = "transformers", volatility = "" },
+  { name = "uvicorn", volatility = "" },
+]
+
+github = [
+  { name = "BurntSushi/ripgrep", volatility = "" },
+  { name = "caddyserver/caddy", volatility = "" },
+  { name = "cli/cli", volatility = "" },
+  { name = "denoland/deno", volatility = "" },
+  { name = "docker/compose", volatility = "" },
+  { name = "etcd-io/etcd", volatility = "" },
+  { name = "facebook/react", volatility = "" },
+  { name = "getzep/graphiti", volatility = "" },
+  { name = "grafana/grafana", volatility = "" },
+  { name = "hashicorp/terraform", volatility = "" },
+  { name = "helm/helm", volatility = "" },
+  { name = "home-assistant/core", volatility = "" },
+  { name = "jqlang/jq", volatility = "" },
+  { name = "kubernetes/kubernetes", volatility = "" },
+  { name = "microsoft/TypeScript", volatility = "" },
+  { name = "nodejs/node", volatility = "" },
+  { name = "ollama/ollama", volatility = "" },
+  { name = "pnpm/pnpm", volatility = "" },
+  { name = "prettier/prettier", volatility = "" },
+  { name = "prometheus/prometheus", volatility = "" },
+  { name = "rust-lang/rust", volatility = "" },
+  { name = "sharkdp/bat", volatility = "" },
+  { name = "traefik/traefik", volatility = "" },
+  { name = "vectorize-io/hindsight", volatility = "" },
+]

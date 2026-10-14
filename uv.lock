@@ -799,6 +799,9 @@ dev = [
     { name = "pytest" },
     { name = "ruff" },
 ]
+eval = [
+    { name = "packaging" },
+]
 
 [package.metadata]
 requires-dist = [{ name = "mcp", specifier = ">=2.3,<3" }]
@@ -809,6 +812,7 @@ dev = [
     { name = "pytest", specifier = ">=9.1" },
     { name = "ruff", specifier = ">=0.17" },
 ]
+eval = [{ name = "packaging", specifier = ">=24" }]
 
 [[package]]
 name = "sse-starlette"

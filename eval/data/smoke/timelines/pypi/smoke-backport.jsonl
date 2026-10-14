@@ -1,0 +1,9 @@
+{"source": "pypi", "project": "smoke-backport", "url": "https://pypi.org/pypi/smoke-backport/json", "collected_at": "2026-09-30T12:00:00Z", "latest_at_collection": "3.0.0", "script": "t1"}
+{"version": "1.0.0", "published": "2023-11-01T09:00:00Z", "yanked": false}
+{"version": "2.0.0", "published": "2024-03-01T09:00:00Z", "yanked": false}
+{"version": "1.0.1", "published": "2024-05-01T09:00:00Z", "yanked": false}
+{"version": "2.1.0rc1", "published": "2024-06-01T09:00:00Z", "yanked": false}
+{"version": "2.1.0", "published": "2024-08-15T23:30:00Z", "yanked": false}
+{"version": "2.1.1", "published": "2025-02-01T09:00:00Z", "yanked": true}
+{"version": "2.2.x", "published": "2025-03-01T09:00:00Z", "yanked": false}
+{"version": "3.0.0", "published": "2025-06-10T09:00:00Z", "yanked": false}
