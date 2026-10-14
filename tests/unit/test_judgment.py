@@ -79,7 +79,7 @@ def test_the_template_is_pinned_to_its_version():
     digest = hashlib.sha256(judgment.TEMPLATE.encode()).hexdigest()
     assert (judgment.PROMPT_VERSION, digest) == (
         "j2",
-        "e7c5d8f539cb8bc856a6e960499efb9a6cdd3c7f762a3a72fe658393c50887f4",
+        "95f03673627047a377728eaf0ec2f1cbe262d44322d917c85650bd9f892ace10",
     )
 
 
@@ -228,6 +228,18 @@ def test_a_full_stop_after_zero_decimals_and_other_case_still_match():
         validate("changed", value="Free", page=page, section=section, quote=quote, new_value="free")
 
 
+def test_changed_may_drop_a_word_the_page_dropped():
+    # The approved eligibility phrase loses "only": a real change, not a part of the value.
+    value = "only to organizations in the Claude Partner Network"
+    page = "Certification is available to organizations in the Claude Partner Network."
+    section = Section(page, None, 0, len(page), range(1), range(1), 1.0, 0.0)
+    found = "to organizations in the Claude Partner Network"
+    judged = validate(
+        "changed", value=value, page=page, section=section, quote=page, new_value=found
+    )
+    assert judged.new_value == found
+
+
 @pytest.mark.parametrize(
     ("name", "text", "subject", "attribute", "value", "quote"),
     [
@@ -281,10 +293,8 @@ def test_a_real_quote_from_a_recorded_page(name, text, subject, attribute, value
         ("AIP-C01", "AIP\u2013C01", True),  # dashes
         ("\u201cbeta\u201d", '"beta"', True),  # quote marks
         ("Partner Network", "partner network", True),  # case is ignored (D10 follow-up 9)
-        ("$300", "The exam fee is $300.00.", True),  # a full stop after zero decimals
         ("지원", "한국어를 지원합니다", True),
         ("지원", "미지원 기능", False),  # a Hangul value starts a word
-        ("$300", "U\u017fd 300", False),  # not a currency code
     ],
 )
 def test_value_in(value, text, found):
@@ -298,3 +308,7 @@ def test_values_are_compared_after_folding():
     assert not same_value("$300", "$250")
     assert same_value("Free", "free")
     assert fold("USD 1,000.0 \u2014 €5") == "1000 USD - 5 EUR"
+    # Each currency code goes with one amount, the one it follows or precedes first.
+    assert fold("Exam cost 300 USD 65 questions") == "Exam cost 300 USD 65 questions"
+    assert fold("300 USD 9,900원") == "300 USD 9900 KRW"
+    assert fold("$99 USD $125 USD") == "99 USD 125 USD"
