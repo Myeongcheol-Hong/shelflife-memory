@@ -2,29 +2,22 @@
 
 Handoff notes between working sessions. Newest entry first. Each entry says where the work stands, what waits on the owner, and what the next session should do first.
 
-## 2026-10-14: #21 updated after the outside review; #22 and #23 opened
+## 2026-10-14: #21 and #22 merged (schema v2 is on `main`); #23 open
 
 ### State at the end of the session
 
-- Merged into `main`: #19 and #20.
-- Open: three stacked PRs (the limit). Each lower branch is merged into the next one up.
-
-| PR | Branch | Base | Content |
-|---|---|---|---|
-| [#21](https://github.com/Myeongcheol-Hong/shelflife-memory/pull/21) `[stack 3/5]` | `claude/tender-mayer-wts8cd-m3e` | `main` | **ONE-WAY DOOR.** Schema v2, `verify` for web_page, `record_check`, the upgrade notice |
-| [#22](https://github.com/Myeongcheol-Hong/shelflife-memory/pull/22) `[stack 4/5]` | `claude/tender-mayer-wts8cd-m3f` | #21 | The four write checks, `check-writes`, the seed edits |
-| [#23](https://github.com/Myeongcheol-Hong/shelflife-memory/pull/23) `[stack 5/5]` | `claude/tender-mayer-wts8cd-recall-particles` | #22 | `recall` uses `drop_particle()`; this log entry |
-
+- Merged into `main`: #19, #20, #21 (**ONE-WAY DOOR**: schema v2, `verify` for web_page, `record_check`, the upgrade notice) and #22 (the four write checks, `check-writes`, the seed edits). M3 is done.
+- Open: [#23](https://github.com/Myeongcheol-Hong/shelflife-memory/pull/23) `[stack 5/5]`, branch `claude/tender-mayer-wts8cd-recall-particles`, base `main`: `recall` uses `drop_particle()`, and this log entry. `main` is merged into it.
 - #21 has the outside review's changes, in new commits (D10 follow-up 18):
   - the owner's rollback steps, in the description and design 5.1;
   - `selector_version` and `fetched_at` in `checks`, stored by `record_check`;
   - a `claims_fts` rebuild in the migration, and the "never VACUUM without rebuilding claims_fts" note in the schema comment and design 5.1;
   - a timestamped backup when `.bak-v1` exists, a 60 s busy timeout for the migration, and the `checks_claim` index.
-- CI was green on #21 (617 tests). #22 and #23 pass 638 and 642 tests locally.
+- The first daily-use open on the Mac upgrades the database and saves `shelflife.db.bak-v1`; the Rollback steps are in design 5.1.
 
 ### Waiting on the owner
 
-- Merge #21 after reading its Rollback, then #22, then #23.
+- Merge #23.
 - An unknown charset label (`LookupError`) is not a recorded error: `decode()` falls back to UTF-8 and the page is judged. A test documents this. Keep it, or record an error instead?
 - The owner's last message also answered proposals this session has no record of, probably from another session:
   - a "hardening PR" (to drop the VACUUM note from) and "two new PRs" outside the stack. Neither exists on GitHub.
@@ -33,7 +26,7 @@ Handoff notes between working sessions. Newest entry first. Each entry says wher
 
 ### Next session: start here
 
-1. Check #21-#23 (merged? comments? CI?). As each merges, retarget the next one to `main`.
+1. Check #23 (merged? comments? CI?).
 2. Find out whether the roadmap order above is decided and who edits the roadmap. If it is, the next milestone is M5a, not M4. Show a plan for it.
 3. Notes for M4 from the reviews:
    - `checks` now stores `selector_version` and `fetched_at`, so a selector change can be told apart from a page change.
