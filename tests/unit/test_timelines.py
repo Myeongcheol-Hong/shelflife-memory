@@ -15,7 +15,6 @@ from eval.replay.timelines import (
     load_all,
     load_projects,
     problems,
-    split_of,
 )
 
 ROOT = Path(__file__).parents[2]
@@ -90,33 +89,40 @@ def test_changes_lists_only_the_days_the_latest_moved():
     assert changes(t, date(2024, 3, 2), date(2024, 12, 31)) == []  # 2.0.0 was already latest
 
 
-@pytest.mark.parametrize(
-    ("day", "split"),
-    [
-        (date(2023, 12, 31), None),
-        (date(2024, 1, 1), "dev"),
-        (date(2024, 12, 31), "dev"),
-        (date(2025, 1, 1), "test"),
-        (date(2026, 9, 30), "test"),
-        (date(2026, 10, 1), None),
-    ],
-)
-def test_the_split_is_by_time(day, split):
-    assert split_of(day) == split
-
-
-def test_problems_names_a_disagreement_and_mixed_tag_prefixes():
-    t = timeline("pypi", Release("1.0", at("2024-01-01")), latest="1.1")
+def test_problems_names_a_disagreement_a_late_start_and_mixed_tag_prefixes():
+    t = timeline("pypi", Release("1.0", at("2023-01-01")), latest="1.1")
     assert problems(t) == ["latest by our rules is 1.0, the source said 1.1"]
+    t = timeline("pypi", Release("1.0", at("2024-01-02")), latest="1.0")
+    assert problems(t) == ["first release on 2024-01-02, after the replay starts"]
     t = timeline(
         "github",
-        Release("pkg-a-v1.0", at("2024-01-01"), created=at("2024-01-01")),
-        Release("pkg-b-v2.0", at("2024-01-02"), created=at("2024-01-02")),
+        Release("pkg-a-v1.0", at("2023-01-01"), created=at("2023-01-01")),
+        Release("pkg-b-v2.0", at("2023-01-02"), created=at("2023-01-02")),
         latest="pkg-b-v2.0",
     )
     assert problems(t) == ["tags with several prefixes (per-package tags?): ['pkg-a-', 'pkg-b-']"]
     t = timeline("github", Release("v1.0", at("2024-01-01")), latest="v1.0")
     assert problems(t) == []
+
+
+def test_problems_counts_the_days_github_may_have_shown_a_backport_as_latest():
+    # GitHub marks a newly published release latest by default (make_latest), so after
+    # v2.9.1 is published the source may have shown it, while the rule keeps v3.0.0:
+    # v2.9.1's commit (its created_at) is older than v3.0.0's.
+    t = timeline(
+        "github",
+        Release("v2.9.0", at("2023-06-01"), created=at("2023-06-01")),
+        Release("v1.9.1", at("2023-08-01"), created=at("2023-05-01")),  # before the replay
+        Release("v3.0.0", at("2024-02-01"), created=at("2024-02-01")),
+        Release("v2.9.1", at("2024-03-01"), created=at("2024-01-20")),
+        Release("v2.9.2", at("2024-04-01"), created=at("2024-01-25")),
+        Release("v3.0.1", at("2024-05-01"), created=at("2024-05-01")),
+        latest="v3.0.1",
+    )
+    assert problems(t) == [
+        "2 days when the release created last was not the one published last, first"
+        " 2024-03-01: GitHub may have shown the other as latest"
+    ]
 
 
 # --- files ------------------------------------------------------------------------------
@@ -133,6 +139,9 @@ def test_projects_toml_is_read_and_checked(tmp_path):
         Project("github", "getzep/graphiti", ""),
     ]
     assert Project("github", "getzep/graphiti", "").path == "github/getzep__graphiti.jsonl"
+    # PEP 503 folding is for PyPI names only: these are two GitHub repositories.
+    path.write_text('github = [{ name = "o/my.repo" }, { name = "o/my-repo" }]')
+    assert len(load_projects(path)) == 2
 
 
 @pytest.mark.parametrize(
@@ -143,6 +152,7 @@ def test_projects_toml_is_read_and_checked(tmp_path):
         ('github = [{ name = "graphiti" }]', "not a github name"),
         ('pypi = [{ name = "mcp", volatility = "none" }]', "volatility must be one of"),
         ('pypi = [{ name = "Foo_Bar" }, { name = "foo-bar" }]', "listed twice"),
+        ('github = [{ name = "O/R" }, { name = "o/r" }]', "listed twice"),
     ],
 )
 def test_projects_toml_refuses(tmp_path, text, message):
@@ -174,11 +184,19 @@ def test_a_bad_timeline_file_names_itself(tmp_path, lines):
 # --- the smoke corpus and the collected data (CI) ---------------------------------------
 
 
-def test_the_smoke_corpus_matches_its_projects_and_has_no_problems():
+def test_the_smoke_corpus_matches_its_projects_and_flags_what_it_was_built_to():
     timelines = load_all(SMOKE)
     listed = {(p.source, p.name) for p in load_projects(SMOKE / "projects.toml")}
     assert {(t.source, t.project) for t in timelines} == listed
-    assert [problems(t) for t in timelines] == [[]] * len(timelines)
+    assert {t.project: problems(t) for t in timelines} == {
+        "smoke-backport": [],
+        "smoke-prerelease-only": ["first release on 2024-02-01, after the replay starts"],
+        "smoke-quiet": [],
+        "smoke-org/out-of-order": [
+            "2 days when the release created last was not the one published last, first"
+            " 2024-04-02: GitHub may have shown the other as latest"
+        ],
+    }
 
 
 def test_the_smoke_corpus_gives_the_changes_it_was_built_for():
@@ -199,7 +217,7 @@ def test_the_smoke_corpus_gives_the_changes_it_was_built_for():
 
 def test_the_collected_timelines_load_and_match_projects_toml():
     # Before the maintainer collects the data there are no timeline files, and this
-    # only reads projects.toml.
+    # only reads projects.toml. After, every listed project has its timeline.
     projects = {(p.source, p.name) for p in load_projects(REAL / "projects.toml")}
-    for t in load_all(REAL):
-        assert (t.source, t.project) in projects
+    if timelines := load_all(REAL):
+        assert {(t.source, t.project) for t in timelines} == projects

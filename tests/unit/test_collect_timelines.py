@@ -27,11 +27,11 @@ def fetcher(routes):
     return fetch
 
 
-def gh_release(tag, day, *, created=None, prerelease=False, draft=False, published=True):
+def gh_release(tag, day, *, created=None, prerelease=False, draft=False):
     return {
         "tag_name": tag,
         "created_at": f"{created or day}T08:00:00Z",
-        "published_at": f"{day}T09:00:00Z" if published else None,
+        "published_at": f"{day}T09:00:00Z",
         "prerelease": prerelease,
         "draft": draft,
     }
@@ -155,7 +155,8 @@ def test_main_writes_each_timeline_and_reports_failures(tmp_path, capsys, monkey
     mcp = load(tmp_path / "pypi" / "mcp.jsonl")
     assert (mcp.collected_at, mcp.latest_at_collection) == (NOW, "2.3.0")
     # The rules give what PyPI called the latest on the day it was recorded.
-    assert latest_on(mcp, date(2026, 10, 14)) == "2.3.0" and problems(mcp) == []
+    assert latest_on(mcp, date(2026, 10, 14)) == "2.3.0"
+    assert problems(mcp) == ["first release on 2024-11-20, after the replay starts"]
     lines = (tmp_path / "pypi" / "mcp.jsonl").read_text().splitlines()
     assert json.loads(lines[0])["script"] == collect_timelines.SCRIPT_VERSION
     published = [json.loads(line)["published"] for line in lines[1:]]

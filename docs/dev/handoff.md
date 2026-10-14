@@ -13,12 +13,13 @@ Where the work stands. Each session's last PR overwrites this file (CLAUDE.md); 
 
 1. Add `deps-approved` to the M5a PR (`packaging` in the `eval` group).
 2. Cut `projects.toml` to about 50 + 20 and label each kept project's volatility while cutting, before collecting.
-3. On the Mac: `uv run python -m eval.replay.collect_timelines` (with `GITHUB_TOKEN` if set), then commit `eval/data/timelines/` to the M5a branch. Look at its `check:` lines.
+3. On the Mac, with `GITHUB_TOKEN` set (60 requests an hour without it is too few): `uv run python -m eval.replay.collect_timelines`, then commit `eval/data/timelines/` to the M5a branch.
+4. Read its `check:` lines. For a GitHub repository with days when the release created last was not the one published last, choose: cut it, keep the rule, or order by publication (D11).
 
 ## Next session: start here
 
 1. Check #25 and the M5a PR. Once the data is in, fill the data card's "Collected" line (counts, date, `check:` lines) and tick M5a's timeline and labeling items.
-2. Then M6: the replay over the timelines, with the baseline policies. Every eval also runs on `eval/data/smoke/` in CI; never fill a label.
+2. Then M6: the replay over the timelines, with the baseline policies. Parse each PyPI version once at load (`latest_on()` parses on every call). Every eval also runs on `eval/data/smoke/` in CI; never fill a label.
 
 ## Notes for later milestones
 

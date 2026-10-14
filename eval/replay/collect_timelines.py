@@ -24,7 +24,14 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from eval.replay.timelines import Project, load, load_projects, problems
+from eval.replay.timelines import (
+    Project,
+    load,
+    load_projects,
+    parse_utc,
+    problems,
+    utc_text,
+)
 from shelflife.verifiers import Fetch, FetchError, http_get
 
 SCRIPT_VERSION = "t1"
@@ -41,7 +48,7 @@ def collect_pypi(name: str, fetch: Fetch) -> tuple[str, str | None, list[dict[st
     releases = [
         {
             "version": version,
-            "published": min(_iso(f["upload_time_iso_8601"]) for f in files),
+            "published": utc_text(min(parse_utc(f["upload_time_iso_8601"]) for f in files)),
             "yanked": all(f.get("yanked", False) for f in files),
         }
         for version, files in data["releases"].items()
@@ -53,8 +60,8 @@ def collect_pypi(name: str, fetch: Fetch) -> tuple[str, str | None, list[dict[st
 def collect_github(
     repo: str, fetch: Fetch, token: str | None
 ) -> tuple[str, str | None, list[dict[str, Any]]]:
-    """(url, latest, releases) from GitHub's REST API, page by page. Drafts and releases
-    never published are left out."""
+    """(url, latest, releases) from GitHub's REST API, page by page. Drafts are left out
+    (a token with push access would list them)."""
     headers = GITHUB_HEADERS | ({"Authorization": f"Bearer {token}"} if token else {})
     base = f"https://api.github.com/repos/{repo}/releases"
     releases = []
@@ -63,12 +70,12 @@ def collect_github(
         releases += [
             {
                 "version": r["tag_name"],
-                "published": _iso(r["published_at"]),
-                "created": _iso(r["created_at"]),
+                "published": utc_text(parse_utc(r["published_at"])),
+                "created": utc_text(parse_utc(r["created_at"])),
                 "prerelease": bool(r["prerelease"]),
             }
             for r in batch
-            if not r.get("draft") and r.get("published_at")
+            if not r["draft"]
         ]
         if len(batch) < PER_PAGE:
             break
@@ -94,7 +101,7 @@ def write(
         "source": project.source,
         "project": project.name,
         "url": url,
-        "collected_at": now.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "collected_at": utc_text(now),
         "latest_at_collection": latest,
         "script": SCRIPT_VERSION,
     }
@@ -140,14 +147,6 @@ def main(
         for problem in problems(load(path)):
             print(f"  check: {problem}")
     return 1 if failed else 0
-
-
-def _iso(text: str) -> str:
-    """A source's timestamp as UTC to the second ("2024-11-25T20:41:56Z")."""
-    moment = datetime.fromisoformat(text)
-    if moment.tzinfo is None:
-        raise ValueError(f"time without a time zone: {text!r}")
-    return moment.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 if __name__ == "__main__":

@@ -103,29 +103,52 @@ def changes(timeline: Timeline, start: date, end: date) -> list[tuple[date, str 
     return found
 
 
-def split_of(day: date) -> str | None:
-    """ "dev", "test", or None for a day outside both."""
-    for name, (first, last) in (("dev", DEV), ("test", TEST)):
-        if first <= day <= last:
-            return name
-    return None
-
-
 def problems(timeline: Timeline) -> list[str]:
-    """What does not add up: the rules disagree with what the source called latest when
-    it was collected (a GitHub release marked latest by hand, a version PEP 440 cannot
-    read), or GitHub tags that look like several packages' (a monorepo)."""
+    """What the collector reports for the maintainer to look at:
+    - the rules disagree with what the source called latest when it was collected (a
+      version PEP 440 cannot read, a GitHub release marked latest by hand);
+    - the first release comes after the replay starts (a young project, or a release
+      list cut short);
+    - GitHub tags with several prefixes (a monorepo's per-package tags);
+    - GitHub days in the replay when the release created last, which the rule picks, is
+      not the one published last. GitHub marks a newly published release latest by
+      default (`make_latest`), so on those days a backport may have been the latest.
+    """
     found = []
     ours = latest_on(timeline, timeline.collected_at.date())
     if ours != timeline.latest_at_collection:
         found.append(
             f"latest by our rules is {ours}, the source said {timeline.latest_at_collection}"
         )
+    if timeline.releases and (first := min(r.published for r in timeline.releases)).date() > DEV[0]:
+        found.append(f"first release on {first.date()}, after the replay starts")
     if timeline.source == "github":
         prefixes = {_tag_prefix(r.version) for r in timeline.releases}
         if len(prefixes) > 1:
             found.append(f"tags with several prefixes (per-package tags?): {sorted(prefixes)[:5]}")
+        disputed = [
+            day
+            for day in _publish_days(timeline)
+            if _published_last(timeline, day) != latest_on(timeline, day)
+        ]
+        if disputed:
+            found.append(
+                f"{len(disputed)} days when the release created last was not the one published"
+                f" last, first {disputed[0]}: GitHub may have shown the other as latest"
+            )
     return found
+
+
+def _publish_days(timeline: Timeline) -> list[date]:
+    """The days in the replay (DEV to TEST) on which a release was published."""
+    days = {r.published.date() for r in timeline.releases}
+    return sorted(d for d in days if DEV[0] <= d <= TEST[1])
+
+
+def _published_last(timeline: Timeline, day: date) -> str | None:
+    end = datetime.combine(day, time.max, UTC)
+    stable = [r for r in timeline.releases if r.published <= end and not r.prerelease]
+    return max(stable, key=lambda r: r.published).version if stable else None
 
 
 def _tag_prefix(tag: str) -> str:
@@ -149,7 +172,8 @@ def load_projects(path: Path) -> list[Project]:
                 raise ValueError(f"{path}: not a {source} name: {name!r}")
             if label not in ("", *LABELS):
                 raise ValueError(f"{path}: {name}: volatility must be one of {LABELS} or empty")
-            key = (source, re.sub(r"[-_.]+", "-", name.lower()))  # PEP 503 for PyPI
+            folded = re.sub(r"[-_.]+", "-", name.lower()) if source == "pypi" else name.lower()
+            key = (source, folded)  # PyPI names compare under PEP 503, GitHub's ignore case
             if key in seen:
                 raise ValueError(f"{path}: {name} is listed twice")
             seen.add(key)
@@ -166,17 +190,17 @@ def load(path: Path) -> Timeline:
         releases = tuple(
             Release(
                 version=row["version"],
-                published=_utc(row["published"]),
+                published=parse_utc(row["published"]),
                 yanked=bool(row.get("yanked", False)),
                 prerelease=bool(row.get("prerelease", False)),
-                created=_utc(row["created"]) if row.get("created") else None,
+                created=parse_utc(row["created"]) if row.get("created") else None,
             )
             for row in rows
         )
         return Timeline(
             header["source"],
             header["project"],
-            _utc(header["collected_at"]),
+            parse_utc(header["collected_at"]),
             header["latest_at_collection"],
             releases,
         )
@@ -188,7 +212,13 @@ def load_all(folder: Path) -> list[Timeline]:
     return [load(p) for p in sorted(folder.glob("*/*.jsonl"))]
 
 
-def _utc(text: str) -> datetime:
+def utc_text(moment: datetime) -> str:
+    """A time as the timeline files write it: UTC to the second ("2024-11-25T20:41:56Z")."""
+    return moment.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def parse_utc(text: str) -> datetime:
+    """A source's or a file's ISO time as UTC; ValueError without a time zone."""
     moment = datetime.fromisoformat(text)
     if moment.tzinfo is None:
         raise ValueError(f"time without a time zone: {text!r}")
