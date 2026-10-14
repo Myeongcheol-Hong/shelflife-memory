@@ -53,7 +53,8 @@ The README names these projects openly.
       -> remember: decision + supporting claim ("Chatbox Pro costs $19.99/month", source URL, fast)
 
 (Jan) Me: "Which multi-LLM app did we pick?"
-      -> recall: the supporting claim is past its check date -> re-check the pricing page -> changed
+      -> recall: the supporting claim is past its check date -> verify re-checks the pricing page -> changed
+         (from M4, recall can re-check by itself with SHELFLIFE_RECALL_VERIFY=auto; it is off by default)
       Claude: "In October you picked Chatbox. The reason was 'Pro is $19.99/month',
                which is now $24.99 (checked today, source link). Want to revisit the decision?"
       (The price change is a made-up example.)
@@ -174,6 +175,8 @@ CREATE TABLE checks (
 CREATE VIRTUAL TABLE claims_fts USING fts5(text, subject, content='claims', tokenize='trigram');
 ```
 
+Schema v2 (D10) adds the judgment columns to `checks`. Opening a v1 file migrates it after copying it to `<db>.bak-v1`, a one-way door; the upgrade is reported on stderr and once in the next tool result.
+
 Search works for Korean (D8). The trigram index matches substrings, so a particle fused onto a word ("Chatbox로") does not hide it. Query words shorter than 3 characters, common in Korean, are matched with LIKE. A query word that mixes Latin letters and Hangul is split where the scripts meet, and a common particle there is dropped. Results are ranked by the number of query words matched, then bm25.
 
 ### 5.2 MCP tools
@@ -185,7 +188,7 @@ Search works for Korean (D8). The trigram index matches substrings, so a particl
 | `due` | days? | Returns `{"due", "changed", "needs_check_method"}` (D9): claims whose next check is due (within `days`), each with its last check; claims a check found changed, each with that check; world facts with no check method, except those whose `none` the caller set on purpose (D10). Decisions to revisit join in M4 |
 | `verify` | claim_id | Checks a claim now. pypi and github_release: the rule-based verifier compares the value, the check is recorded, and it returns `{"claim", "check"}`. The claim keeps its value; `changed` sets its status, and `next_check_at` follows D9. web_page: it fetches the page, selects the relevant section and returns `{"claim", "check": null, "judge": {"prompt_version", "prompt", "url", "section"}}`; Claude judges in the conversation and stores the result with `record_check` (D4, D10). A failed fetch is recorded as `error` |
 | `forget` | claim_id | Marks the claim `retired` (history kept, nothing deleted) and returns `{"claim"}`. Forgetting a retired claim again is not an error |
-| `record_check` | claim_id, result, new_value?, quote?, reason? | Stores a web_page judgment Claude made in the conversation (D4 (b)) from the section `verify` returned. `result` is same, changed or cannot_tell. Before anything is stored, code checks the quote against the page text `verify` fetched, which the server holds for about 30 minutes (otherwise: call `verify` again). `cannot_tell` needs no quote and may give a short reason. Rules in 5.3 and D10 |
+| `record_check` | claim_id, result, new_value?, quote?, reason? | Stores a web_page judgment Claude made in the conversation (D4 (b)) from the section `verify` returned. `result` is same, changed or cannot_tell. Before anything is stored, code checks the quote against the page text `verify` fetched, which the server holds for about 30 minutes (otherwise: call `verify` again). `cannot_tell` needs no quote and may give a short reason. Returns `{"claim", "check"}` as `verify` does; a check shows its `reason` wherever it appears, `due` included. Rules in 5.3 and D10 |
 
 Tool descriptions say when to use each tool and when not to. Claude calls `remember` only when the user asks; it may offer, but waits for the user's confirmation (D3).
 
@@ -200,7 +203,7 @@ Under D4 and D10, `verify` does steps 1 and 2 and returns the section with the v
 
 - Quotes are matched against the extracted text of step 1, not the raw HTML. The quote and the page text go through the same `normalize()`: invisible format characters removed, Unicode NFC, each run of whitespace as one space. That keeps every word as written; removing format characters such as zero-width joiners can only change how some emoji and scripts render.
 - The quote is at least about 20 characters and 3 words, appears exactly once on the page, and lies inside the section `verify` returned.
-- `same` needs the claim's value inside the quote. `changed` needs `new_value` inside the quote and different from the claim's value. This value check folds dashes and quote marks and numbers (60% = 60.0%, but a version such as 2.3.0 is not folded), and matches money amounts with their currency ($300 = 300 USD = USD 300 = 300달러). Values are compared after folding, so "300 USD" is no change from "$300". Case is kept, and a value is not found inside a longer number or Latin word ("$30" is not in "$300").
+- `same` needs the claim's value inside the quote. `changed` needs `new_value` inside the quote and different from the claim's value. This value check folds dashes and quote marks and numbers (60% = 60.0%, but a version such as 2.3.0 is not folded), and matches money amounts with their currency ($300 = 300 USD = USD 300 = 300달러). Values are compared after folding, so "300 USD" is no change from "$300". Case is ignored (D10 follow-up 9). A value is not found inside a longer number or word on the page, even where the quote cuts one off ("$30" is not in "$300", "지원" is not in "미지원"), and a `new_value` that is only part of the claim's value is refused.
 - A claim without a value gets the quote rules only, but a `new_value` given with `changed` must still appear in the quote (D10).
 
 `cannot_tell` needs no quote. A failed fetch is recorded by the server as `error`.
@@ -221,7 +224,7 @@ The user decides what to remember and gives the claim sentence (D2, D3). When Cl
    - The check_target exists (PyPI package, GitHub repo, URL responds)
    - **Verify right after write returns `same`**: if a just-written claim verifies as changed or cannot_tell, either the claim or the verifier is wrong
    - Metric: write integrity rate (share of claims passing all four)
-   - How they run (D10): pure functions over `remember`-shaped records, so the M8 write eval runs them without a database, plus a read-only CLI (`shelflife-memory check-writes FILE`) that writes one JSON line per claim and check; never inside `remember`. Check 3 fails only on HTTP 404 or 410; a 403, 429, 5xx or network error is reported as blocked. For `web_page`, check 4 needs a judgment and is left out of the rate until M5. The report gives pass, fail and skip counts per check, and the rate is over claims where all four checks applied
+   - How they run (D10): pure functions over `remember`-shaped records, so the M8 write eval runs them without a database, plus a read-only CLI (`shelflife-memory check-writes FILE`) that writes one JSON line per claim and check; never inside `remember`. Check 3 fails on HTTP 404 or 410 and on a malformed check_target; blocked is only for network or access problems, such as a 403, 429, 5xx or network error. For `web_page`, check 4 needs a judgment and is left out of the rate until M5. The report gives pass, fail and skip counts per check. In the rate, a claim with any failed check counts as failing, one that passed all four as passing, and the rest are left out
 2. **Labeled set (small, hand-made)**
    - 40 items from my own research conversations (certifications, multi-LLM apps, memory frameworks; no employer data). An item is one sentence I gave, plus the surrounding turn and the source URL if any (D2). The gold labels are the fields Claude should fill: kind, subject/attribute/value, volatility, check_method/check_target, observed_at and source
    - Metrics: per-field accuracy for the given sentences, volatility confusion matrix. Recall (missed claims) and precision (invented or unneeded claims) measure extraction, which is a stretch goal under D2

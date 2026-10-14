@@ -232,6 +232,8 @@ def test_query_words_drop_each_listed_particle(particle):
     ("word", "kept"),
     [
         ("학교으로", "학교"),  # the longest particle first, not "학교으"
+        ("앞으로", "앞으로"),  # 으로 would leave 1 character, so nothing is dropped
+        ("방법으로", "방법"),
         ("속도", "속도"),  # only 1 character would remain
         ("회의", "회의"),
         ("에서", "에서"),

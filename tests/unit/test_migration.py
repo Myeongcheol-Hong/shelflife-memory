@@ -4,8 +4,10 @@ import sqlite3
 from contextlib import closing
 
 import pytest
+from mcp import Client
 
 from shelflife.models import CheckResult
+from shelflife.server import build_server
 from shelflife.store import Store
 
 # The v1 schema as main shipped it before schema v2, copied verbatim.
@@ -136,7 +138,7 @@ def test_a_v1_file_is_backed_up_then_migrated(v1_file, clock, capsys):
         assert copy.execute("SELECT id FROM checks").fetchall() == [("k1",)]
     assert not backup.with_name("shelflife.db.bak-v1-wal").exists()
     err = capsys.readouterr().err
-    assert f"upgraded {v1_file} to schema v2; the v1 file is saved as {backup}" in err
+    assert f"database upgraded to schema v2; the v1 file is saved as {backup}" in err
 
 
 def test_a_migrated_file_is_not_migrated_again(v1_file, clock, capsys):
@@ -173,3 +175,22 @@ def test_a_process_that_waited_for_the_lock_finds_v2_and_stops(v1_file, clock, c
         store._migrate_v1()  # what the second process runs once it has the lock
         assert store._conn.execute("PRAGMA user_version").fetchone()[0] == 2
     assert capsys.readouterr().err == ""
+
+
+@pytest.mark.anyio
+async def test_the_next_tool_result_carries_the_upgrade_notice_once(v1_file, clock):
+    # Claude tells the user where the backup is (D10 follow-up 15).
+    backup = v1_file.with_name("shelflife.db.bak-v1")
+    with Store(v1_file, now=clock) as store:
+        async with Client(build_server(store, now=clock)) as client:
+            first = (await client.call_tool("due", {})).structured_content
+            second = (await client.call_tool("due", {})).structured_content
+            instructions = " ".join(client.instructions.split())
+    assert first["notice"] == f"database upgraded to schema v2; the v1 file is saved as {backup}"
+    assert "notice" not in second
+    assert "If a result has a notice, pass it on to the user." in instructions
+
+
+@pytest.fixture
+def anyio_backend():
+    return "asyncio"

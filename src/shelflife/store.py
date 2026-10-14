@@ -114,13 +114,14 @@ _LONGEST_FIRST = sorted(PARTICLES, key=len, reverse=True)
 def drop_particle(word: str) -> str:
     """Drop a trailing particle from a pure-Hangul word if at least 2 characters remain (D8).
 
-    "가격은" gives "가격" and "학교으로" gives "학교" (the longest particle is tried first),
-    but "속도" and "회의" stay. Any other word is returned as it is.
+    The longest particle that ends the word is the one dropped: "가격은" gives "가격" and
+    "학교으로" gives "학교", but "속도", "회의" and "앞으로" stay (not "앞으"). Any other word
+    is returned as it is.
     """
     if re.fullmatch(r"[\uac00-\ud7a3]+", word):
         for particle in _LONGEST_FIRST:
-            if word.endswith(particle) and len(word) - len(particle) >= 2:
-                return word[: -len(particle)]
+            if word.endswith(particle):
+                return word[: -len(particle)] if len(word) - len(particle) >= 2 else word
     return word
 
 
@@ -204,6 +205,7 @@ class Store:
         )
         self._conn.row_factory = sqlite3.Row
         self._path = str(path)
+        self._notice: str | None = None  # the schema upgrade, for the next tool result
         self._lock = threading.Lock()
         self._clock = now
         try:
@@ -273,10 +275,14 @@ class Store:
             for column in V2_COLUMNS:
                 self._conn.execute(f"ALTER TABLE checks ADD COLUMN {column} TEXT")
             self._conn.execute("PRAGMA user_version = 2")
-        print(
-            f"shelflife: upgraded {self._path} to schema v2; the v1 file is saved as {backup}",
-            file=sys.stderr,
-        )
+        self._notice = f"database upgraded to schema v2; the v1 file is saved as {backup}"
+        print(f"shelflife: {self._notice}", file=sys.stderr)
+
+    def take_notice(self) -> str | None:
+        """The schema upgrade notice, once: the server adds it to the next tool result."""
+        with self._lock:
+            notice, self._notice = self._notice, None
+            return notice
 
     def _now(self) -> datetime:
         now = self._clock()
