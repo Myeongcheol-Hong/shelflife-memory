@@ -27,6 +27,7 @@ CLAIMS_PER_PROJECT = 20
 QUESTION_RATES = {"2 a month": 2 / 30, "1 a week": 1 / 7, "1 a day": 1.0}  # per claim-day
 FIXED = (3, 7, 14, 30, 60, 90, 180)  # days, for the fixed-interval curve
 SESSION = 10  # claims made on one day, about as many projects, in the sessions scenario
+JITTERED = {"per-class": None, "fixed 7": 7, "fixed 30": 30}  # also run with jitter (D12)
 
 
 @dataclass(frozen=True)
@@ -184,10 +185,7 @@ def interval(days: int | None, jitter: bool = False) -> Policy:
 POLICIES: dict[str, Policy] = {"never": never, "every read": every_read, "oracle": oracle}
 POLICIES |= {f"fixed {n}": interval(n) for n in FIXED}
 POLICIES["per-class"] = interval(None)
-POLICIES |= {
-    f"{name} + jitter": interval(n, jitter=True)
-    for name, n in (("per-class", None), ("fixed 7", 7), ("fixed 30", 30))
-}
+POLICIES |= {f"{name} + jitter": interval(n, jitter=True) for name, n in JITTERED.items()}
 
 
 @dataclass
@@ -212,9 +210,8 @@ def outcome(claim: Claim, truth: Truth, checks: list[date]) -> Counts:
     """The claim's counts when checked on `checks`. A check adopts the latest of its day.
     The latest never returns to an earlier value (D12), so the stored value is stale on a
     day exactly when the latest changed since the creation or the last check."""
-    anchors, qs = [claim.created, *checks], claim.questions
-    c = Counts(claims=1, questions=len(qs), days=(claim.end - claim.created).days)
-    c.checks = len(checks)
+    anchors, qs = [claim.created, *checks], claim.questions  # both ascending
+    c = Counts(1, len(qs), days=(claim.end - claim.created).days, checks=len(checks))
     for k, anchor in enumerate(anchors):
         # From this read to the day before the next, the value is stale from the first
         # change on, and so is every answer then (a check runs before that day's questions).
@@ -256,6 +253,8 @@ def replay(
     project without one is refused."""
     if missing := [t.project for t in timelines if labels.get(t.project) not in LABELS]:
         raise ValueError(f"no volatility label for {missing[:3]}")
+    if scenario not in ("uniform", "sessions"):
+        raise ValueError(f"no scenario {scenario!r}")
     truths = {t.project: truth(t, split) for t in timelines}
     placed = {s: sessions(truths, split, s) for s in seeds} if scenario == "sessions" else {}
     rows = []
