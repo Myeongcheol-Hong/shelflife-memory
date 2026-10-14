@@ -8,6 +8,7 @@ pypi = [
 ]
 
 github = [
+  { name = "smoke-org/moved-tag", volatility = "" },
   { name = "smoke-org/out-of-order", volatility = "" },
   { name = "smoke-org/two-products", volatility = "", tag = '^v\d' },
 ]

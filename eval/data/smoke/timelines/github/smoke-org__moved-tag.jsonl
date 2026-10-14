@@ -1,0 +1,4 @@
+{"source": "github", "project": "smoke-org/moved-tag", "url": "https://api.github.com/repos/smoke-org/moved-tag/releases", "collected_at": "2026-09-30T12:00:00Z", "latest_at_collection": "v2.0.0", "script": "t1"}
+{"version": "v1.0.0", "published": "2023-10-01T09:00:00Z", "created": "2023-10-01T08:00:00Z", "prerelease": false}
+{"version": "v2.0.0", "published": "2024-03-01T09:00:00Z", "created": "2024-06-15T08:00:00Z", "prerelease": false}
+{"version": "v2.0.1", "published": "2024-05-01T09:00:00Z", "created": "2024-05-01T08:00:00Z", "prerelease": false}

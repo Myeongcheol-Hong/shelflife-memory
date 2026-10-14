@@ -19,6 +19,8 @@
 #   set by hand (the maintainer's cut, from each repository's last 100 releases and the
 #   collector's first run): there "the stable release created last" keeps jumping
 #   between lines, or is not what GitHub shows as latest.
+# - No repository whose created_at values moved after publishing so often that its past
+#   cannot be rebuilt (ollama, cut after an outside review; D11).
 # - Alphabetical, with no release counts, dates or guessed volatility.
 #
 # `tag` (GitHub only, optional) is a regular expression a release's tag must match
@@ -90,7 +92,6 @@ github = [
   { name = "cli/cli", volatility = "medium" },
   { name = "denoland/deno", volatility = "medium" },
   { name = "docker/compose", volatility = "medium" },
-  { name = "facebook/react", volatility = "medium", tag = '^v\d' },
   { name = "getzep/graphiti", volatility = "fast", tag = '^v\d' },
   { name = "gohugoio/hugo", volatility = "medium" },
   { name = "hashicorp/terraform", volatility = "fast" },
@@ -98,7 +99,6 @@ github = [
   { name = "jesseduffield/lazygit", volatility = "medium" },
   { name = "jqlang/jq", volatility = "slow" },
   { name = "microsoft/TypeScript", volatility = "slow", tag = '^v\d' },
-  { name = "ollama/ollama", volatility = "slow" },
   { name = "prettier/prettier", volatility = "slow" },
   { name = "rust-lang/rust", volatility = "medium" },
   { name = "sharkdp/bat", volatility = "fast" },
