@@ -1,0 +1,51 @@
+{
+ "run": "2026-10-14-baf3a2c",
+ "ran at": "2026-10-14T20:05:20+00:00",
+ "git sha": "baf3a2cdd42e070706b5b5bac6553e4feba91712",
+ "uncommitted changes": false,
+ "dataset sha256": "ae19668a67597c1581c0a22d438cb2be7a6ed1b4a1f7e6da3c2236dd0b96714a",
+ "python": "3.13.16",
+ "packaging": "26.3",
+ "decision": "D12",
+ "seeds": [
+  0,
+  1,
+  2,
+  3,
+  4
+ ],
+ "claims per project": 20,
+ "question rates per claim-day": {
+  "2 a month": 0.06666666666666667,
+  "1 a week": 0.14285714285714285,
+  "1 a day": 1.0
+ },
+ "session size": 10,
+ "splits": {
+  "dev": [
+   "2024-01-01",
+   "2024-12-31"
+  ],
+  "test": [
+   "2025-01-01",
+   "2026-09-30"
+  ]
+ },
+ "policies": [
+  "never",
+  "every read",
+  "oracle",
+  "fixed 3",
+  "fixed 7",
+  "fixed 14",
+  "fixed 30",
+  "fixed 60",
+  "fixed 90",
+  "fixed 180",
+  "per-class",
+  "per-class + jitter",
+  "fixed 7 + jitter",
+  "fixed 30 + jitter"
+ ],
+ "resamples": 2000
+}
