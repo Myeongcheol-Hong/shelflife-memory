@@ -14,10 +14,12 @@ from eval.replay.replay import (
     Counts,
     Row,
     Truth,
+    changes_per_year,
     claims,
     interval,
     outcome,
     replay,
+    sessions,
     stream,
     truth,
 )
@@ -111,6 +113,61 @@ def test_claims_start_on_the_first_day_with_a_latest_and_repeat_exactly():
 def test_replay_refuses_a_project_without_a_label():
     with pytest.raises(ValueError, match="no volatility label"):
         replay(SMOKE, SMOKE_LABELS | {"smoke-quiet": ""}, "dev", [0], WEEKLY)
+
+
+def test_sessions_make_days_of_ten_projects_each_spread_like_the_uniform_scenario():
+    truths = {f"p{i}": Truth((), (), "1.0") for i in range(29)}
+    truths["young"] = Truth((d(7, 1),), ("0.1",), None)  # a first release mid-split
+    placed = sessions(truths, "dev", seed=3)
+    assert placed == sessions(truths, "dev", seed=3) != sessions(truths, "dev", seed=4)
+    assert all(len(days) == 20 for days in placed.values())  # every claim placed
+    per_day = Counter(day for days in placed.values() for day in days)
+    assert all(n % 10 == 0 for n in per_day.values())  # 10 a session; two may share a day
+    assert min(placed["young"]) >= d(7, 1)
+    # Spread over its own window, not bunched after its first release: over 10 seeds, the
+    # first quarter of 2024-07-01 to 2024-12-31 holds no more than a quarter of its 200
+    # claims. Placing the fewest-placed project first would put 62 there.
+    early = [sum(day < d(8, 16) for day in sessions(truths, "dev", s)["young"]) for s in range(10)]
+    assert sum(early) <= 50
+
+
+def test_sessions_drop_a_claim_no_session_can_take():
+    truths = {f"p{i}": Truth((), (), "1.0") for i in range(11)}
+    truths["late"] = Truth((d(12, 20),), ("0.1",), None)  # a few sessions left in dev
+    placed = sessions(truths, "dev", seed=0)
+    # 24 sessions of 10 for 11 early projects: never more than 20 claims each.
+    assert all(len(placed[f"p{i}"]) == 20 for i in range(11))
+    assert 0 < len(placed["late"]) < 20  # at most one claim per session
+    assert sessions({"none": Truth((), (), None)}, "dev", seed=0) == {}
+
+
+def test_claims_take_the_placed_days_and_their_questions_come_after():
+    made = claims("x", "fast", Truth((), (), "1.0"), "dev", 0, 1.0, placed=[d(3, 1), d(12, 30)])
+    assert [c.created for c in made] == [d(3, 1), d(12, 30)]
+    assert [len(c.questions) for c in made] == [(SPLITS["dev"][1] - d(3, 1)).days, 1]
+
+
+def test_changes_per_year_leaves_out_a_first_release():
+    late = Truth((d(3, 1), d(6, 1)), ("0.1", "0.2"), None)
+    assert changes_per_year(late, "dev") == pytest.approx(1 / (306 / 365))
+    assert changes_per_year(Truth((d(1, 10), d(1, 20)), ("2", "3"), "1"), "dev") == pytest.approx(
+        2 / (366 / 365)  # 2024 is a leap year
+    )
+    assert changes_per_year(Truth((), (), None), "dev") == 0.0
+
+
+def test_peak_ci_resamples_projects_and_pairs_the_policies():
+    def row(seed, project, policy, *days):
+        return Row(seed, project, policy, Counts(claims=1), Counter(days))
+
+    rows = [row(0, "p", "x", d(1, 2), d(1, 2)), row(0, "q", "x", d(1, 2))]
+    rows += [row(0, "p", "y", d(1, 2)), row(0, "q", "y", d(1, 3))]
+    assert score.peak_ci(rows, "x", "dev", minus="x") == (0, 0)
+    assert score.peak_ci(rows, "x", "dev") == (2, 4)  # two q's give 2, two p's give 4
+    assert score.peak_ci(rows, "x", "dev", minus="y")[1] > 0
+    # With a second seed the peak is averaged over the seeds: two p's give (4 + 2) / 2.
+    rows += [row(1, "p", "x", d(1, 2)), row(1, "q", "x", d(1, 2))]
+    assert score.peak_ci(rows, "x", "dev") == (2, 3)
 
 
 @pytest.fixture(scope="module")
