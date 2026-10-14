@@ -196,11 +196,11 @@ Tool descriptions say when to use each tool and when not to. Claude calls `remem
 3. Get a structured judgment: same / changed (with new value) / cannot_tell, plus a **verbatim quote** as evidence for same and changed
 4. Check in code that the quote really appears on the page (blocks invented evidence)
 
-Under D4 and D10, `verify` does steps 1 and 2 and returns the section with the versioned judgment template. Claude makes the judgment in step 3 in the conversation and stores it with `record_check`. The eval harness reuses the same template, so 6.2 measures what runs in daily use. Step 4 runs in code, before anything is stored, for `same` and `changed`:
+Under D4 and D10, `verify` does steps 1 and 2 and returns the section with the versioned judgment template (`verifiers/judgment.py`; a test pins the template to its `PROMPT_VERSION`). Claude makes the judgment in step 3 in the conversation and stores it with `record_check`. The eval harness reuses the same template, so 6.2 measures what runs in daily use. Step 4 runs in code, before anything is stored, for `same` and `changed`:
 
 - Quotes are matched against the extracted text of step 1, not the raw HTML. The quote and the page text go through the same `normalize()`: invisible format characters removed, Unicode NFC, each run of whitespace as one space. That keeps every word as written; removing format characters such as zero-width joiners can only change how some emoji and scripts render.
 - The quote is at least about 20 characters and 3 words, appears exactly once on the page, and lies inside the section `verify` returned.
-- `same` needs the claim's value inside the quote. `changed` needs `new_value` inside the quote and different from the claim's value. This value check folds dashes and quote marks and numbers (60% = 60.0%, but a version such as 2.3.0 is not folded), and matches money amounts with their currency ($300 = 300 USD = USD 300 = 300달러). Values are compared after folding, so "300 USD" is no change from "$300".
+- `same` needs the claim's value inside the quote. `changed` needs `new_value` inside the quote and different from the claim's value. This value check folds dashes and quote marks and numbers (60% = 60.0%, but a version such as 2.3.0 is not folded), and matches money amounts with their currency ($300 = 300 USD = USD 300 = 300달러). Values are compared after folding, so "300 USD" is no change from "$300". Case is kept, and a value is not found inside a longer number or Latin word ("$30" is not in "$300").
 - A claim without a value gets the quote rules only, but a `new_value` given with `changed` must still appear in the quote (D10).
 
 `cannot_tell` needs no quote. A failed fetch is recorded by the server as `error`.
