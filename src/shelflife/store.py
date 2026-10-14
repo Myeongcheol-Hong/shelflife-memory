@@ -205,6 +205,7 @@ class Store:
         )
         self._conn.row_factory = sqlite3.Row
         self._path = str(path)
+        self._notice: str | None = None  # the schema upgrade, for the next tool result
         self._lock = threading.Lock()
         self._clock = now
         try:
@@ -274,10 +275,14 @@ class Store:
             for column in V2_COLUMNS:
                 self._conn.execute(f"ALTER TABLE checks ADD COLUMN {column} TEXT")
             self._conn.execute("PRAGMA user_version = 2")
-        print(
-            f"shelflife: upgraded {self._path} to schema v2; the v1 file is saved as {backup}",
-            file=sys.stderr,
-        )
+        self._notice = f"database upgraded to schema v2; the v1 file is saved as {backup}"
+        print(f"shelflife: {self._notice}", file=sys.stderr)
+
+    def take_notice(self) -> str | None:
+        """The schema upgrade notice, once: the server adds it to the next tool result."""
+        with self._lock:
+            notice, self._notice = self._notice, None
+            return notice
 
     def _now(self) -> datetime:
         now = self._clock()

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import inspect
 import threading
@@ -85,7 +86,16 @@ def build_server(
 
     def tool(fn: Callable[..., dict[str, Any]]) -> None:
         declared[fn.__name__] = set(inspect.signature(fn).parameters)
-        server.add_tool(fn)
+
+        # The first result after a schema upgrade carries a notice, so Claude tells the
+        # user where the backup is (D10 follow-up 15).
+        @functools.wraps(fn)
+        def with_notice(*args: Any, **kwargs: Any) -> dict[str, Any]:
+            result = fn(*args, **kwargs)
+            notice = store.take_notice()
+            return result | {"notice": notice} if notice else result
+
+        server.add_tool(with_notice)
 
     @tool
     def remember(
@@ -248,28 +258,32 @@ def build_server(
 
     def judge(claim: Claim) -> dict[str, Any]:
         """verify for a web_page claim (D10): fetch the page, select the section, hold the
-        page for record_check and return the judgment prompt. A failed fetch is recorded
-        as error."""
+        page for record_check and return the judgment prompt. A page that cannot be
+        fetched or decoded (a bad host name, an unusable charset) is recorded as error.
+        The fetch time is taken before the fetch, so a check another process records
+        while the page loads is newer than it."""
+        fetched_at = now()
         try:
             page = get_page(claim.check_target or "")
-        except FetchError as e:
+            blocks = extract(page.text())
+            section = select_section(
+                blocks,
+                text=claim.text,
+                subject=claim.subject,
+                attribute=claim.attribute,
+                value=claim.value,
+            )
+            core = normalize(" ".join(blocks[i].text for i in section.core))
+            section_sha256 = hashlib.sha256(core.encode()).hexdigest()
+        except (FetchError, UnicodeError) as e:
             claim, check = store.add_check(claim.id, CheckResult.ERROR, evidence=str(e))
             return {"claim": claim.to_dict(), "check": check.to_dict()}
-        blocks = extract(page.text())
-        section = select_section(
-            blocks,
-            text=claim.text,
-            subject=claim.subject,
-            attribute=claim.attribute,
-            value=claim.value,
-        )
-        core = normalize(" ".join(blocks[i].text for i in section.core))
         fetched = _Fetched(
-            at=now(),
+            at=fetched_at,
             page=normalize(page_text(blocks)),
             section=section,
             page_sha256=page.sha256,
-            section_sha256=hashlib.sha256(core.encode()).hexdigest(),
+            section_sha256=section_sha256,
         )
         with held_lock:
             for stale in [k for k, v in held.items() if fetched.at - v.at > HOLD]:
@@ -282,8 +296,9 @@ def build_server(
                 "prompt_version": judgment.PROMPT_VERSION,
                 "prompt": judgment.render(claim, section, page.final_url),
                 "url": page.final_url,
+                # The heading is page text, so it is shown only inside the prompt's
+                # fence (D10 follow-up 12).
                 "section": {
-                    "heading": section.heading,
                     "start": section.start,
                     "end": section.end,
                     "score": section.score,

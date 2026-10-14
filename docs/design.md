@@ -175,6 +175,8 @@ CREATE TABLE checks (
 CREATE VIRTUAL TABLE claims_fts USING fts5(text, subject, content='claims', tokenize='trigram');
 ```
 
+Schema v2 (D10) adds the judgment columns to `checks`. Opening a v1 file migrates it after copying it to `<db>.bak-v1`, a one-way door; the upgrade is reported on stderr and once in the next tool result.
+
 Search works for Korean (D8). The trigram index matches substrings, so a particle fused onto a word ("Chatbox로") does not hide it. Query words shorter than 3 characters, common in Korean, are matched with LIKE. A query word that mixes Latin letters and Hangul is split where the scripts meet, and a common particle there is dropped. Results are ranked by the number of query words matched, then bm25.
 
 ### 5.2 MCP tools
@@ -186,7 +188,7 @@ Search works for Korean (D8). The trigram index matches substrings, so a particl
 | `due` | days? | Returns `{"due", "changed", "needs_check_method"}` (D9): claims whose next check is due (within `days`), each with its last check; claims a check found changed, each with that check; world facts with no check method, except those whose `none` the caller set on purpose (D10). Decisions to revisit join in M4 |
 | `verify` | claim_id | Checks a claim now. pypi and github_release: the rule-based verifier compares the value, the check is recorded, and it returns `{"claim", "check"}`. The claim keeps its value; `changed` sets its status, and `next_check_at` follows D9. web_page: it fetches the page, selects the relevant section and returns `{"claim", "check": null, "judge": {"prompt_version", "prompt", "url", "section"}}`; Claude judges in the conversation and stores the result with `record_check` (D4, D10). A failed fetch is recorded as `error` |
 | `forget` | claim_id | Marks the claim `retired` (history kept, nothing deleted) and returns `{"claim"}`. Forgetting a retired claim again is not an error |
-| `record_check` | claim_id, result, new_value?, quote?, reason? | Stores a web_page judgment Claude made in the conversation (D4 (b)) from the section `verify` returned. `result` is same, changed or cannot_tell. Before anything is stored, code checks the quote against the page text `verify` fetched, which the server holds for about 30 minutes (otherwise: call `verify` again). `cannot_tell` needs no quote and may give a short reason. Rules in 5.3 and D10 |
+| `record_check` | claim_id, result, new_value?, quote?, reason? | Stores a web_page judgment Claude made in the conversation (D4 (b)) from the section `verify` returned. `result` is same, changed or cannot_tell. Before anything is stored, code checks the quote against the page text `verify` fetched, which the server holds for about 30 minutes (otherwise: call `verify` again). `cannot_tell` needs no quote and may give a short reason. Returns `{"claim", "check"}` as `verify` does; a check shows its `reason` wherever it appears, `due` included. Rules in 5.3 and D10 |
 
 Tool descriptions say when to use each tool and when not to. Claude calls `remember` only when the user asks; it may offer, but waits for the user's confirmation (D3).
 

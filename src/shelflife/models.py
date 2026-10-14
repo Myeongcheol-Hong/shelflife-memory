@@ -175,6 +175,7 @@ class Check:
             "old_value": self.old_value,
             "new_value": self.new_value,
             "evidence": self.evidence,
+            "reason": self.reason,  # why cannot_tell, if Claude said (D10 follow-up 14)
             "checked_at": self.checked_at.isoformat(),
         }
 
