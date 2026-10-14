@@ -1,0 +1,108 @@
+# Candidate projects for the M5a release timelines (D11).
+#
+# The maintainer cuts this list to about 50 PyPI projects and 20 GitHub repositories and
+# gives each kept project a volatility label (fast, medium or slow) while cutting, before
+# any data is collected, so the labels stay blind to the data. The collector refuses to
+# run while a label is empty. The labels are the maintainer's: Claude never fills them.
+#
+# How the candidates were chosen:
+# - Fields that release at very different paces: AI and LLM tooling, web frameworks and
+#   clients, data and science libraries, developer tools, a cloud SDK, long-standing
+#   utilities, and server and command-line software.
+# - PyPI projects first published before 2024, so the latest version on the replay's
+#   first day is known; and the projects the maintainer's own memory checks (mcp,
+#   claude-agent-sdk, Hindsight, Graphiti), whatever their age.
+# - GitHub repositories that publish GitHub Releases, which the github_release verifier
+#   reads, under one tag series: no monorepos whose releases are per-package tags. No
+#   repository is the same project as a PyPI entry.
+# - No repository that patches several release lines in parallel, or whose latest is
+#   set by hand (the maintainer's cut, from each repository's last 100 releases and the
+#   collector's first run): there "the stable release created last" keeps jumping
+#   between lines, or is not what GitHub shows as latest.
+# - Alphabetical, with no release counts, dates or guessed volatility.
+#
+# `tag` (GitHub only, optional) is a regular expression a release's tag must match
+# (re.search), for a repository that also publishes releases of other products: the
+# collector and latest_on() ignore every release whose tag does not match. Use '^v\d'
+# (or '^\d' for tags without a "v"), not '^v', which also matches "vscode-typescript/".
+#
+# The collector warns about tags with several prefixes, about a latest release that our
+# rules disagree with, and about a latest release outside the tag pattern.
+
+pypi = [
+  { name = "aiohttp", volatility = "medium" },
+  { name = "anthropic", volatility = "fast" },
+  { name = "attrs", volatility = "slow" },
+  { name = "boto3", volatility = "slow" },
+  { name = "certifi", volatility = "slow" },
+  { name = "charset-normalizer", volatility = "slow" },
+  { name = "chromadb", volatility = "medium" },
+  { name = "claude-agent-sdk", volatility = "medium" },
+  { name = "click", volatility = "medium" },
+  { name = "datasets", volatility = "slow" },
+  { name = "django", volatility = "slow" },
+  { name = "duckdb", volatility = "medium" },
+  { name = "fastapi", volatility = "medium" },
+  { name = "flask", volatility = "slow" },
+  { name = "grpcio", volatility = "slow" },
+  { name = "httpx", volatility = "slow" },
+  { name = "huggingface-hub", volatility = "slow" },
+  { name = "instructor", volatility = "slow" },
+  { name = "jinja2", volatility = "slow" },
+  { name = "litellm", volatility = "fast" },
+  { name = "llama-index", volatility = "medium" },
+  { name = "matplotlib", volatility = "medium" },
+  { name = "mcp", volatility = "fast" },
+  { name = "mypy", volatility = "slow" },
+  { name = "numpy", volatility = "medium" },
+  { name = "openai", volatility = "fast" },
+  { name = "pandas", volatility = "medium" },
+  { name = "pip", volatility = "fast" },
+  { name = "poetry", volatility = "medium" },
+  { name = "polars", volatility = "medium" },
+  { name = "pre-commit", volatility = "slow" },
+  { name = "pyarrow", volatility = "slow" },
+  { name = "pydantic", volatility = "slow" },
+  { name = "pytest", volatility = "medium" },
+  { name = "python-dateutil", volatility = "slow" },
+  { name = "pytz", volatility = "slow" },
+  { name = "pyyaml", volatility = "slow" },
+  { name = "qdrant-client", volatility = "medium" },
+  { name = "redis", volatility = "medium" },
+  { name = "requests", volatility = "slow" },
+  { name = "ruff", volatility = "medium" },
+  { name = "scikit-learn", volatility = "medium" },
+  { name = "scipy", volatility = "medium" },
+  { name = "sentence-transformers", volatility = "medium" },
+  { name = "setuptools", volatility = "slow" },
+  { name = "six", volatility = "slow" },
+  { name = "sqlalchemy", volatility = "slow" },
+  { name = "starlette", volatility = "medium" },
+  { name = "tiktoken", volatility = "slow" },
+  { name = "tokenizers", volatility = "medium" },
+  { name = "transformers", volatility = "medium" },
+  { name = "uvicorn", volatility = "slow" },
+]
+
+github = [
+  { name = "BurntSushi/ripgrep", volatility = "medium" },
+  { name = "caddyserver/caddy", volatility = "medium" },
+  { name = "cli/cli", volatility = "medium" },
+  { name = "denoland/deno", volatility = "medium" },
+  { name = "docker/compose", volatility = "medium" },
+  { name = "facebook/react", volatility = "medium", tag = '^v\d' },
+  { name = "getzep/graphiti", volatility = "fast", tag = '^v\d' },
+  { name = "gohugoio/hugo", volatility = "medium" },
+  { name = "hashicorp/terraform", volatility = "fast" },
+  { name = "home-assistant/core", volatility = "fast", tag = '^\d' },
+  { name = "jesseduffield/lazygit", volatility = "medium" },
+  { name = "jqlang/jq", volatility = "slow" },
+  { name = "microsoft/TypeScript", volatility = "slow", tag = '^v\d' },
+  { name = "ollama/ollama", volatility = "slow" },
+  { name = "prettier/prettier", volatility = "slow" },
+  { name = "rust-lang/rust", volatility = "medium" },
+  { name = "sharkdp/bat", volatility = "fast" },
+  { name = "starship/starship", volatility = "fast" },
+  { name = "vectorize-io/hindsight", volatility = "fast" },
+  { name = "zed-industries/zed", volatility = "medium" },
+]

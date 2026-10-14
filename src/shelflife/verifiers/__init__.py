@@ -35,6 +35,10 @@ class FetchError(Exception):
         self.status = status  # the HTTP status, for an HTTP error
 
 
+class TooLarge(FetchError):
+    """http_get's response body was over its size cap; a smaller request may fit."""
+
+
 @dataclass(frozen=True)
 class Outcome:
     result: CheckResult
@@ -63,7 +67,7 @@ def http_get(url: str, headers: Mapping[str, str]) -> bytes:
     except (OSError, http.client.HTTPException) as e:  # URLError and timeouts are OSErrors
         raise FetchError(f"cannot reach {url}: {e}") from None
     if len(body) > limit:
-        raise FetchError(f"response larger than {limit // 2**20} MB from {url}")
+        raise TooLarge(f"response larger than {limit // 2**20} MB from {url}")
     return body
 
 

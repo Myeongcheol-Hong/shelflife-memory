@@ -1,0 +1,8 @@
+{"source": "github", "project": "smoke-org/two-products", "url": "https://api.github.com/repos/smoke-org/two-products/releases", "collected_at": "2026-09-30T12:00:00Z", "latest_at_collection": "mcp-v1.1.0", "script": "t1", "tag": "^v\\d"}
+{"version": "v1.0.0", "published": "2023-11-01T09:00:00Z", "created": "2023-11-01T08:00:00Z", "prerelease": false}
+{"version": "v1.1.0", "published": "2024-03-01T09:00:00Z", "created": "2024-03-01T08:00:00Z", "prerelease": false}
+{"version": "mcp-v1.0.0", "published": "2024-06-01T09:00:00Z", "created": "2024-06-01T08:00:00Z", "prerelease": false}
+{"version": "v1.2.0", "published": "2024-09-01T09:00:00Z", "created": "2024-09-01T08:00:00Z", "prerelease": false}
+{"version": "vscode-ext/v2.0.0", "published": "2025-02-01T09:00:00Z", "created": "2025-02-01T08:00:00Z", "prerelease": false}
+{"version": "v1.3.0", "published": "2025-05-01T09:00:00Z", "created": "2025-05-01T08:00:00Z", "prerelease": false}
+{"version": "mcp-v1.1.0", "published": "2026-09-01T09:00:00Z", "created": "2026-09-01T08:00:00Z", "prerelease": false}

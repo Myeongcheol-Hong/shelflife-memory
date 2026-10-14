@@ -1,0 +1,13 @@
+# The smoke corpus: made-up projects, each built for an edge case of the "latest" rules
+# (eval/data/README.md). Volatility is left for the maintainer, as in the real list.
+
+pypi = [
+  { name = "smoke-backport", volatility = "" },
+  { name = "smoke-prerelease-only", volatility = "" },
+  { name = "smoke-quiet", volatility = "" },
+]
+
+github = [
+  { name = "smoke-org/out-of-order", volatility = "" },
+  { name = "smoke-org/two-products", volatility = "", tag = '^v\d' },
+]

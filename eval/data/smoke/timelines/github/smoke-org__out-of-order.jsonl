@@ -1,0 +1,6 @@
+{"source": "github", "project": "smoke-org/out-of-order", "url": "https://api.github.com/repos/smoke-org/out-of-order/releases", "collected_at": "2026-09-30T12:00:00Z", "latest_at_collection": "v1.1.0", "script": "t1"}
+{"version": "v0.9.0", "published": "2023-10-01T09:00:00Z", "created": "2023-10-01T08:00:00Z", "prerelease": false}
+{"version": "v1.0.0", "published": "2024-01-10T09:00:00Z", "created": "2024-01-10T08:00:00Z", "prerelease": false}
+{"version": "v0.9.1", "published": "2024-04-02T09:00:00Z", "created": "2023-11-20T08:00:00Z", "prerelease": false}
+{"version": "v1.1.0-beta.1", "published": "2024-10-01T09:00:00Z", "created": "2024-10-01T08:00:00Z", "prerelease": true}
+{"version": "v1.1.0", "published": "2025-03-05T09:00:00Z", "created": "2025-03-03T08:00:00Z", "prerelease": false}

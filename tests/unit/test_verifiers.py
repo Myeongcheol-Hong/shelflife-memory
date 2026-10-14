@@ -8,6 +8,7 @@ from shelflife import verifiers
 from shelflife.models import CheckResult
 from shelflife.verifiers import (
     FetchError,
+    TooLarge,
     compare_version,
     github_release,
     http_get,
@@ -274,7 +275,7 @@ def test_http_get_refuses_a_body_over_the_limit(monkeypatch):
     opened(monkeypatch, Response(b"x" * 12))
     assert http_get("https://example.org/x", {}) == b"x" * 12
     opened(monkeypatch, Response(b"x" * 13))
-    with pytest.raises(FetchError, match="larger than"):
+    with pytest.raises(TooLarge, match="larger than"):
         http_get("https://example.org/x", {})
 
 
