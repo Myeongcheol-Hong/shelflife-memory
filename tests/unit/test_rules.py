@@ -113,7 +113,7 @@ GH = CheckMethod.GITHUB_RELEASE
         (None, "https://pypi.org/project/certifi/", "latest_version", "2024.08.30",
          (CheckMethod.PYPI, "certifi")),  # a dotted calendar version is a version
         (None, PYPI, "latest_version", "20240620",
-         (CheckMethod.PYPI, "mcp")),  # so is a compact date (owner, 2026-10-13)
+         (CheckMethod.PYPI, "mcp")),  # so is a compact date (D5)
         # A check_target naming the same project is kept exactly as given.
         ("MCP", PYPI, "latest_version", "2.3.0", (CheckMethod.PYPI, "MCP")),
         ("claude_agent_sdk", "https://pypi.org/project/claude-agent-sdk/", "latest_version",
@@ -148,11 +148,11 @@ def test_infer_check(check_target, source_url, attribute, value, expected):
         (PYPI, PYPI, "latest_version", "2.3.0"),  # a URL does not name a project
         ("https://example.com/changelog", PYPI, "latest_version", "2.3.0"),
         ("x/my_repo", "https://github.com/x/my-repo", "latest_release", "1.0"),  # not PEP 503
-        # No attribute: the text never makes a latest-version fact (owner, 2026-10-13).
+        # No attribute: the text never makes a latest-version fact (D5).
         (None, PYPI, None, "2.3.0"),
         (None, RELEASE, None, "v0.30.2"),
         # The attribute does not name a latest version or release. Without latest,
-        # newest, current or 최신 it may be a pinned version (owner, 2026-10-13).
+        # newest, current or 최신 it may be a pinned version (D5).
         (None, PYPI, "version", "2.3.0"),
         (None, RELEASE, "release", "v0.30.2"),
         (None, PYPI, "stable_version", "2.3.0"),
@@ -242,8 +242,8 @@ def test_rules_read_the_attribute_and_value_at_write_time(store, text, fields, e
 
 
 def test_a_pinned_version_gets_no_check(store):
-    # Owner, 2026-10-13: a bare "version" attribute may be a pinned version, which a
-    # check would report as changed on every release.
+    # D5: a bare "version" attribute may be a pinned version, which a check would report
+    # as changed on every release.
     claim = store.remember(
         "We pinned mcp version 2.3.0",
         "world_fact",
@@ -255,8 +255,8 @@ def test_a_pinned_version_gets_no_check(store):
 
 
 def test_a_version_in_the_text_alone_gets_no_check(store):
-    # Owner, 2026-10-13: without an attribute naming the latest version or release, the
-    # claim gets no check method and waits under needs_check_method (the cheap error).
+    # D5: without an attribute naming the latest version or release, the claim gets no
+    # check method and waits under needs_check_method (the cheap error).
     claim = store.remember(
         "The latest mcp release requires Python 3.10", "world_fact", value="3.10", source_url=PYPI
     )

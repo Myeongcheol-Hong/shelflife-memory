@@ -1,10 +1,10 @@
 # Decision log
 
-One entry per decision: the options, the option chosen, why, and when to revisit it. D1 to D4 were the open decisions in `docs/design.md` section 8. Decisions belong to the owner (MC). Claude proposes options and records what the owner decided; it does not fill in an open entry.
+One entry per decision: the options, the option chosen, why, and when to revisit it. D1 to D4 were the open decisions in `docs/design.md` section 8. Decisions belong to the maintainer (MC). Claude proposes options and records what the maintainer decided; it does not fill in an open entry.
 
 ## D1: Storage
 
-- Status: decided by the owner, 2026-10-13
+- Status: decided by the maintainer, 2026-10-13
 - Options (design 8): a single SQLite file with FTS5 and no embeddings to start; embeddings later if search quality needs them.
 - Chosen: a single SQLite file with FTS5, no embeddings.
 - Why: personal scale (hundreds to a few thousand short claims); keyword search plus the subject/attribute fields is enough. Embeddings would need an embedding API key or a local model, which conflicts with subscription-only use and keeping the tool light.
@@ -12,56 +12,56 @@ One entry per decision: the options, the option chosen, why, and when to revisit
 
 ## D2: Who extracts claims
 
-- Status: decided by the owner, 2026-10-13
+- Status: decided by the maintainer, 2026-10-13
 - Options (design 8): the LLM extracts claims from the conversation, or the user gives the sentences directly. Design suggests direct entry first, since extraction quality is a separate problem.
 - Chosen: direct entry. I give the claim sentence; Claude only structures it into fields (subject, attribute, value, kind, volatility, check_method, source). Claude does not pick claims out of a long conversation in v1.
 - Why: every stored claim is intentional, and extraction quality is a separate problem.
 - Consequence: the 6.0-2 labeled eval focuses on field accuracy for given sentences; extraction recall/precision becomes a stretch goal.
-- Applied (owner, 2026-10-13): `text` is the user's sentence as given, in whatever language. Claude does not rewrite or translate it; it only structures it into the other fields. The `remember` description says so.
-- Write eval (owner, 2026-10-13): an item is one user-given sentence plus the surrounding turn and the source URL, if any; the gold labels are the fields. The trap cases are listed in design 6.0-2.
+- Applied (maintainer, 2026-10-13): `text` is the user's sentence as given, in whatever language. Claude does not rewrite or translate it; it only structures it into the other fields. The `remember` description says so.
+- Write eval (maintainer, 2026-10-13): an item is one user-given sentence plus the surrounding turn and the source URL, if any; the gold labels are the fields. The trap cases are listed in design 6.0-2.
 - Revisit if: after about two weeks of daily use, entry feels tedious or I forget to save things. Next step would be "Claude proposes, I approve".
 
 ## D3: When `remember` is called
 
-- Status: decided by the owner, 2026-10-13
+- Status: decided by the maintainer, 2026-10-13
 - Options (design 8): Claude calls it on its own during conversations, or only when asked. If on its own, the 6.0 write eval is mandatory.
 - Chosen: `remember` is called only when I ask. Claude may offer ("Want me to remember this?") but must not call `remember` without my confirmation.
 - Why: consistent with D2; only approved claims enter memory.
 - Applied: the server instructions and the `remember` tool description in `src/shelflife/server.py` say this, and `tests/integration/test_mcp_tools.py` pins the wording.
-- Clarified (owner, 2026-10-13): an offer shows the exact sentence that would be stored, and the user's yes approves that sentence.
+- Clarified (maintainer, 2026-10-13): an offer shows the exact sentence that would be stored, and the user's yes approves that sentence.
 - Revisit if: together with D2.
 
 ## D4: Where LLM judgments happen
 
-- Status: decided by the owner, 2026-10-13
+- Status: decided by the maintainer, 2026-10-13
 - Options (design 8): (a) the server calls the Claude API (needs an API key, allows background web_page checks); (b) Claude in the conversation judges and stores the result with `record_check`. In both, the background job runs without an LLM. Design suggests (b) plus the rule-based background job for v1.
 - Chosen: (b) Claude in the conversation judges and stores the result with `record_check`, plus the rule-based background job (pypi/github decided by rules; web_page only marked "possibly changed" via a hash of the relevant section).
 - Why: works on the Claude subscription without an API key, and the server stays LLM-free and deterministic to test. The verbatim-quote check in code still guards every result.
 - Accepted trade-off: web_page changes are only judged during a conversation or the weekly digest, so detection latency depends on usage.
 - Implementation note: the judgment instructions are a versioned prompt template that `verify` returns for a `web_page` claim (D10; in M4 `recall(verify=auto)` too) and the eval harness reuses, so 6.2 measures what runs in daily use. (Changed on 2026-10-13: the first version said `recall` returns it.)
 - Revisit if: "possibly changed" items pile up unjudged in the digest. Then add (a) as an optional mode with an API key.
-- Volatility (owner, 2026-10-13): under (b) the "LLM fallback" for volatility is option (i): Claude sets volatility only at write time, through `remember`'s `volatility` parameter, when it is confident. No new tool. Revisit if many claims still carry the default volatility after the M2 rules.
-- `FieldSource.LLM` (owner, 2026-10-13): removed, since nothing sets it under option (i). If D4 is ever revisited, it comes back with that change.
+- Volatility (maintainer, 2026-10-13): under (b) the "LLM fallback" for volatility is option (i): Claude sets volatility only at write time, through `remember`'s `volatility` parameter, when it is confident. No new tool. Revisit if many claims still carry the default volatility after the M2 rules.
+- `FieldSource.LLM` (maintainer, 2026-10-13): removed, since nothing sets it under option (i). If D4 is ever revisited, it comes back with that change.
 
 ## D5: `remember` parameters and field sources
 
-- Status: decided by the owner, 2026-10-12 (recorded from the session that built M1)
+- Status: decided by the maintainer, 2026-10-12 (recorded from the session that built M1)
 - Chosen: `text` and `kind` are required. Optional: `subject`, `attribute`, `value`, `volatility`, `check_method`, `check_target`, `source_url`, `source_quote`, `observed_at`, `depends_on`. System-managed fields (`id`, `recorded_at`, `last_checked_at`, `next_check_at`, `status`) are never accepted, and unknown enum values are rejected. `volatility_source` and `check_method_source` record who set each value (`caller` or `default`, later `rule`; `llm` was removed on 2026-10-13, see D4), so later stages never overwrite a caller's value and the write eval can tell them apart. The tool description tells the model to leave volatility and check_method empty unless it is confident.
 - Why: design 5.2 listed only four inputs, but a claim (design 4.1) needs more. Under D4 above, LLM judgments happen in the conversation, not on the server, so Claude supplies volatility through these parameters. (Reworded on 2026-10-13: the first version assumed D4 (b) before D4 was decided.)
-- Check-method rule (owner, 2026-10-13, M2d): the rule gives a world fact a `pypi` or `github_release` check only when the attribute names a latest-version or latest-release fact (`latest_version`, `latest_release`, `최신 버전`) and the value is a version string. The attribute must say latest, newest, current or 최신: a bare `version`, `release`, `버전` or `릴리스` does not qualify, because it may be a pinned version ("we pinned mcp version 2.3.0"), which a check would report as `changed` on every release. `remember`'s description asks for `latest_version` or `latest_release`. The text alone never qualifies: "The latest mcp release requires Python 3.10" has no such attribute, so it gets no check method and shows under `due`'s `needs_check_method`, which is the cheap error (a missing check), not a false `changed`. A bare year (2025) or a date (2024-06-20) is not a version string; a compact date (20240620) stays one.
-- URLs (owner, 2026-10-13, D10): `remember` rejects a `web_page` `check_target` or any `source_url` that is not a full http(s) URL with a host.
+- Check-method rule (maintainer, 2026-10-13, M2d): the rule gives a world fact a `pypi` or `github_release` check only when the attribute names a latest-version or latest-release fact (`latest_version`, `latest_release`, `최신 버전`) and the value is a version string. The attribute must say latest, newest, current or 최신: a bare `version`, `release`, `버전` or `릴리스` does not qualify, because it may be a pinned version ("we pinned mcp version 2.3.0"), which a check would report as `changed` on every release. `remember`'s description asks for `latest_version` or `latest_release`. The text alone never qualifies: "The latest mcp release requires Python 3.10" has no such attribute, so it gets no check method and shows under `due`'s `needs_check_method`, which is the cheap error (a missing check), not a false `changed`. A bare year (2025) or a date (2024-06-20) is not a version string; a compact date (20240620) stays one.
+- URLs (maintainer, 2026-10-13, D10): `remember` rejects a `web_page` `check_target` or any `source_url` that is not a full http(s) URL with a host.
 - Revisit if: the labeled write eval (design 6.0-2) shows that the volatility or check_method Claude supplies (`*_source` = `caller`) does worse than what the M2 rules set when the field is left empty, counting a fast claim labeled slower as the expensive error; or daily use needs a field `remember` does not accept. Then tell the model to leave both fields empty.
 
 ## D6: MCP SDK version
 
-- Status: decided by the owner, 2026-10-12
+- Status: decided by the maintainer, 2026-10-12
 - Chosen: `mcp>=2.3,<3` with `MCPServer`.
 - Why: v2 is the current stable line; it renamed `FastMCP` to `MCPServer`.
 - Revisit if: `mcp` 3.0 is released (the `<3` pin then holds the server back), or Claude Desktop or Claude Code stops working with a 2.x server.
 
 ## D7: `next_check_at` in M1
 
-- Status: decided by the owner, 2026-10-12
+- Status: decided by the maintainer, 2026-10-12
 - Chosen: `next_check_at` = `observed_at` + the per-class interval from design 4.2 (`none` gives no date), as a pure function; the clock is injected. M2 extends it.
 - Why: `due` ships in M1 and needs a date to compare against.
 - Extended (2026-10-13): after a check, D9 sets the next date.
@@ -69,49 +69,49 @@ One entry per decision: the options, the option chosen, why, and when to revisit
 
 ## D8: Search for Korean claims
 
-- Status: decided by the owner, 2026-10-13
-- Problem: the owner writes in Korean, and D2 stores the sentence as given, so `recall` must work for Korean. With the default `unicode61` tokenizer, particles fuse onto words: "Chatbox로" is one token, so "Chatbox 가격" finds nothing. The owner's test on SQLite 3.50: with `unicode61`, "Chatbox 가격" and "시험 비용" found nothing; with `trigram` plus LIKE for query words shorter than 3 characters, both matched.
+- Status: decided by the maintainer, 2026-10-13
+- Problem: the maintainer writes in Korean, and D2 stores the sentence as given, so `recall` must work for Korean. With the default `unicode61` tokenizer, particles fuse onto words: "Chatbox로" is one token, so "Chatbox 가격" finds nothing. The maintainer's test on SQLite 3.50: with `unicode61`, "Chatbox 가격" and "시험 비용" found nothing; with `trigram` plus LIKE for query words shorter than 3 characters, both matched.
 - Options: keep `unicode61` (fails for Korean); A: the `trigram` tokenizer with a LIKE fallback for short query words. `porter` stemming (English only) was offered in #2 and declined, because Korean support matters more.
 - Chosen: A. `claims_fts` uses `tokenize='trigram'`. Query words of 3 or more characters match through the index, shorter ones with LIKE. Results are ranked by the number of query words matched, then bm25, so short common words do not flood the top 10. The `recall` description tells the model to search for names in their original spelling (Hindsight, not 힌드사이트). The schema changed in place at version 1, because no database was in use yet.
 - Accepted trade-offs: matching is by substring, so "mcp" also matches "mcpx"; a name written in another script is not found; query words shorter than 3 characters are matched by scanning every claim, which is fine at personal scale; a trigram index is larger than a `unicode61` one.
-- Added (owner, 2026-10-13): where Latin letters meet Hangul in a query word, the word is split there, and the Hangul part is dropped if it is a common particle (은 는 이 가 을 를 의 로 으로 에 에서 와 과 도 만); otherwise both parts are kept ("Chatbox의" gives "Chatbox"; "AI모델" gives "AI" and "모델"). The `recall` description asks for 2-5 key words (names and nouns) without particles, not a full question ("Chatbox 가격", not "Chatbox의 가격은").
-- Added (owner, 2026-10-13, M3c follow-ups): a pure-Hangul word also loses a trailing particle if at least 2 characters remain ("가격은" gives "가격", but "속도" and "회의" stay). Only the longest particle that ends the word is dropped, and only if 2 characters remain: "학교으로" gives "학교", not "학교으", and "앞으로" stays whole rather than becoming "앞으" (owner, 2026-10-14). One helper, `drop_particle()` in `store.py`, used by section selection and, after the M3 stack, by `recall`, so "가격이" finds a claim that says "가격은".
+- Added (maintainer, 2026-10-13): where Latin letters meet Hangul in a query word, the word is split there, and the Hangul part is dropped if it is a common particle (은 는 이 가 을 를 의 로 으로 에 에서 와 과 도 만); otherwise both parts are kept ("Chatbox의" gives "Chatbox"; "AI모델" gives "AI" and "모델"). The `recall` description asks for 2-5 key words (names and nouns) without particles, not a full question ("Chatbox 가격", not "Chatbox의 가격은").
+- Added (maintainer, 2026-10-13, M3c follow-ups): a pure-Hangul word also loses a trailing particle if at least 2 characters remain ("가격은" gives "가격", but "속도" and "회의" stay). Only the longest particle that ends the word is dropped, and only if 2 characters remain: "학교으로" gives "학교", not "학교으", and "앞으로" stays whole rather than becoming "앞으" (maintainer, 2026-10-14). One helper, `drop_particle()` in `store.py`, used by section selection and, after the M3 stack, by `recall`, so "가격이" finds a claim that says "가격은".
 - Revisit if: in daily use, Korean searches miss claims I know are stored (for example a Korean noun with an ending outside the D8 list, or written with different spacing, such as "가격정보" against "가격 정보"); or filler words crowd out the claim I wanted, because ranking counts every matched query word equally, so a full question ("What is the price of Chatbox Pro?") can rank a claim that shares only "the", "is" and "of" first; or substring matches crowd out the claim I wanted; or `recall` gets slow as the store grows into the thousands of claims.
 
 ## D9: Checks and their tool interface (M2)
 
-- Status: decided by the owner, 2026-10-13 (answers to five questions Claude asked in the chat, plus the `forget` output)
+- Status: decided by the maintainer, 2026-10-13 (answers to five questions Claude asked in the chat, plus the `forget` output)
 - Chosen:
   1. A check that finds a new value does not change the claim. The claim keeps its value, its status becomes `changed`, and the `checks` row holds the old and new values. To adopt the new value, the user remembers a new claim and forgets the old one. Rejected: updating the value in place, with the history in `checks`.
-  2. `verify` returns `{"claim": {...}, "check": {"result", "old_value", "new_value", "evidence", "reason", "checked_at"}}` (`reason` is the `cannot_tell` reason, D10). For a `web_page` claim it returns `{"claim", "check": null, "judge": {...}}` instead, and Claude stores the judgment with `record_check` (D10, owner, 2026-10-13).
+  2. `verify` returns `{"claim": {...}, "check": {"result", "old_value", "new_value", "evidence", "reason", "checked_at"}}` (`reason` is the `cannot_tell` reason, D10). For a `web_page` claim it returns `{"claim", "check": null, "judge": {...}}` instead, and Claude stores the judgment with `record_check` (D10, maintainer, 2026-10-13).
   3. `due` returns one JSON object with three lists, `{"due": [...], "changed": [...], "needs_check_method": [...]}`, replacing the single `"claims"` list. Each due item shows its last check result, so failures are visible. `needs_check_method` leaves out claims whose `check_method` `none` the caller set on purpose (D10).
   4. After a check, `same` or `changed` sets `next_check_at` to the check date plus the class interval (design 4.2). `error` or `cannot_tell` leaves `next_check_at` alone, so the claim stays due and is retried; after 3 `error` or `cannot_tell` results in a row, the next check moves out by the class interval instead.
-  5. `recall`'s `verify = auto / never / always` parameter (design 5.2) waits for M4, with the daily due run. `recall` stays read-only in M2. In M4, `recall(verify=auto)` returns `verify`'s `judge` payload for due `web_page` claims (D10). It ships behind a setting that is off by default, `SHELFLIFE_RECALL_VERIFY=never` (owner, 2026-10-13).
+  5. `recall`'s `verify = auto / never / always` parameter (design 5.2) waits for M4, with the daily due run. `recall` stays read-only in M2. In M4, `recall(verify=auto)` returns `verify`'s `judge` payload for due `web_page` claims (D10). It ships behind a setting that is off by default, `SHELFLIFE_RECALL_VERIFY=never` (maintainer, 2026-10-13).
   6. `forget` returns `{"claim": {...}}` with status `retired`. Forgetting a claim that is already retired is not an error.
 - Why: a stored claim is a sentence the user approved (D2, D3), so a check never rewrites it; the checks log keeps what each check found. The retry cap keeps a source that stays broken from being retried every day.
-- Follow-ups (owner, 2026-10-13, M2d):
+- Follow-ups (maintainer, 2026-10-13, M2d):
   - A `pypi` or `github_release` claim needs a `value` at write time, since a check compares it; `verify` still refuses a claim without one. A `web_page` claim may have no value (D4: it is judged in the conversation).
   - `add_check` and `forget` take SQLite's write lock before they read the claim (`BEGIN IMMEDIATE`), because Claude Desktop and Claude Code run side by side, so two processes writing to one file is the normal case.
   - "Due" is not a stored status: it is derived from `next_check_at` (design 4.1).
   - Each item in `due`'s `changed` list carries `change`, the check that found the new value (approved as built in M2c).
-- Follow-up (owner): remember plus forget is tedious for version claims that change often, so M4 adds a one-call "supersede" that stores the new claim and retires the old one. Decisions linked to the old claim stay linked to it and stay flagged for the owner's review.
+- Follow-up (maintainer): remember plus forget is tedious for version claims that change often, so M4 adds a one-call "supersede" that stores the new claim and retires the old one. Decisions linked to the old claim stay linked to it and stay flagged for the maintainer's review.
 - Revisit if: `changed` claims pile up unadopted in `due`; or the retry cap hides a source that is broken for good (a claim whose every check is `error`).
 
 ## D10: web_page checks and write checks (M3)
 
-- Status: decided by the owner, 2026-10-13 (answers to Q1-Q8 of the M3 plan, then to the questions raised in M3a-M3c) and 2026-10-14 (answers to the review of the M3 stack)
+- Status: decided by the maintainer, 2026-10-13 (answers to Q1-Q8 of the M3 plan, then to the questions raised in M3a-M3c) and 2026-10-14 (answers to the review of the M3 stack)
 - Chosen:
   1. **Page hand-off (Q1 (a)).** `verify` on a `web_page` claim fetches the page, selects the relevant section and returns `{"claim", "check": null, "judge": {"prompt_version", "prompt", "url", "section"}}`. Claude judges in the conversation and stores the result with `record_check`. In M4, `recall(verify=auto)` returns the same `judge` payload for due `web_page` claims. Rejected: `recall` returning it in M3, which puts page fetches inside `recall`; a new tool.
   2. **What `record_check` checks against (Q2 (a)).** The page text `verify` fetched, held by the server for about 30 minutes. Without it, `record_check` refuses and asks Claude to call `verify` again. It also refuses a judgment based on a fetch older than the claim's last check, so a stale `same` from the other server process cannot overwrite a newer `changed`. Rejected: re-fetching the live page.
   3. **The `record_check` contract (Q3).** `result` is `same`, `changed` or `cannot_tell`; only the server records `error`, for a failed fetch. For `same` and `changed` the quote must be at least about 20 characters and 3 words, appear exactly once on the page, and lie inside the section `verify` returned. `changed` needs a `new_value` inside the quote that differs from the claim's value; `same` needs the claim's value inside the quote. `cannot_tell` needs no quote and takes an optional short reason (free text, not validated) that is stored, so 6.2 can separate "page unreadable" from "hard to judge". A rejected judgment is a tool error and stores nothing; the tool description tells Claude to record `cannot_tell` when it cannot find a quote, which counts toward D9's limit of 3 in a row. Rule-based (`pypi`, `github_release`) claims are refused.
-  4. **Absence claims (Q4 (a)).** A claim that something does not exist ("MemGuard has not published eval results") cannot be proven by a quote, so it does not use `web_page`. `due`'s `needs_check_method` lists only claims whose `check_method_source` is not `caller`: a `none` the owner set on purpose is a decision, not a gap. The MemGuard seed claim becomes `check_method` `none` (caller).
-  5. **Value matching (Q5 (b) and (c)).** The quote stays verbatim after `normalize()` (invisible characters, NFC and whitespace only). The check that the value is inside the quote also folds dashes and quote marks, and compares money amounts with their currency ($300 = 300 USD = USD 300 = 300달러): D2 stores the owner's sentence as given, so the value is often not written the way the page writes it. Rejected: strict matching. In the seeds, "about 60%" drops "about", and the eligibility value becomes a short phrase copied from the page.
+  4. **Absence claims (Q4 (a)).** A claim that something does not exist ("MemGuard has not published eval results") cannot be proven by a quote, so it does not use `web_page`. `due`'s `needs_check_method` lists only claims whose `check_method_source` is not `caller`: a `none` the maintainer set on purpose is a decision, not a gap. The MemGuard seed claim becomes `check_method` `none` (caller).
+  5. **Value matching (Q5 (b) and (c)).** The quote stays verbatim after `normalize()` (invisible characters, NFC and whitespace only). The check that the value is inside the quote also folds dashes and quote marks, and compares money amounts with their currency ($300 = 300 USD = USD 300 = 300달러): D2 stores the maintainer's sentence as given, so the value is often not written the way the page writes it. Rejected: strict matching. In the seeds, "about 60%" drops "about", and the eligibility value becomes a short phrase copied from the page.
   6. **Schema v2 (Q6 (a)).** `checks` gets `prompt_version`, `page_sha256` and `section_sha256` columns, with a v1-to-v2 migration tested on a v1 file. The section hash is the baseline M4's daily run compares with to mark a claim "possibly changed" (D4). `cost_usd` stays empty under the subscription (design 4.4).
-  7. **Write checks (Q7 (a)).** The four checks of design 6.0-1 are pure functions over `remember`-shaped records, so the M8 write eval can run them without a database, plus a read-only CLI that writes one JSON line per claim and check. They never run inside `remember`. Check 3 fails on HTTP 404 or 410 and on a malformed `check_target` (not a PyPI project name, not owner/repo); blocked is only for network or access problems outside our control, such as a 403, 429, 5xx or network error (owner, 2026-10-14). Check 4 for `web_page` is "needs judgment" and is left out of the rate until M5. The report gives pass, fail and skip counts per check, and the write integrity rate: a claim with any failed check counts as applied and failing, a claim that passed all four as passing, and the rest are left out (owner, 2026-10-14). Claude proposes `source_quote` values for the seeds, copied verbatim from the fetched pages, and the owner approves them in the PR; seeds are example data, not eval labels.
-  8. **URLs at write time (Q8).** `remember` rejects a `web_page` `check_target` or any `source_url` that is not a full http(s) URL (D5). Fetching checks more: http and https only, public addresses only, again on every redirect. Behind a proxy, which resolves host names itself, only addresses written as numbers and localhost names are refused, and the proxy decides the rest, because cloud sessions cannot resolve names locally (Claude's proposal, confirmed by the owner).
-- Also (owner, 2026-10-13): the developer-mode page on `developers.openai.com` is gone (HTTP 404; the old `platform.openai.com` URL redirects to the same 404). Its seed claim stays as it is, as a real "source moved" case for write check 3, an `error` check and `last_check` in `due`. M5's Wayback collection becomes a script the owner runs on the Mac, like the release timelines.
+  7. **Write checks (Q7 (a)).** The four checks of design 6.0-1 are pure functions over `remember`-shaped records, so the M8 write eval can run them without a database, plus a read-only CLI that writes one JSON line per claim and check. They never run inside `remember`. Check 3 fails on HTTP 404 or 410 and on a malformed `check_target` (not a PyPI project name, not owner/repo); blocked is only for network or access problems outside our control, such as a 403, 429, 5xx or network error (maintainer, 2026-10-14). Check 4 for `web_page` is "needs judgment" and is left out of the rate until M5. The report gives pass, fail and skip counts per check, and the write integrity rate: a claim with any failed check counts as applied and failing, a claim that passed all four as passing, and the rest are left out (maintainer, 2026-10-14). Claude proposes `source_quote` values for the seeds, copied verbatim from the fetched pages, and the maintainer approves them in the PR; seeds are example data, not eval labels.
+  8. **URLs at write time (Q8).** `remember` rejects a `web_page` `check_target` or any `source_url` that is not a full http(s) URL (D5). Fetching checks more: http and https only, public addresses only, again on every redirect. Behind a proxy, which resolves host names itself, only addresses written as numbers and localhost names are refused, and the proxy decides the rest, because cloud sessions cannot resolve names locally (Claude's proposal, confirmed by the maintainer).
+- Also (maintainer, 2026-10-13): the developer-mode page on `developers.openai.com` is gone (HTTP 404; the old `platform.openai.com` URL redirects to the same 404). Its seed claim stays as it is, as a real "source moved" case for write check 3, an `error` check and `last_check` in `due`. M5's Wayback collection becomes a script the maintainer runs on the Mac, like the release timelines.
 - Why: `verify` already owns "check this claim now" (D9), so the web_page path stays in one tool and `recall` stays read-only until M4. Holding the fetched text checks the quote against exactly what Claude was shown, with no second fetch. The write checks stay pure functions, so the eval grades with the same code (CLAUDE.md: grade with code).
-- Follow-ups (owner, 2026-10-13, answers to Claude's questions from M3a-M3c):
+- Follow-ups (maintainer, 2026-10-13, answers to Claude's questions from M3a-M3c):
   1. `cannot_tell`'s reason gets its own `reason` column in the schema v2 migration, so `evidence` keeps meaning the quote or the error and 6.2 can query reasons directly.
   2. A `web_page` claim without a value: `same` and `changed` need the quote rules only. A `new_value` given with `changed` must still appear in the quote, so no unquoted value is stored; it is not compared with anything.
   3. The value check also folds numbers, so 60% = 60.0% and the MetagenomicsBench seed's "60%" matches the page's "60.0%". Version strings such as "2.3.0" are not folded.
@@ -120,15 +120,15 @@ One entry per decision: the options, the option chosen, why, and when to revisit
   6. The proxy rule in item 8 is confirmed.
   7. M4 hashes the section's core (`Section.core`, the best segment before it grows into its neighbours), not the grown section. The fee, cost and price synonym group in section selection is approved, with 수수료 added.
   8. Schema v2 is a one-way door: before migrating, the server copies the database file next to it with `.bak-v1` appended (`shelflife.db.bak-v1`) and says so in its output.
-- Follow-ups (owner, 2026-10-14, answers to the review of the M3 stack):
+- Follow-ups (maintainer, 2026-10-14, answers to the review of the M3 stack):
   9. Value comparison ignores case: `same_value` and `value_in` compare casefolded values, so "Free" is no change from "free".
   10. The write integrity rate counts a claim with any failed check as applied and failing (item 7), so a check 3 failure lowers the rate even when check 4 is then blocked.
   11. A malformed `check_target` fails check 3; blocked is for network or access problems outside our control (item 7).
   12. `verify`'s judgment prompt shows the section's heading inside the untrusted-data fence, not as a separate field outside it, because the heading helps tell two similar sections apart (the two $125 exams); the template becomes `j2`.
   13. `record_check` returns `{"claim", "check"}`, as `verify` does.
   14. The check shown to Claude (`verify`, `record_check`, `due`'s `last_check` and `change`) includes the `cannot_tell` reason.
-  15. The schema upgrade is reported on stderr and, once, in the next tool result ("database upgraded to v2; backup at ..."), so Claude tells the owner.
+  15. The schema upgrade is reported on stderr and, once, in the next tool result ("database upgraded to v2; backup at ..."), so Claude tells the maintainer.
   16. The seeds' `source_quote` values and the new eligibility and MetagenomicsBench values (M3f) are approved.
-  17. Review fixes the owner approved with the plan (2026-10-14), so a false same or changed is refused: a value must also hold in the quote widened to whole words on the page (a quote that cuts "$3000" to "$300" does not count); a value that starts with Hangul must start a word ("지원" is not in "미지원"); and changed refuses a `new_value` that is only part of the claim's value while the quote still holds the whole value ("300" for "$300"), but accepts one that drops a word the page dropped.
-  18. Before merging schema v2 (owner, 2026-10-14, after an outside review): `checks` also stores the `selector_version` and the page's `fetched_at`, so M4 can tell a selector change from a page change; the migration adds an index on `checks(claim_id)`, rebuilds `claims_fts` (a VACUUM can renumber the rowids it points at; never VACUUM without a rebuild, and a proper INTEGER PRIMARY KEY for `claims` waits for v3), waits up to 60 s for the other server's lock, and never overwrites an existing `.bak-v1` (it writes `.bak-v1.<UTC time>` instead). The rollback is the one in design 5.1: quit both clients, keep the v2 file as `shelflife.db.v2-abandoned`, delete the `-wal` and `-shm` files, copy the backup back, and put the v1 code on both clients before restarting either.
+  17. Review fixes the maintainer approved with the plan (2026-10-14), so a false same or changed is refused: a value must also hold in the quote widened to whole words on the page (a quote that cuts "$3000" to "$300" does not count); a value that starts with Hangul must start a word ("지원" is not in "미지원"); and changed refuses a `new_value` that is only part of the claim's value while the quote still holds the whole value ("300" for "$300"), but accepts one that drops a word the page dropped.
+  18. Before merging schema v2 (maintainer, 2026-10-14, after an outside review): `checks` also stores the `selector_version` and the page's `fetched_at`, so M4 can tell a selector change from a page change; the migration adds an index on `checks(claim_id)`, rebuilds `claims_fts` (a VACUUM can renumber the rowids it points at; never VACUUM without a rebuild, and a proper INTEGER PRIMARY KEY for `claims` waits for v3), waits up to 60 s for the other server's lock, and never overwrites an existing `.bak-v1` (it writes `.bak-v1.<UTC time>` instead). The rollback is the one in design 5.1: quit both clients, keep the v2 file as `shelflife.db.v2-abandoned`, delete the `-wal` and `-shm` files, copy the backup back, and put the v1 code on both clients before restarting either.
 - Revisit if: `record_check` often refuses with "call verify again" in daily use (the 30-minute hold is too short); 6.2 finds the value folding accepting a wrong value (narrow it); most `cannot_tell` reasons say the page was unreadable (the extractor, not the judgment, needs work); or 6.2 shows misjudgments that the dropped "was ... now ..." context of struck-through text would have prevented.

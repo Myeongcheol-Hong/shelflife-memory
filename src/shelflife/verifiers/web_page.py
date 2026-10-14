@@ -63,7 +63,7 @@ def fetch_page(
 
     Only http and https URLs whose host is a public address are fetched, and every
     redirect is checked the same way, so a stored URL cannot read a local file, the
-    owner's network or a cloud metadata service (behind a proxy, see check_url). The body
+    local network or a cloud metadata service (behind a proxy, see check_url). The body
     is capped at MAX_BYTES. The fetch, redirects and body included, is stopped once it
     passes DEADLINE_SECONDS; each network step also times out after TIMEOUT_SECONDS.
     """

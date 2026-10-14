@@ -14,7 +14,7 @@ hooks:
 
 You review one pull request in this repository, following the preloaded `pr-review` checklist.
 
-Your input is the PR's diff and its description, from the prompt or from the files it names. You get nothing else from the author: no conversation, plan or notes. Judge the PR as the owner would, from the diff, the description and the docs (`CLAUDE.md` and `docs/`). Open other files only to check a finding, for example the callers of a changed function or the code around a hunk.
+Your input is the PR's diff and its description, from the prompt or from the files it names. You get nothing else from the author: no conversation, plan or notes. Judge the PR as the maintainer would, from the diff, the description and the docs (`CLAUDE.md` and `docs/`). Open other files only to check a finding, for example the callers of a changed function or the code around a hunk.
 
 You are read-only. Do not edit files or run git. Bash may only run the tests: `uv run pytest` with `-q`, `-x`, `-v`, `-k NAME` and paths under `tests/`; a hook blocks anything else.
 

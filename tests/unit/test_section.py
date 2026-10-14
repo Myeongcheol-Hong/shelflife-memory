@@ -74,7 +74,7 @@ def test_a_short_page_is_returned_whole():
 
 
 # Claims about the recorded pages. The first five are the seed claims, with the values the
-# owner asked for in D10; the others are examples written for these tests. None of them is
+# maintainer asked for in D10; the others are examples written for these tests. None of them is
 # an eval label: tests, not eval/data.
 CLAIMS = [
     ("skilljar-faq", "Claude certification exams are open only to employees of Claude "

@@ -2,8 +2,8 @@
 
 Rules only fill empty fields, and the claim records `rule` as their source. A value the
 caller gave is never replaced (D5). Claude sets volatility only through `remember` (D4),
-so these rules are the only classifier on the server. They are heuristics, approved by
-the owner on 2026-10-13; design 6.0-3 measures their impact.
+so these rules are the only classifier on the server. They are heuristics the
+maintainer approved; design 6.0-3 measures their impact.
 """
 
 from __future__ import annotations
@@ -46,14 +46,14 @@ MONEY = re.compile(
 # newest, current or 최신: a bare "version" or "release" may be a pinned one ("we pinned
 # mcp version 2.3.0"), which a check would report as changed on every release. The text
 # alone never qualifies. Such claims get no check method and show under due's
-# needs_check_method, the cheap error (owner, 2026-10-13).
+# needs_check_method, the cheap error (D5).
 VERSION_ATTRIBUTE = re.compile(
     r"(?:latest|newest|current)\s+(?:stable\s+)?(?:version|release)s?"
     r"|최신\s*(?:버전|릴리스)"
 )
 # A bare year or a date (2025, 2024-06, 2024-06-20) is not a version string, although it
 # parses as one (2024/06/20 does not parse). Dotted calendar versions (certifi's
-# 2024.08.30) and compact dates (20240620) still count (owner, 2026-10-13).
+# 2024.08.30) and compact dates (20240620) still count (D5).
 YEAR_OR_DATE = re.compile(r"\d{4}(?:-\d{1,2}(?:-\d{1,2})?)?")
 PYPI_URL = re.compile(r"https?://pypi\.org/project/([A-Za-z0-9][A-Za-z0-9._-]*)/?.*", re.I)
 GITHUB_URL = re.compile(
