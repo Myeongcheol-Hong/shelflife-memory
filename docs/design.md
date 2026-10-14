@@ -124,7 +124,7 @@ A `decision` claim points to its supporting claims through `depends_on`. If any 
 
 Every check is recorded in the `checks` table: when, which method, result (same / changed / cannot_tell / error), old value, new value, evidence quote and cost. This is the audit trail for "why did it answer this way", which matters in regulated domains.
 
-A `web_page` check also records which judgment template was used and what it judged: `prompt_version`, `page_sha256` and `section_sha256`, plus the `reason` Claude may give for `cannot_tell` (schema v2, D10). The section hash covers the section's core, the best segment before it grows into its neighbours; it is the baseline M4's daily run compares with to mark a claim "possibly changed" (D4). `cost_usd` stays empty under the subscription: a judgment made in the conversation (D4 (b)) has no per-call price the server could know.
+A `web_page` check also records which judgment template was used and what it judged: `prompt_version`, `page_sha256` and `section_sha256`, the `selector_version` and the page's `fetched_at`, so M4 can tell a selector change from a page change, plus the `reason` Claude may give for `cannot_tell` (schema v2, D10). The section hash covers the section's core, the best segment before it grows into its neighbours; it is the baseline M4's daily run compares with to mark a claim "possibly changed" (D4). `cost_usd` stays empty under the subscription: a judgment made in the conversation (D4 (b)) has no per-call price the server could know.
 
 ## 5. Architecture
 
@@ -170,12 +170,24 @@ CREATE TABLE checks (
   method TEXT NOT NULL, result TEXT NOT NULL,   -- same | changed | cannot_tell | error
   old_value TEXT, new_value TEXT, evidence TEXT, cost_usd REAL,
   prompt_version TEXT, page_sha256 TEXT, section_sha256 TEXT,  -- web_page (schema v2, D10)
-  reason TEXT                                                   -- cannot_tell (schema v2, D10)
+  reason TEXT,                                                  -- cannot_tell (schema v2, D10)
+  selector_version TEXT, fetched_at TEXT                        -- web_page (schema v2, D10)
 );
 CREATE VIRTUAL TABLE claims_fts USING fts5(text, subject, content='claims', tokenize='trigram');
 ```
 
-Schema v2 (D10) adds the judgment columns to `checks`. Opening a v1 file migrates it after copying it to `<db>.bak-v1`, a one-way door; the upgrade is reported on stderr and once in the next tool result.
+Schema v2 (D10) adds the judgment columns and an index on `claim_id` to `checks`, and rebuilds `claims_fts`. Opening a v1 file migrates it after copying it to `<db>.bak-v1` (or `<db>.bak-v1.<UTC time>` if that name is taken, so an earlier backup is never overwritten), a one-way door; the upgrade is reported on stderr and once in the next tool result.
+
+`claims` has a TEXT primary key, so the rowid `claims_fts` points at is not stable: VACUUM may renumber it. Never VACUUM without rebuilding `claims_fts` afterwards (`INSERT INTO claims_fts(claims_fts) VALUES ('rebuild')`). Giving `claims` an INTEGER PRIMARY KEY waits for schema v3.
+
+To roll schema v2 back:
+1. Quit Claude Desktop and Claude Code.
+2. Copy `shelflife.db` to `shelflife.db.v2-abandoned`, and `shelflife.db-wal`, if it exists, to `shelflife.db.v2-abandoned-wal`.
+3. Delete `shelflife.db-wal` and `shelflife.db-shm`.
+4. Copy (not move) `shelflife.db.bak-v1` to `shelflife.db`. If the upgrade notice named a timestamped backup, use that one.
+5. Put the v1 code on both clients before restarting either.
+
+Checks recorded after the upgrade are lost, and so is every other write since then (claims remembered or forgotten); `shelflife.db.v2-abandoned` keeps them.
 
 Search works for Korean (D8). The trigram index matches substrings, so a particle fused onto a word ("Chatbox로") does not hide it. Query words shorter than 3 characters, common in Korean, are matched with LIKE. A query word that mixes Latin letters and Hangul is split where the scripts meet, and a common particle there is dropped; a Hangul word also loses a trailing particle if 2 characters remain ("가격은" finds "가격이"). Results are ranked by the number of query words matched, then bm25.
 
