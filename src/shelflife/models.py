@@ -143,6 +143,14 @@ class Check:
     new_value: str | None  # the value found at the source
     evidence: str | None  # quoted verbatim from the fetched content, or the error
     cost_usd: float | None = None  # what an LLM judgment cost; None for rule-based checks
+    # web_page judgments (schema v2, D10): the template version, hashes of the fetched body
+    # and of the section's core, and the reason Claude may give for cannot_tell.
+    prompt_version: str | None = None
+    page_sha256: str | None = None
+    section_sha256: str | None = None
+    reason: str | None = None
+    selector_version: str | None = None  # the section selector's version (M4 compares)
+    fetched_at: datetime | None = None  # when verify fetched the page judged
 
     @classmethod
     def from_row(cls, row: Mapping[str, Any]) -> Check:
@@ -156,6 +164,12 @@ class Check:
             new_value=row["new_value"],
             evidence=row["evidence"],
             cost_usd=row["cost_usd"],
+            prompt_version=row["prompt_version"],
+            page_sha256=row["page_sha256"],
+            section_sha256=row["section_sha256"],
+            reason=row["reason"],
+            selector_version=row["selector_version"],
+            fetched_at=datetime.fromisoformat(row["fetched_at"]) if row["fetched_at"] else None,
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -165,6 +179,7 @@ class Check:
             "old_value": self.old_value,
             "new_value": self.new_value,
             "evidence": self.evidence,
+            "reason": self.reason,  # why cannot_tell, if Claude said (D10 follow-up 14)
             "checked_at": self.checked_at.isoformat(),
         }
 

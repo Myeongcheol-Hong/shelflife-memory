@@ -358,6 +358,12 @@ def test_needs_check_method_lists_world_facts_nothing_can_check(store, clock):
     assert [c.id for c in store.needs_check_method()] == [first.id, second.id]
 
 
+def test_needs_check_method_leaves_out_a_none_the_caller_set(store):
+    store.remember("MemGuard has not published eval results", "world_fact", check_method="none")
+    gap = store.remember("Seoul has 25 districts", "world_fact")
+    assert [c.id for c in store.needs_check_method()] == [gap.id]
+
+
 def test_due_rejects_bad_days(store):
     with pytest.raises(ValueError, match="days must be 0 or more"):
         store.due(days=-1)

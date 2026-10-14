@@ -39,6 +39,7 @@ def test_same_makes_the_claim_fresh_until_one_interval_after_the_check(store, cl
         "old_value": "2.3.0",
         "new_value": "2.3.0",
         "evidence": "2.3.0",
+        "reason": None,
         "checked_at": "2026-10-12T09:30:00+00:00",
     }
     assert [r["id"] for r in checks(store, claim.id)] == [check.id]
