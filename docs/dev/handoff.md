@@ -10,9 +10,7 @@ Where the work stands. Each session's last PR overwrites this file (CLAUDE.md); 
 
 ## Waiting on the maintainer
 
-- #24's three decisions: the volatility-`none` refusal also covers a note's default `none`; `needs_check_method` leaves out volatility-`none` claims; the 10 MB cap with grpcio's PyPI JSON at 9.1 MB.
-- M7's LLM-judged volatility policy needs the model runner, which is in M5b, after M7; its volatility-impact item needs the maintainer's volatility labels for the replay's claims, which no milestone lists. Where do the runner and that labeling item go?
-- The M5a plan (no code yet). The timeline collection script runs on the maintainer's Mac.
+- The M5a plan's five decisions (in the session's last message): the project list (about 70 candidates, cut to 50 + 20), the "latest" rules (PyPI: highest non-prerelease, non-yanked version by PEP 440; GitHub: the API's latest rule), the split (time only, or also hold out projects), `packaging` in a new `eval` dependency group, and `pythonpath = ["."]` for tests. The timeline collection script runs on the maintainer's Mac.
 
 ## Next session: start here
 

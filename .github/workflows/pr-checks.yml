@@ -76,18 +76,22 @@ jobs:
               ["git", "diff", "--numstat", "-M", "-z", "HEAD^1", "HEAD"],
               check=True, capture_output=True, text=True,
           ).stdout.split("\0")
-          rows = []
+          rows, gone = [], []
           while len(fields) > 1:
               added, deleted, path = fields.pop(0).split("\t", 2)
               if not path:
                   path = fields[1]
                   del fields[:2]
-              if added == "-" or EXCLUDED.search(path) or path in removed_files:
+              if added == "-" or EXCLUDED.search(path):  # binary or excluded
+                  continue
+              if path in removed_files:  # shown below, so a large deletion stays visible
+                  gone.append((int(deleted), path))
                   continue
               rows.append((int(added) + int(deleted), path))
           total = sum(n for n, _ in rows)
           report = [f"Changed lines (excluding tests, fixtures, eval data, uv.lock and deleted files): {total} (limit {LIMIT})", ""]
           report += [f"{n:6} {path}" for n, path in sorted(rows, reverse=True)]
+          report += [f"deleted, not counted: {n} lines {path}" for n, path in sorted(gone, reverse=True)]
           print("\n".join(report))
           with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
               summary.write("```\n" + "\n".join(report) + "\n```\n")

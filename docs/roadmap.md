@@ -37,6 +37,7 @@ Items marked **(maintainer)** are done by the maintainer by hand: ground-truth l
 - [ ] PyPI/GitHub release timelines (about 50 packages, 20 repos), dev/test split. Collected by a script the maintainer runs on the Mac, because the cloud session cannot call the GitHub API for repositories not attached to it; the data is committed
 - [ ] `eval/data/README.md` data card: sources, dates and licenses of the timelines
 - [ ] Smoke corpus in `eval/data/smoke/`, wired into CI
+- [ ] **(maintainer)** Label the volatility class of each replay claim (design 6.0-3). M6's per-class policy needs these classes, and labeling before any replay result keeps the labels blind
 
 ## M6: Replay simulator and baseline policies
 - [ ] Day-by-day replay over the timelines
@@ -45,6 +46,7 @@ Items marked **(maintainer)** are done by the maintainer by hand: ground-truth l
 - [ ] First results table
 
 ## M7: Adaptive and LLM-judged policies
+- [ ] Shared model runner (`claude -p --model`, repeats, run artifacts). It starts `claude -p` outside the repository, so the project's Stop hook and `CLAUDE.md` stay out of eval runs. M5b and M8 reuse it
 - [ ] Adaptive per-claim policy, tuned on dev split only
 - [ ] LLM-judged volatility policy
 - [ ] 5 seeds, bootstrap intervals, Pareto figure
@@ -57,11 +59,10 @@ Items marked **(maintainer)** are done by the maintainer by hand: ground-truth l
 - [ ] Weekly digest
 - [ ] `supersede`: one call that remembers the new claim and retires the old one (D9). Decisions linked to the old claim stay linked to it and stay flagged for the maintainer's review
 
-## M5b: Wayback pairs, write-eval items, labeling tools, model runner
+## M5b: Wayback pairs, write-eval items, labeling tools
 - [ ] Wayback pair collection tool and labeling file format. Collected by a script the maintainer runs on the Mac, like the release timelines, because cloud sessions cannot reach `web.archive.org` reliably; the data is committed
 - [ ] Write-eval item file format (one given sentence, the surrounding turn, the source URL; gold labels are the fields; design 6.0-2) and labeling tool
 - [ ] The data card covers the Wayback pairs and write-eval items, with their labeling rules
-- [ ] Shared model runner (`claude -p --model`, repeats, run artifacts). It starts `claude -p` outside the repository, so the project's Stop hook and `CLAUDE.md` stay out of eval runs
 - [ ] **(maintainer)** Label 30-40 Wayback pairs
 - [ ] **(maintainer)** Label 40 write-eval items, including about 10 trap cases (design 6.0-2)
 
