@@ -46,12 +46,14 @@ LATE_LABELED = {"gohugoio/hugo", "jesseduffield/lazygit", "starship/starship", "
 NOT_WORSE = 0.005  # the stale-answer rate may rise this much at its interval's upper end
 BUCKETS = ("0 changes a year", "under 6", "6 to 52", "over 52")
 ROWS = ("oracle", "every read", *(f"fixed {n}" for n in FIXED))
+VERSUS = "per-class minus fixed 30"  # paired, uniform scenario, 1 question a week
 
 
 def run(timelines: list[Timeline], labels: dict[str, str], seeds: list[int] = SEEDS) -> dict:
-    """metrics.json: every split, scenario and question rate, then jitter's comparisons."""
+    """metrics.json: every split, scenario and question rate, per-class minus fixed 30,
+    then jitter's comparisons."""
     out: dict[str, Any] = {}
-    jitter_rows = {}
+    versus, jitter_rows = {}, {}
     for split in SPLITS:
         groups = _groups(timelines, labels, split)
         for scenario in SCENARIOS:
@@ -63,6 +65,10 @@ def run(timelines: list[Timeline], labels: dict[str, str], seeds: list[int] = SE
                 )
                 if headline:
                     jitter_rows[scenario] = rows
+                if (scenario, rate) == HEADLINE[1:]:
+                    on, off = (score.per_project(rows, p) for p in ("per-class", "fixed 30"))
+                    versus[f"{split} / {scenario} / {rate}"] = _paired(on, off)
+    out[VERSUS] = versus
     out["jitter"] = _jitter(jitter_rows, HEADLINE[0])
     return out
 
@@ -117,18 +123,21 @@ def _jitter(rows_by_scenario: dict[str, list[Row]], split: str) -> dict:
             peaks = (
                 score.peak(rows, f"{name} + jitter", split)[0] - score.peak(rows, name, split)[0]
             )
-            found = {
-                "peak per day": {
-                    "value": peaks,
-                    "ci": score.peak_ci(rows, f"{name} + jitter", split, name),
-                }
-            }
-            for metric in ("stale-answer rate", "stale claim-days"):
-                value = score.value(metric, score.total(on)) - score.value(metric, score.total(off))
-                found[metric] = {"value": value, "ci": score.ci(metric, on, minus=off)}
-            out[f"{scenario} / {name}"] = found
+            ci = score.peak_ci(rows, f"{name} + jitter", split, name)
+            out[f"{scenario} / {name}"] = {"peak per day": {"value": peaks, "ci": ci}}
+            out[f"{scenario} / {name}"] |= _paired(on, off)
     out["primary: helps"] = helps(out["sessions / per-class"])
     return out
+
+
+def _paired(on: dict[str, Counts], off: dict[str, Counts]) -> dict:
+    """The stale-answer rate and stale claim-days of one policy minus another on the same
+    claims, each with its paired 95% interval over the same resampled projects."""
+    found = {}
+    for metric in ("stale-answer rate", "stale claim-days"):
+        value = score.value(metric, score.total(on)) - score.value(metric, score.total(off))
+        found[metric] = {"value": value, "ci": score.ci(metric, on, minus=off)}
+    return found
 
 
 def helps(found: dict) -> bool:
@@ -141,9 +150,10 @@ def table(metrics: dict, run_id: str) -> str:
     """table.md: the headline, every read across question rates, jitter, the breakdowns."""
     head, dev = metrics[" / ".join(HEADLINE)], metrics["dev / uniform / 1 a week"]
     lines = [f"# 6.1 replay, run {run_id}", "", _caption(*HEADLINE, head), "", *_policies(head)]
+    lines += ["", "## Per-class minus fixed 30, paired (uniform, 1 a week)", "", *_versus(metrics)]
     lines += ["", "## Every read at each question rate (test, uniform)", "", *_every_read(metrics)]
     lines += ["", "## Jitter, with minus without, paired (test, 1 a week)", ""]
-    lines += _jitter_table(metrics["jitter"])
+    lines += _jitter_table(metrics)
     lines += ["", "## By label and by observed change rate (test, uniform, 1 a week)", ""]
     lines += _groups_table(head)
     lines += ["", "## Dev split (not compared with test: dev claims live shorter)", ""]
@@ -157,12 +167,26 @@ def _claims(metrics: dict) -> list[str]:
     """Each row's projects and claims, and the claims no session could take (D12)."""
     rows = []
     for key, summary in metrics.items():
-        if key != "jitter":
+        if key not in (VERSUS, "jitter"):
             projects, claims = summary["never"]["projects"], summary["never"]["claims"]
             dropped = CLAIMS_PER_PROJECT * projects - claims
             rows.append([key, str(projects), f"{claims:.1f}", f"{dropped:.1f}"])
     header = ["Split / scenario / questions", "Projects", "Claims", "Dropped (of 20 a project)"]
     return _table(header, rows)
+
+
+def _versus(metrics: dict) -> list[str]:
+    checks = COLUMNS[0]
+    header = ["Split", "Stale-answer rate", "Stale claim-days"]
+    header += ["Checks per claim-month: per-class", "Fixed 30"]
+    rows = []
+    for key, v in metrics[VERSUS].items():
+        stale = [_pct(v[m]) for m in ("stale-answer rate", "stale claim-days")]
+        cost = [checks(metrics[key][p]) for p in ("per-class", "fixed 30")]
+        rows.append([key.split(" / ")[0], *stale, *cost])
+    note = "Each difference is per-class minus fixed 30 on the same claims, in points, with"
+    note += " its paired 95% interval over resampled projects (D12). Above 0: per-class is staler."
+    return [*_table(header, rows), "", note]
 
 
 def _every_read(metrics: dict) -> list[str]:
@@ -180,19 +204,20 @@ def _every_read(metrics: dict) -> list[str]:
     return _table(header, rows)
 
 
-def _jitter_table(jitter: dict) -> list[str]:
-    rows = [
-        [
-            key + (" (primary)" if key == "sessions / per-class" else " (exploratory)"),
-            _num(v["peak per day"]),
-            _pct(v["stale-answer rate"]),
-            _pct(v["stale claim-days"]),
-        ]
-        for key, v in jitter.items()
-        if isinstance(v, dict)
-    ]
+def _jitter_table(metrics: dict) -> list[str]:
+    jitter, rows = metrics["jitter"], []
+    for key, v in jitter.items():
+        if isinstance(v, dict):
+            scenario, name = key.split(" / ")
+            summary = metrics[f"{HEADLINE[0]} / {scenario} / {HEADLINE[2]}"]
+            peaks = [summary[p]["peak per day"] for p in (name, f"{name} + jitter")]
+            label = " (primary)" if key == "sessions / per-class" else " (exploratory)"
+            stale = [_pct(v[m]) for m in ("stale-answer rate", "stale claim-days")]
+            rows.append([key + label, *(f"{x:.1f}" for x in peaks), _num(v["peak per day"])])
+            rows[-1] += stale
     verdict = "helps" if jitter["primary: helps"] else "does not help"
-    header = ["Scenario / policy", "Peak per day", "Stale-answer rate", "Stale claim-days"]
+    header = ["Scenario / policy", "Peak per day: without", "With", "With minus without"]
+    header += ["Stale-answer rate", "Stale claim-days"]
     return [
         *_table(header, rows),
         "",
