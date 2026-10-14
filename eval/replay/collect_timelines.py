@@ -32,6 +32,7 @@ from eval.replay.timelines import (
     load_projects,
     parse_utc,
     problems,
+    tag_prefix,
     utc_text,
 )
 from shelflife.verifiers import Fetch, FetchError, http_get
@@ -60,11 +61,10 @@ def collect_pypi(name: str, fetch: Fetch) -> tuple[str, str | None, list[dict[st
 
 
 def collect_github(
-    repo: str, fetch: Fetch, token: str | None, tag: str | None = None
+    repo: str, fetch: Fetch, token: str | None
 ) -> tuple[str, str | None, list[dict[str, Any]]]:
     """(url, latest, releases) from GitHub's REST API, page by page. Drafts are left out
-    (a token with push access would list them), and with a tag pattern every release whose
-    tag does not match it (`re.search`). `latest` is GitHub's, pattern or not."""
+    (a token with push access would list them)."""
     headers = GITHUB_HEADERS | ({"Authorization": f"Bearer {token}"} if token else {})
     base = f"https://api.github.com/repos/{repo}/releases"
     releases = []
@@ -78,7 +78,7 @@ def collect_github(
                 "prerelease": bool(r["prerelease"]),
             }
             for r in batch
-            if not r["draft"] and (tag is None or re.search(tag, r["tag_name"]))
+            if not r["draft"]
         ]
         if len(batch) < PER_PAGE:
             break
@@ -140,14 +140,19 @@ def main(
             if project.source == "pypi":
                 url, latest, releases = collect_pypi(project.name, fetch)
             else:
-                url, latest, releases = collect_github(project.name, fetch, token, project.tag)
+                url, latest, releases = collect_github(project.name, fetch, token)
+            tag = project.tag
+            outside = [r["version"] for r in releases if tag and not re.search(tag, r["version"])]
+            releases = [r for r in releases if r["version"] not in outside]
             path = write(args.folder, project, url, latest, releases, now())
         except (FetchError, KeyError, TypeError, ValueError) as e:
             print(f"error: {project.source} {project.name}: {e}", file=sys.stderr)
             failed += 1
             continue
-        matching = f" matching {project.tag}" if project.tag else ""
-        print(f"{project.source} {project.name}: {len(releases)} releases{matching}")
+        print(f"{project.source} {project.name}: {len(releases)} releases")
+        if outside:
+            prefixes = sorted({tag_prefix(v) for v in outside})
+            print(f"  left out {len(outside)} outside {tag}, tag prefixes {prefixes[:5]}")
         for problem in problems(load(path)):
             print(f"  check: {problem}")
     return 1 if failed else 0

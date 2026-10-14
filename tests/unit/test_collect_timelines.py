@@ -117,23 +117,6 @@ def test_github_stops_at_a_short_page_and_reads_no_latest_as_none():
         collect_github("o/r", fetch, token=None)
 
 
-def test_github_keeps_only_the_releases_matching_the_tag_pattern():
-    base = "https://api.github.com/repos/o/r/releases"
-    fetch = fetcher(
-        {
-            f"{base}?per_page=100&page=1": [
-                gh_release("v1.0.0", "2024-01-01"),
-                gh_release("mcp-v1.0.0", "2024-02-01"),
-                gh_release("vscode-typescript/v1.0.1", "2024-03-01"),
-            ],
-            f"{base}/latest": {"tag_name": "vscode-typescript/v1.0.1"},
-        }
-    )
-    _, latest, releases = collect_github("o/r", fetch, token=None, tag=r"^v\d")
-    assert [r["version"] for r in releases] == ["v1.0.0"]
-    assert latest == "vscode-typescript/v1.0.1"  # GitHub's, for problems() to compare
-
-
 def write_projects(folder, text):
     folder.mkdir(parents=True, exist_ok=True)
     (folder / "projects.toml").write_text(text)
@@ -190,13 +173,18 @@ def test_main_keeps_the_tag_pattern_in_the_header(tmp_path, capsys):
             f"{base}?per_page=100&page=1": [
                 gh_release("v1.0", "2023-01-01"),
                 gh_release("mcp-v1.0", "2024-02-01"),
+                gh_release("vscode-typescript/v1.0.1", "2024-03-01"),
             ],
-            f"{base}/latest": {"tag_name": "mcp-v1.0"},
+            f"{base}/latest": {"tag_name": "mcp-v1.0"},  # GitHub's, stored as it is
         }
     )
     assert main([str(tmp_path)], fetch=fetch, now=lambda: NOW) == 0
     out = capsys.readouterr().out
-    assert "github o/r: 1 releases matching ^v\\d" in out
+    # What was left out is named by its tag prefixes, for the maintainer to look over.
+    assert (
+        "github o/r: 1 releases\n"
+        "  left out 2 outside ^v\\d, tag prefixes ['mcp-', 'vscode-typescript/']\n"
+    ) in out
     assert "check: the source's latest, mcp-v1.0, is outside the tag pattern ^v\\d" in out
     timeline = load(tmp_path / "github" / "o__r.jsonl")
     assert (timeline.tag, [r.version for r in timeline.releases]) == (r"^v\d", ["v1.0"])

@@ -103,7 +103,7 @@ def changes(timeline: Timeline, start: date, end: date) -> list[tuple[date, str 
     The latest can change only on a day a release was published: a yank's date is not
     known, so a yanked version never counts.
     """
-    days = sorted({r.published.date() for r in timeline.releases})
+    days = sorted({r.published.date() for r in counted(timeline)})
     current = latest_on(timeline, start - timedelta(days=1))
     found = []
     for day in (d for d in days if start <= d <= end):
@@ -137,7 +137,7 @@ def problems(timeline: Timeline) -> list[str]:
     if releases and (first := min(r.published for r in releases)).date() > DEV[0]:
         found.append(f"first release on {first.date()}, after the replay starts")
     if timeline.source == "github":
-        prefixes = {_tag_prefix(r.version) for r in releases}
+        prefixes = {tag_prefix(r.version) for r in releases}
         if len(prefixes) > 1:
             found.append(f"tags with several prefixes (per-package tags?): {sorted(prefixes)[:5]}")
         disputed = [
@@ -165,7 +165,7 @@ def _published_last(timeline: Timeline, day: date) -> str | None:
     return max(stable, key=lambda r: r.published).version if stable else None
 
 
-def _tag_prefix(tag: str) -> str:
+def tag_prefix(tag: str) -> str:
     """The part of a tag before its version number: "graphiti-" in "graphiti-0.3.1"."""
     m = re.match(r"(.*?)v?\d", tag)
     return m[1].lower() if m else tag.lower()
@@ -174,7 +174,7 @@ def _tag_prefix(tag: str) -> str:
 def load_projects(path: Path) -> list[Project]:
     """projects.toml: `pypi` and `github` lists of {name, volatility, tag} tables, `tag`
     only for GitHub. Raises ValueError on an unknown key, a malformed name, an unknown
-    label, a tag pattern that is not a regular expression, or a duplicate."""
+    label, a tag pattern that is empty or not a regular expression, or a duplicate."""
     data = tomllib.loads(path.read_text(encoding="utf-8"))
     if unknown := set(data) - set(SOURCES):
         raise ValueError(f"{path}: unknown keys {sorted(unknown)}")
@@ -189,7 +189,7 @@ def load_projects(path: Path) -> list[Project]:
                 raise ValueError(f"{path}: not a {source} name: {name!r}")
             if label not in ("", *LABELS):
                 raise ValueError(f"{path}: {name}: volatility must be one of {LABELS} or empty")
-            if tag is not None and (source != "github" or not _is_regex(tag)):
+            if tag is not None and (source != "github" or tag == "" or not _is_regex(tag)):
                 raise ValueError(f"{path}: {name}: tag must be a regular expression, for GitHub")
             folded = re.sub(r"[-_.]+", "-", name.lower()) if source == "pypi" else name.lower()
             key = (source, folded)  # PyPI names compare under PEP 503, GitHub's ignore case

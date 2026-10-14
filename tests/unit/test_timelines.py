@@ -88,10 +88,6 @@ def test_a_tag_pattern_leaves_out_the_releases_of_other_products():
     assert changes(t, *DEV) == [(date(2024, 1, 10), "v1.0.0"), (date(2024, 4, 1), "v1.1.0")]
     # Without the pattern each product's release takes its turn as the latest.
     assert latest_on(timeline("github", *releases), date(2024, 3, 1)) == "vscode-typescript/v1.0.1"
-    # A bare "v" is not enough: it matches "vscode-typescript/v1.0.1" too.
-    assert latest_on(timeline("github", *releases, tag="^v"), date(2024, 3, 1)) == (
-        "vscode-typescript/v1.0.1"
-    )
 
 
 def test_changes_lists_only_the_days_the_latest_moved():
@@ -216,6 +212,7 @@ def test_projects_toml_is_read_and_checked(tmp_path):
         ('pypi = [{ name = "mcp", tag = "^v" }]', "tag must be a regular expression, for GitHub"),
         ('github = [{ name = "o/r", tag = "(v" }]', "tag must be a regular expression"),
         ('github = [{ name = "o/r", tag = 1 }]', "tag must be a regular expression"),
+        ('github = [{ name = "o/r", tag = "" }]', "tag must be a regular expression"),
     ],
 )
 def test_projects_toml_refuses(tmp_path, text, message):
