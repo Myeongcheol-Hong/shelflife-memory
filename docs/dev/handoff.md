@@ -4,8 +4,8 @@ Where the work stands. Each session's last PR overwrites this file (CLAUDE.md); 
 
 ## State
 
-- `main` has M1-M3 and the hardening from the external review (#24). Schema v2 (#21) is a one-way door; the rollback steps are in design 5.1.
-- #25 (README, "maintainer" wording, roadmap in build order) and the M5a PR are the session's last two; the M5a PR is stacked on #25.
+- `main` has M1-M3, the hardening from the external review (#24) and the repo presentation (#25: README, "maintainer" wording, roadmap in build order). Schema v2 (#21) is a one-way door; the rollback steps are in design 5.1.
+- The M5a PR is the session's last PR and carries this file.
 - M5a so far: the candidate list (`eval/data/timelines/projects.toml`, 52 PyPI + 24 GitHub, labels empty), the collector, the "latest" rules and split (D11), the smoke corpus in CI and the data card. No timeline data yet.
 - Build order (roadmap): M1-M3, M5a, M6, M7, M4, M5b, M8, M9.
 
@@ -18,7 +18,7 @@ Where the work stands. Each session's last PR overwrites this file (CLAUDE.md); 
 
 ## Next session: start here
 
-1. Check #25 and the M5a PR. Once the data is in, fill the data card's "Collected" line (counts, date, `check:` lines) and tick M5a's timeline and labeling items.
+1. Check the M5a PR. Once the data is in, fill the data card's "Collected" line (counts, date, `check:` lines) and tick M5a's timeline and labeling items.
 2. Then M6: the replay over the timelines, with the baseline policies. Parse each PyPI version once at load (`latest_on()` parses on every call). Every eval also runs on `eval/data/smoke/` in CI; never fill a label.
 
 ## Notes for later milestones
