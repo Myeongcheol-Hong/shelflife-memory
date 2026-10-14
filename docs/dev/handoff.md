@@ -5,18 +5,18 @@ Where the work stands. Each session's last PR overwrites this file (CLAUDE.md); 
 ## State
 
 - `main` has M1-M3: the store, the six MCP tools, the PyPI, GitHub release and web page checks, and the write checks. Schema v2 (#21) is a one-way door; the rollback steps are in design 5.1.
-- Open: the hardening PR from the external review (base `main`), then this repo-presentation PR (README, this file, "maintainer" wording, roadmap order). Merge in that order; before this one merges, `main` is merged into it and this file is brought up to date.
+- Open: #24, hardening from the external review, then the repo-presentation PR (README, this file, "maintainer" wording, roadmap order). Merge in that order; before the second merges, `main` is merged into it and this file is brought up to date.
 - Build order (roadmap): M1-M3, M5a, M6, M7, M4, M5b, M8, M9. Next is M5a: release timelines, dev/test split, smoke corpus.
 
 ## Waiting on the maintainer
 
-- Hardening PR: `remember` refuses a check method on any claim whose volatility is `none`, a note's default included. Confirm, or limit it to a `none` the caller set.
+- #24's three decisions: the volatility-`none` refusal also covers a note's default `none`; `needs_check_method` leaves out volatility-`none` claims; the 10 MB cap with grpcio's PyPI JSON at 9.1 MB.
 - M7's LLM-judged volatility policy and its volatility-impact item need the model runner and volatility labels, which are in M5b, after M7. Move the runner into M5a, or do those two items after M5b.
 - The M5a plan (no code yet). The timeline collection script runs on the maintainer's Mac.
 
 ## Next session: start here
 
-1. Check the two PRs (merged? comments? CI?).
+1. Check #24 and the repo-presentation PR (merged? comments? CI?).
 2. With the M5a plan approved, build M5a. Eval rules are in CLAUDE.md: the dev/test split is fixed before any tuning, and every eval also runs on `eval/data/smoke/` in CI.
 
 ## Notes for later milestones
