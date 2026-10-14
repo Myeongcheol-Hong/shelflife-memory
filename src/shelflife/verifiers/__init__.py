@@ -36,7 +36,9 @@ class FetchError(Exception):
 class Outcome:
     result: CheckResult
     new_value: str | None = None  # the value found at the source
-    evidence: str | None = None  # text quoted verbatim from the fetched content, or the error
+    # Text quoted verbatim from the fetched content, or why there is none: the error, or
+    # "version not found verbatim".
+    evidence: str | None = None
 
 
 # (check_target, claimed value, fetch) -> outcome.

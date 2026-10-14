@@ -15,7 +15,9 @@ from dataclasses import dataclass
 from shelflife.store import PARTICLES, drop_particle
 from shelflife.verifiers.web_page import Block
 
-SELECTOR_VERSION = "s2"  # s2: claim words lose Korean particles (drop_particle)
+# s2: claim words lose Korean particles (drop_particle). s3: extract() hides more inline
+# styles and reads at most MAX_PARSED characters, so a section and its hash may differ.
+SELECTOR_VERSION = "s3"
 
 # Heading rank: h1-h6, then <summary> (an FAQ question) and <dt> (a term) below them.
 HEADING_LEVELS = {"h1": 1, "h2": 2, "h3": 3, "h4": 4, "h5": 5, "h6": 6, "summary": 7, "dt": 7}

@@ -317,6 +317,8 @@ def test_volatility_none_skips_the_check_rule(store):
         FieldSource.DEFAULT,
     )
     assert (claim.next_check_at, claim.check_target) == (None, None)
+    # Nothing may check it, so it is not listed as missing a check method either.
+    assert [c.id for c in store.needs_check_method()] == []
 
 
 @pytest.mark.parametrize(

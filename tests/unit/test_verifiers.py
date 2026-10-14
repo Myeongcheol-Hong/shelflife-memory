@@ -240,7 +240,8 @@ class Response:
         return False
 
     def read(self, n=-1):
-        return self.body if n < 0 else self.body[:n]
+        assert n == verifiers.MAX_BYTES + 1  # never more than the limit is held in memory
+        return self.body[:n]
 
 
 def opened(monkeypatch, result):

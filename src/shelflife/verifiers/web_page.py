@@ -65,13 +65,13 @@ def fetch_page(
     owner's network or a cloud metadata service (behind a proxy, see check_url). The body
     is capped at MAX_BYTES.
 
-    The time limit: no request, the first or a redirect, starts once DEADLINE_SECONDS
-    have passed, and each one's socket timeout is TIMEOUT_SECONDS or the time left when
-    it starts, whichever is less. The deadline is checked again when the headers have
-    arrived and after each chunk of the body. The timeout bounds each socket operation
-    (connecting, one read), not a whole request, so the limit is not exact: a server
-    that keeps sending a little at a time can overrun it by up to one timeout while the
-    body is read, and by more while it sends the headers.
+    The time limit, DEADLINE_SECONDS: every request, the first and each redirect, is
+    checked just before it connects. None starts once the deadline has passed, and each
+    one's socket timeout is TIMEOUT_SECONDS or the time left, whichever is less. The
+    deadline is checked again when the headers have arrived and after each chunk of the
+    body. A socket timeout bounds one socket operation, not a request, so this is not a
+    hard limit: a server that keeps sending a little at a time (headers, chunk sizes, a
+    redirect's body) can overrun it by more than one timeout.
     """
     check_url(url, resolve)
     request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
@@ -85,8 +85,8 @@ def fetch_page(
         return remaining
 
     try:
-        timeout = min(TIMEOUT_SECONDS, left())
-        with (opener or _opener(resolve, left)).open(request, timeout=timeout) as response:
+        opener = opener or _opener(resolve, left)
+        with opener.open(request, timeout=TIMEOUT_SECONDS) as response:
             left()
             content_type = response.headers.get_content_type()
             if content_type not in PAGE_TYPES:
@@ -195,15 +195,33 @@ def _via_proxy(req: urllib.request.Request) -> bool:
     return req.has_proxy() or bool(getattr(req, "_tunnel_host", None))
 
 
+def _time_limit(req: urllib.request.Request, left: Callable[[], float] | None) -> None:
+    """Just before a request connects: FetchError once fetch_page's deadline has passed,
+    else a socket timeout of TIMEOUT_SECONDS or the time left, whichever is less. A
+    redirect passes here too, after urllib has read the previous response."""
+    if left is not None:
+        req.timeout = min(TIMEOUT_SECONDS, left())
+
+
 class _HTTPHandler(urllib.request.HTTPHandler):
+    def __init__(self, left: Callable[[], float] | None = None) -> None:
+        super().__init__()
+        self.left = left
+
     def http_open(self, req: urllib.request.Request) -> http.client.HTTPResponse:
+        _time_limit(req, self.left)
         # Through a proxy the connection goes to the proxy, which may be local.
         direct = not _via_proxy(req)
         return self.do_open(_HTTPConnection if direct else http.client.HTTPConnection, req)
 
 
 class _HTTPSHandler(urllib.request.HTTPSHandler):
+    def __init__(self, left: Callable[[], float] | None = None) -> None:
+        super().__init__()
+        self.left = left
+
     def https_open(self, req: urllib.request.Request) -> http.client.HTTPResponse:
+        _time_limit(req, self.left)
         direct = not _via_proxy(req)
         return self.do_open(_HTTPSConnection if direct else http.client.HTTPSConnection, req)
 
@@ -211,16 +229,11 @@ class _HTTPSHandler(urllib.request.HTTPSHandler):
 class _CheckedRedirects(urllib.request.HTTPRedirectHandler):
     max_redirections = MAX_REDIRECTS
 
-    def __init__(
-        self, resolve: Resolve | None = None, left: Callable[[], float] | None = None
-    ) -> None:
-        self.resolve, self.left = resolve, left
+    def __init__(self, resolve: Resolve | None = None) -> None:
+        self.resolve = resolve
 
     def redirect_request(self, req, fp, code, msg, headers, newurl):  # type: ignore[no-untyped-def]
         check_url(newurl, self.resolve)
-        if self.left is not None:
-            # urllib opens the redirect with req.timeout once this returns.
-            req.timeout = min(TIMEOUT_SECONDS, self.left())
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
@@ -228,14 +241,14 @@ def _opener(
     resolve: Resolve | None = None, left: Callable[[], float] | None = None
 ) -> urllib.request.OpenerDirector:
     """An opener for http and https only (no file:, data: or ftp: handlers). `left` gives
-    the seconds left before fetch_page's deadline, for each redirect."""
+    the seconds left before fetch_page's deadline, checked before each request."""
     opener = urllib.request.OpenerDirector()
     for handler in (
         urllib.request.ProxyHandler(),
-        _HTTPHandler(),
-        _HTTPSHandler(),
+        _HTTPHandler(left),
+        _HTTPSHandler(left),
         urllib.request.HTTPDefaultErrorHandler(),
-        _CheckedRedirects(resolve, left),
+        _CheckedRedirects(resolve),
         urllib.request.HTTPErrorProcessor(),
     ):
         opener.add_handler(handler)

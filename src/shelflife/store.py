@@ -719,13 +719,14 @@ class Store:
 
     def needs_check_method(self) -> list[Claim]:
         """World facts nothing can check, because no check method was given or found.
-        A none the caller set on purpose is a decision, not a gap, so it is left out (D10)."""
+        A none the caller set on purpose is a decision, not a gap, so it is left out (D10),
+        and so is a claim with volatility none, which is never checked (D5)."""
         with self._lock:
             rows = self._conn.execute(
                 """
                 SELECT * FROM claims
                 WHERE kind = 'world_fact' AND check_method = 'none' AND status != 'retired'
-                  AND check_method_source != 'caller'
+                  AND check_method_source != 'caller' AND volatility != 'none'
                 ORDER BY recorded_at, id
                 """
             ).fetchall()

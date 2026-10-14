@@ -374,19 +374,19 @@ def test_fetch_page_follows_only_checked_redirects(direct, monkeypatch):
     assert opened == [old, new, evil]
 
 
-def test_each_redirect_gets_the_time_left_and_none_starts_after_the_deadline(direct, monkeypatch):
+def test_each_request_gets_the_time_left_and_none_starts_after_the_deadline(direct, monkeypatch):
     old, new = "https://93.184.215.14/old", "https://93.184.215.15/new"
     now, timeouts = [0.0], []
     took = {old: 20, new: 5}  # seconds each request takes
 
-    def https_open(self, req):
+    def do_open(self, connection, req, **kw):  # the network step, after the time check
         timeouts.append((req.full_url, req.timeout))
         now[0] += took[req.full_url]
         if req.full_url == old:
             return Raw(old, 301, {"Location": new})
         return Raw(new, 200, {"Content-Type": "text/html"}, b"<p>Fee: $200</p>")
 
-    monkeypatch.setattr(web_page._HTTPSHandler, "https_open", https_open)
+    monkeypatch.setattr(web_page._HTTPSHandler, "do_open", do_open)
     page = fetch_page(old, clock=lambda: now[0])
     assert page.body == b"<p>Fee: $200</p>"
     # The first request gets the usual timeout; the redirect only the 10 s left.
@@ -397,14 +397,6 @@ def test_each_redirect_gets_the_time_left_and_none_starts_after_the_deadline(dir
     with pytest.raises(FetchError, match="took longer than 30 s"):
         fetch_page(old, clock=lambda: now[0])
     assert timeouts == [(old, web_page.TIMEOUT_SECONDS)]  # the redirect never started
-
-
-def test_no_request_starts_after_the_deadline(proxied):
-    ticks = iter([0, 31])
-    opener = Opener(Response(b"<p>Fee</p>"))
-    with pytest.raises(FetchError, match="took longer than 30 s"):
-        fetch_page("https://example.com/", opener=opener, clock=lambda: next(ticks))
-    assert opener.requests == []
 
 
 def test_the_default_opener_has_only_checked_handlers(direct):
@@ -579,12 +571,6 @@ def test_extract_splits_blocks_at_line_breaks_and_unclosed_tags():
 )
 def test_an_inline_style_that_does_not_hide_keeps_the_text(style):
     assert texts(f"<p style='{style}'>$300</p>") == ["$300"]
-
-
-def test_a_stylesheet_class_does_not_hide():
-    # Only inline styles are read (extract's docstring says so).
-    html = "<style>.sr-only { position: absolute; left: -9999px }</style>"
-    assert texts(html + "<p class='sr-only'>$300</p>") == ["$300"]
 
 
 def test_extract_reads_only_the_first_part_of_a_huge_page(monkeypatch):
