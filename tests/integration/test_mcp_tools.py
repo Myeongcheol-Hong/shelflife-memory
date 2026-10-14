@@ -191,6 +191,7 @@ async def test_verify_records_a_same_check_and_reschedules(client, routes):
         "old_value": "2.3.0",
         "new_value": "2.3.0",
         "evidence": "2.3.0",
+        "reason": None,
         "checked_at": "2026-10-12T09:30:00+00:00",
     }
     assert verified["claim"]["status"] == "fresh"
@@ -321,8 +322,10 @@ async def test_verify_returns_a_judgment_prompt_and_records_nothing(client, rout
     assert verified["check"] is None
     assert verified["claim"] == claim
     judge = verified["judge"]
-    assert (judge["prompt_version"], judge["url"]) == ("j1", AWS)
-    assert judge["section"]["heading"] == "Exam cost"
+    assert (judge["prompt_version"], judge["url"]) == ("j2", AWS)
+    # The heading is page text: shown inside the prompt's fence, not as a field (D10).
+    assert "\nHeading: Exam cost\n" in judge["prompt"]
+    assert "heading" not in judge["section"]
     assert judge["section"]["selector_version"] == "s1"
     assert f"Claim id: {claim['id']}\n" in judge["prompt"]
     assert AWS_QUOTE in " ".join(judge["prompt"].split())
@@ -341,7 +344,7 @@ async def test_record_check_stores_a_quoted_judgment(client, routes, store):
     assert recorded["claim"]["last_checked_at"] == "2026-10-12T09:30:00+00:00"
     stored = store.last_check(claim["id"])
     body = (FIXTURES / "pages/aws-aip-c01.html").read_bytes()
-    assert stored.prompt_version == "j1"
+    assert stored.prompt_version == "j2"
     assert stored.page_sha256 == hashlib.sha256(body).hexdigest()
     assert stored.reason is None
     # M4 compares the section's core, not the section grown around it (D10).
@@ -380,9 +383,16 @@ async def test_cannot_tell_stores_its_reason_and_keeps_the_claim_due(client, rou
     recorded = await call(
         client, "record_check", claim_id=claim["id"], result="cannot_tell", reason="no fee shown"
     )
-    assert (recorded["check"]["result"], recorded["check"]["evidence"]) == ("cannot_tell", None)
+    check = recorded["check"]
+    assert (check["result"], check["evidence"], check["reason"]) == (
+        "cannot_tell",
+        None,
+        "no fee shown",
+    )
     assert recorded["claim"]["next_check_at"] == claim["next_check_at"]
     assert store.last_check(claim["id"]).reason == "no fee shown"
+    [item] = (await call(client, "due", days=30))["due"]
+    assert item["last_check"]["reason"] == "no fee shown"  # Claude sees why (D10)
 
 
 @pytest.mark.parametrize(
@@ -449,6 +459,47 @@ async def test_verify_records_an_error_when_the_page_cannot_be_fetched(client, r
     assert "judge" not in verified
 
 
+async def test_verify_records_an_error_when_the_page_cannot_be_decoded(client, routes, store):
+    claim = await remember_page(client, routes)
+    routes[AWS] = UnicodeError("label empty or too long")  # a host name idna refuses
+    verified = await call(client, "verify", claim_id=claim["id"])
+    assert (verified["check"]["result"], verified["check"]["evidence"]) == (
+        "error",
+        "label empty or too long",
+    )
+    page = Page(AWS, AWS, 200, "text/html", None, b'<meta charset="undefined"><p>Fee: $300</p>')
+    async with Client(build_server(store, get_page=lambda url: page)) as other:
+        verified = await call(other, "verify", claim_id=claim["id"])
+    assert verified["check"]["result"] == "error"
+    assert "undefined encoding" in verified["check"]["evidence"]  # 3.11 words it differently
+
+
+async def test_a_check_recorded_while_the_page_loads_is_newer_than_the_fetch(store, clock):
+    claim = store.remember(
+        "The AWS AIP-C01 exam fee is $300",
+        "world_fact",
+        subject="AWS AIP-C01",
+        attribute="exam_fee",
+        value="$300",
+        check_method="web_page",
+        check_target=AWS,
+    )
+    body = (FIXTURES / "pages/aws-aip-c01.html").read_bytes()
+
+    def slow_page(url):
+        clock.now += timedelta(seconds=30)  # the other server process checks meanwhile
+        store.add_check(claim.id, CheckResult.CHANGED, "$250", "from the other process")
+        clock.now += timedelta(seconds=30)
+        return Page(url, url, 200, "text/html", None, body)
+
+    async with Client(build_server(store, get_page=slow_page, now=clock)) as client:
+        await call(client, "verify", claim_id=claim.id)
+        message = await call_error(
+            client, "record_check", claim_id=claim.id, result="same", quote=AWS_QUOTE
+        )
+    assert "was checked after this page was fetched" in message
+
+
 async def test_record_check_is_only_for_web_page_claims(client):
     claim = await remember_version(client, check_method="pypi", check_target="mcp", value="2.3.0")
     message = await call_error(client, "record_check", claim_id=claim["id"], result="cannot_tell")
@@ -467,4 +518,4 @@ async def test_the_tool_interface_is_pinned(client):
     interface = [words(client.instructions)]
     interface += [[t.name, words(t.description), t.input_schema] for t in tools]
     digest = hashlib.sha256(json.dumps(interface, sort_keys=True).encode()).hexdigest()
-    assert digest == "75d10bdf38536af2f2ac562f5b797c14ea9ffecd5226b15988ef009204c9df7c"
+    assert digest == "c2f7040f1b3c3a1539392085881c439aa58af85c8c522c78df02f309ecfe25b8"

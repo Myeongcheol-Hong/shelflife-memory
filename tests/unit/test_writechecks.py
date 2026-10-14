@@ -90,6 +90,13 @@ def test_quote_on_source():
     assert writechecks.quote_on_source(RECORD | {"source_url": None}, get_page)[0] == S
 
 
+def test_a_page_that_cannot_be_decoded_blocks_check_1():
+    def undecodable(url):
+        return Page(url, url, 200, "text/html", None, b'<meta charset="undefined"><p>x</p>')
+
+    assert writechecks.quote_on_source(RECORD, undecodable)[0] == B
+
+
 def test_value_in_quote_uses_the_record_check_matcher():
     assert writechecks.value_in_quote(RECORD) == (P, None)  # $300 is 300 USD
     assert writechecks.value_in_quote(RECORD | {"value": "$30"})[0] == F
@@ -131,16 +138,77 @@ def test_verifies_same():
     assert writechecks.verifies_same(pypi | {"value": None}, fetch)[0] == S
 
 
-def test_the_rate_counts_only_records_where_all_four_checks_applied():
-    rows = [
-        {"id": i, "check": c, "status": s}
-        for i, statuses in (("a", [P, P, P, P]), ("b", [P, F, P, P]), ("c", [P, P, B, P]))
-        for c, s in zip(writechecks.CHECKS, statuses, strict=True)
+def rows_for(*statuses):
+    return [
+        {"n": n, "check": c, "status": s}
+        for n, record in enumerate(statuses)
+        for c, s in zip(writechecks.CHECKS, record, strict=True)
     ]
+
+
+def test_any_failed_check_counts_against_the_rate():
+    # D10.7: a record with any fail is applied and failing, all four passes is passing,
+    # and the rest are left out.
+    summary = writechecks.summarize(
+        rows_for(
+            [P, P, P, P],  # passing
+            [P, F, P, P],  # failing
+            [P, P, B, P],  # left out: blocked, nothing failed
+            [P, P, F, B],  # failing: check 3 failed, so check 4 could not run
+            [S, S, F, J],  # failing, though other checks did not apply
+        )
+    )
+    assert (summary["applied"], summary["passed_all"], summary["rate"]) == (4, 1, 0.25)
+    assert summary["counts"]["target_exists"] == {P: 2, F: 2, S: 0, B: 1, J: 0}
+    assert writechecks.summarize([])["rate"] is None
+
+
+def test_records_without_ids_are_counted_one_by_one():
+    page = Page(
+        "https://example.com/news",
+        "https://example.com/news",
+        200,
+        "text/html",
+        None,
+        b"<p>mcp 2.3.0 is out now</p><p>mcp 2.2.0 was released</p>",
+    )
+    pypi = {"source_url": page.url, "check_method": "pypi", "check_target": "mcp"}
+    good = pypi | {"value": "2.3.0", "source_quote": "mcp 2.3.0 is out now"}
+    stale = pypi | {"value": "2.2.0", "source_quote": "mcp 2.2.0 was released"}
+    rows = writechecks.run([good, stale], fetch, lambda url: page)
     summary = writechecks.summarize(rows)
     assert (summary["applied"], summary["passed_all"], summary["rate"]) == (2, 1, 0.5)
-    assert summary["counts"]["value_in_quote"] == {P: 2, F: 1, S: 0, B: 0, J: 0}
-    assert writechecks.summarize([])["rate"] is None
+
+
+@pytest.mark.parametrize(
+    ("method", "target", "detail"),
+    [
+        ("pypi", "mcp/2.3.0", "not a PyPI project name"),  # PyPI would answer this URL
+        ("github_release", "getzep/graphiti/releases", "not an owner/repo"),
+        ("web_page", "ftp://example.com/fees", "not a full http(s) URL"),
+    ],
+)
+def test_a_malformed_target_fails_check_3(method, target, detail):
+    record = {"check_method": method, "check_target": target}
+    status, found = writechecks.target_exists(record, fetch, get_page)
+    assert (status, found.split(":")[0]) == (F, detail)
+
+
+def test_a_host_name_idna_refuses_fails_check_3():
+    def bad_host(url):
+        raise UnicodeError("label empty or too long")
+
+    record = {"check_method": "web_page", "check_target": "https://a..example.com/fees"}
+    assert writechecks.target_exists(record, fetch, bad_host)[0] == F
+
+
+def test_a_field_that_is_not_a_string_fails_every_check():
+    rows = writechecks.run([RECORD | {"value": 300}], fetch, get_page)
+    assert {(r["status"], r["detail"]) for r in rows} == {(F, "value must be a string")}
+
+
+def test_fields_are_read_as_remember_reads_them():
+    assert writechecks.value_in_quote(RECORD | {"value": "   "})[0] == S  # empty means missing
 
 
 def test_the_cli_prints_json_lines_and_stores_nothing(tmp_path, monkeypatch, capsys):
