@@ -189,7 +189,7 @@ To roll schema v2 back:
 
 Checks recorded after the upgrade are lost, and so is every other write since then (claims remembered or forgotten); `shelflife.db.v2-abandoned` keeps them.
 
-Search works for Korean (D8). The trigram index matches substrings, so a particle fused onto a word ("Chatbox로") does not hide it. Query words shorter than 3 characters, common in Korean, are matched with LIKE. A query word that mixes Latin letters and Hangul is split where the scripts meet, and a common particle there is dropped. Results are ranked by the number of query words matched, then bm25.
+Search works for Korean (D8). The trigram index matches substrings, so a particle fused onto a word ("Chatbox로") does not hide it. Query words shorter than 3 characters, common in Korean, are matched with LIKE. A query word that mixes Latin letters and Hangul is split where the scripts meet, and a common particle there is dropped; a Hangul word also loses a trailing particle if 2 characters remain ("가격은" finds "가격이"). Results are ranked by the number of query words matched, then bm25.
 
 ### 5.2 MCP tools
 

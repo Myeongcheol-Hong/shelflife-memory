@@ -210,7 +210,10 @@ def test_recall_finds_korean_claims(store, korean, query, expected):
         ("AI모델v2", ["AI", "모델", "v2"]),  # split at every boundary
         ("모델v2", ["모델", "v2"]),  # Hangul first
         ("Chatbox로 chatbox", ["Chatbox"]),  # deduplicated ignoring case
-        ("가격은", ["가격은"]),  # Hangul only: not split
+        ("가격은", ["가격"]),  # Hangul only: not split, but the particle goes
+        ("AI모델은", ["AI", "모델"]),
+        ("API에서는", ["API"]),  # a stacked particle is not left as a word
+        ("속도", ["속도"]),  # 2 characters must remain
         ("3월", ["3월"]),  # no Latin letter: not split
     ],
 )
@@ -246,6 +249,11 @@ def test_drop_particle_keeps_two_characters(word, kept):
 
 def test_recall_drops_a_particle_after_a_latin_name(store, korean):
     assert [korean[c.id] for c in store.recall("Chatbox의 가격은")] == ["price", "decision"]
+
+
+def test_recall_finds_a_korean_noun_under_another_particle(store, korean):
+    # D8's revisit case: the stored text says "가격은", the query "가격이".
+    assert [korean[c.id] for c in store.recall("가격이")] == ["price"]
 
 
 def test_recall_keeps_a_hangul_part_that_is_not_a_particle(store):
