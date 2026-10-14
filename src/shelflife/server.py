@@ -230,7 +230,7 @@ def build_server(
         For a pypi or github_release claim, the check is recorded and returned as check.
         check.result is same (the source still gives the claim's value), changed (the
         source gives new_value), cannot_tell, or error (evidence says why). If another
-        check of the claim was recorded while the source was fetched, this one is not
+        check of the claim fetched its source after this one did, this one is not
         recorded, and check is that newer check.
 
         For a web_page claim, check is null and judge holds a prompt with the relevant
@@ -253,17 +253,11 @@ def build_server(
                 raise ValueError(f"claim {claim_id!r} has no value to compare with the source")
             fetched_at = now()  # before the fetch, as judge() takes it
             outcome = verifier(claim.check_target or "", claim.value, fetch)
-            try:
-                claim, check = store.add_check(
-                    claim.id,
-                    outcome.result,
-                    outcome.new_value,
-                    outcome.evidence,
-                    fetched_at=fetched_at,
-                )
-            except StaleCheck:  # the other server process checked it while this fetched
-                claim, last = store.checkable(claim.id), store.last_check(claim.id)
-                return {"claim": claim.to_dict(), "check": last and last.to_dict()}
+            claim, check = store.add_check(
+                claim.id, outcome.result, outcome.new_value, outcome.evidence, fetched_at=fetched_at
+            )
+        except StaleCheck:  # another check fetched after this one: return the claim as stored
+            claim, check = store.get(claim_id), store.last_check(claim_id)
         except ValueError as e:
             raise ToolError(str(e)) from e
         return {"claim": claim.to_dict(), "check": check.to_dict()}
@@ -288,7 +282,9 @@ def build_server(
             core = normalize(" ".join(blocks[i].text for i in section.core))
             section_sha256 = hashlib.sha256(core.encode()).hexdigest()
         except (FetchError, UnicodeError) as e:
-            claim, check = store.add_check(claim.id, CheckResult.ERROR, evidence=str(e))
+            claim, check = store.add_check(
+                claim.id, CheckResult.ERROR, evidence=str(e), fetched_at=fetched_at
+            )
             return {"claim": claim.to_dict(), "check": check.to_dict()}
         fetched = _Fetched(
             at=fetched_at,

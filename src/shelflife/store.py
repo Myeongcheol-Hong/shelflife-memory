@@ -408,16 +408,17 @@ class Store:
         scheduler.next_check_after. A web_page judgment also stores its prompt_version,
         page_sha256, section_sha256, reason and selector_version (D10), so M4 can tell a
         selector change from a page change. `fetched_at` is when the source was fetched,
-        taken before the fetch: a claim checked at or after that second is refused with
-        StaleCheck, so a stale result cannot overwrite a newer check from the other
-        server process. Raises ValueError for an unknown or retired claim, or one
+        taken before the fetch. A result whose fetch started no later than the claim's
+        newest recorded fetch, to the second, is refused with StaleCheck, so a stale
+        result cannot overwrite a newer check from the other server process, and a
+        fetch is judged once. Raises ValueError for an unknown or retired claim, or one
         without a check method.
         """
         now = self._now()
         with self._lock, self._write():
             claim = self._get_checkable(claim_id)
             fetched = fetched_at and fetched_at.astimezone(UTC).replace(microsecond=0)
-            if fetched and claim.last_checked_at and claim.last_checked_at >= fetched:
+            if fetched and (last := self._last_fetch(claim.id)) and last >= fetched:
                 raise StaleCheck(
                     f"claim {claim_id!r} was checked after this page was fetched; call verify again"
                 )
@@ -508,6 +509,14 @@ class Store:
         if claim.check_method is CheckMethod.NONE:
             raise ValueError(f"claim {claim_id!r} has no check_method, so nothing can check it")
         return claim
+
+    def _last_fetch(self, claim_id: str) -> datetime | None:
+        """Caller holds the lock. When the claim's newest recorded check fetched its
+        source; a check stored without fetched_at counts from its checked_at, later."""
+        rows = self._conn.execute(
+            "SELECT coalesce(fetched_at, checked_at) FROM checks WHERE claim_id = ?", (claim_id,)
+        )
+        return max((datetime.fromisoformat(at) for (at,) in rows), default=None)
 
     def _inconclusive_in_a_row(self, claim_id: str) -> int:
         """Caller holds the lock. The error and cannot_tell results since the claim's last

@@ -133,7 +133,7 @@ def parse_version(text: str) -> tuple[str | None, str, str] | None:
 def _normal_suffix(suffix: str) -> str:
     """PEP 440's normal form of a pre-, post-, dev-release and local suffix: other
     spellings mapped (alpha, beta, c, pre, preview, rev, r, an implicit "-1"), separators
-    dropped, a missing number read as 0 and leading zeros removed."""
+    dropped or made ".", a missing number read as 0 and leading zeros removed."""
     m = PEP440_SUFFIX.fullmatch(suffix)
     if m is None:
         return suffix[1:] if suffix[:1] in "-_." else suffix
@@ -145,7 +145,8 @@ def _normal_suffix(suffix: str) -> str:
     if m["dev"]:
         out += ".dev" + str(int(m["dev_n"] or 0))
     if m["local"]:
-        out += "+" + re.sub(r"[-_]", ".", m["local"])
+        parts = re.split(r"[-_.]", m["local"])
+        out += "+" + ".".join(p.lstrip("0") or "0" if p.isdigit() else p for p in parts)
     return out
 
 

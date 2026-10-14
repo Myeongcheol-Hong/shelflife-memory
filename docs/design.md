@@ -12,7 +12,7 @@
 
 ## 1. Problem
 
-Today's memory systems (Zep/Graphiti, Hindsight and others) update a memory **when new information arrives and conflicts with the old**; Mem0 only adds memories, and hides one after an expiration date if one was set when it was stored. When the world changes and nobody tells the system, the stale memory keeps being served.
+Today's memory systems (Zep/Graphiti, Hindsight and others) update a memory **when new information arrives and conflicts with the old**; Mem0's pipeline only adds memories, and a memory can carry an optional expiration date, after which it is hidden. When the world changes and nobody tells the system, the stale memory keeps being served.
 
 - Hindsight's own docs say that when a fact stops being true with nothing to replace it, nothing in the pipeline knows the world changed, so the user has to invalidate it by hand.
 - On evolving knowledge, RAG serves superseded values 15 to 40% of the time when forced to answer (MemStrata, arXiv 2606.26511).
@@ -29,7 +29,7 @@ The README names these projects openly.
 |---|---|---|
 | Zep / Graphiti | Bi-temporal knowledge graph. Invalidates an old fact when a contradicting new fact arrives | Misses changes when no new information arrives |
 | Hindsight | Separates world facts from experiences. Its curation API can invalidate and restore memories | Invalidation is manual |
-| Mem0 | An ADD-only pipeline: new information is added as new memories, not merged into old ones. An optional `expiration_date` hides a memory after that date | Nothing re-checks a memory against its source; an expiry date is fixed when the memory is stored. Says itself that staleness in high-relevance memories is an open problem |
+| Mem0 | An ADD-only pipeline: new information is added as new memories, not merged into old ones. An optional `expiration_date` hides a memory after that date | Nothing re-checks a memory against its source: an expiration date is a guess at when the fact goes stale. Says itself that staleness in high-relevance memories is an open problem |
 | MemStrata (arXiv 2606.26511) | Deterministic (subject, relation, object) supersession retires replaced values. Shows RAG serves 15-40% stale values | Also needs the new value to arrive |
 | [MemGuard](https://github.com/ac12644/MemGuard) | **Closest match.** Sidecar for Mem0/Zep/Letta/LangMem: re-fetches source URLs, trust scores, quarantine, 4 MCP tools | No published eval or benchmark. Heavy stack (Postgres, Redis, Celery, React). Decision dependencies ("causal chain") only on the roadmap. 3 stars, no commits since 2026-06 |
 | [agent-memory-staleness-audit](https://github.com/a-bhimava/agent-memory-staleness-audit) | Scores staleness from provenance, per-type half-lives and same-subject supersession | Deliberately no network re-validation. STALE eval planned, not yet run |
@@ -126,7 +126,7 @@ A `decision` claim points to its supporting claims through `depends_on`. If any 
 
 Every check is recorded in the `checks` table: when, which method, result (same / changed / cannot_tell / error), old value, new value, evidence quote and cost. This is the audit trail for "why did it answer this way", which matters in regulated domains.
 
-A `web_page` check also records which judgment template was used and what it judged: `prompt_version`, `page_sha256` and `section_sha256`, the `selector_version` and the page's `fetched_at`, so M4 can tell a selector change from a page change, plus the `reason` Claude may give for `cannot_tell` (schema v2, D10). The section hash covers the section's core, the best segment before it grows into its neighbours; it is the baseline M4's daily run compares with to mark a claim "possibly changed" (D4). `cost_usd` stays empty under the subscription: a judgment made in the conversation (D4 (b)) has no per-call price the server could know.
+A `web_page` check also records which judgment template was used and what it judged: `prompt_version`, `page_sha256` and `section_sha256`, the `selector_version` and the page's `fetched_at`, so M4 can tell a selector change from a page change (a pypi or github_release check stores `fetched_at` too, D10 follow-up 20), plus the `reason` Claude may give for `cannot_tell` (schema v2, D10). The section hash covers the section's core, the best segment before it grows into its neighbours; it is the baseline M4's daily run compares with to mark a claim "possibly changed" (D4). `cost_usd` stays empty under the subscription: a judgment made in the conversation (D4 (b)) has no per-call price the server could know.
 
 ## 5. Architecture
 

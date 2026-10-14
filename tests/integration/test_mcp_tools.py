@@ -3,6 +3,7 @@
 import functools
 import hashlib
 import json
+import threading
 from datetime import timedelta
 from pathlib import Path
 
@@ -243,11 +244,11 @@ async def test_verify_refuses_claims_it_cannot_check(client, store):
     assert "has no value to compare with the source" in message
 
 
-async def test_two_interleaved_verifies_keep_the_newer_check(store, clock):
-    # Claude Desktop and Claude Code each run a server on the file. A's fetch is slow:
-    # while it loads, B fetches the new release and records changed. A's "same" was
-    # read before that, so it is not recorded and cannot mark the claim fresh again.
-    claim = store.remember(
+NEW_RELEASE = b'{"info": {"version": "2.4.0"}}'
+
+
+def remember_mcp(store):
+    return store.remember(
         "The latest mcp is 2.3.0",
         "world_fact",
         value="2.3.0",
@@ -255,10 +256,17 @@ async def test_two_interleaved_verifies_keep_the_newer_check(store, clock):
         check_method="pypi",
         check_target="mcp",
     )
+
+
+async def test_two_interleaved_verifies_keep_the_newer_check(store, clock):
+    # Claude Desktop and Claude Code each run a server on the file. A's fetch is slow:
+    # while it loads, B fetches the new release and records changed. A's "same" was
+    # read before that, so it is not recorded and cannot mark the claim fresh again.
+    claim = remember_mcp(store)
     start = clock.now
 
     def new_release(url, headers):
-        return b'{"info": {"version": "2.4.0"}}'
+        return NEW_RELEASE
 
     async with Client(build_server(store, fetch=new_release, now=clock)) as b:
 
@@ -277,6 +285,51 @@ async def test_two_interleaved_verifies_keep_the_newer_check(store, clock):
     assert (verified["claim"]["status"], verified["claim"]["value"]) == ("changed", "2.3.0")
     rows = store._conn.execute("SELECT result, fetched_at FROM checks").fetchall()
     assert [tuple(r) for r in rows] == [("changed", (start + timedelta(seconds=30)).isoformat())]
+
+
+async def test_a_verify_that_fetched_later_is_recorded_after_one_that_fetched_earlier(store, clock):
+    # The other order: B starts fetching first and records first, then A, which started
+    # fetching after B, finishes. A's result is the newer one, so it is recorded.
+    claim = remember_mcp(store)
+    start = clock.now
+    b_fetching, a_fetching, b_done = threading.Event(), threading.Event(), threading.Event()
+
+    def old_release(url, headers):  # B
+        b_fetching.set()
+        assert a_fetching.wait(5)
+        return (FIXTURES / "pypi/mcp.json").read_bytes()
+
+    def new_release(url, headers):  # A
+        a_fetching.set()
+        assert b_done.wait(5)
+        clock.now += timedelta(seconds=10)
+        return NEW_RELEASE
+
+    found = {}
+
+    async def verify(name, client):
+        found[name] = await call(client, "verify", claim_id=claim.id)
+        if name == "b":
+            b_done.set()
+
+    async with (
+        Client(build_server(store, fetch=old_release, now=clock)) as b,
+        Client(build_server(store, fetch=new_release, now=clock)) as a,
+        anyio.create_task_group() as tasks,
+    ):
+        tasks.start_soon(verify, "b", b)
+        assert await anyio.to_thread.run_sync(b_fetching.wait, 5)
+        clock.now += timedelta(seconds=10)
+        tasks.start_soon(verify, "a", a)
+
+    assert found["b"]["check"]["result"] == "same"
+    assert (found["a"]["check"]["result"], found["a"]["check"]["new_value"]) == ("changed", "2.4.0")
+    assert found["a"]["claim"]["status"] == "changed"
+    rows = store._conn.execute("SELECT result, fetched_at FROM checks ORDER BY rowid").fetchall()
+    assert [tuple(r) for r in rows] == [
+        ("same", start.isoformat()),
+        ("changed", (start + timedelta(seconds=10)).isoformat()),
+    ]
 
 
 async def test_due_returns_three_lists(client, routes):
@@ -574,6 +627,27 @@ async def test_a_check_recorded_while_the_page_loads_is_newer_than_the_fetch(sto
     assert "was checked after this page was fetched" in message
 
 
+async def test_a_page_error_older_than_the_last_check_is_not_recorded(store, clock):
+    claim = store.remember(
+        "The AWS AIP-C01 exam fee is $300",
+        "world_fact",
+        value="$300",
+        check_method="web_page",
+        check_target=AWS,
+    )
+
+    def failing_page(url):
+        clock.now += timedelta(seconds=30)  # the other server process checks meanwhile
+        store.add_check(claim.id, CheckResult.CHANGED, "$250", "from the other process")
+        raise FetchError("HTTP 503")
+
+    async with Client(build_server(store, get_page=failing_page, now=clock)) as client:
+        verified = await call(client, "verify", claim_id=claim.id)
+    assert (verified["check"]["result"], verified["check"]["new_value"]) == ("changed", "$250")
+    assert verified["claim"]["status"] == "changed"
+    assert store._conn.execute("SELECT count(*) FROM checks").fetchone()[0] == 1
+
+
 async def test_record_check_is_only_for_web_page_claims(client):
     claim = await remember_version(client, check_method="pypi", check_target="mcp", value="2.3.0")
     message = await call_error(client, "record_check", claim_id=claim["id"], result="cannot_tell")
@@ -592,4 +666,4 @@ async def test_the_tool_interface_is_pinned(client):
     interface = [words(client.instructions)]
     interface += [[t.name, words(t.description), t.input_schema] for t in tools]
     digest = hashlib.sha256(json.dumps(interface, sort_keys=True).encode()).hexdigest()
-    assert digest == "b8b7198f96803c102975905b56e8f84ccd664f9f7451776c2367cabfc3b12b0b"
+    assert digest == "a35fe16c4cd0dce759c0e1fc728339a6c7becaedf8bcfe865bb535e717cb79e0"

@@ -218,6 +218,7 @@ def test_evidence_must_appear_verbatim_in_the_fetched_body():
         ("v1.0.0-beta.1", "1.0b1"),  # a semver tag
         ("1.0a1.post2.dev3", "1.0alpha-1-2_dev_3"),
         ("1.0+ubuntu-1", "1.0+Ubuntu_1"),  # a local version's separators and case
+        ("1.0+01", "1.0+1"),  # a local version's numbers
     ],
 )
 def test_same_version(a, b):
@@ -242,6 +243,7 @@ def test_same_version(a, b):
         ("1.0.post1", "1.0.dev1"),
         ("1.0c1", "1.0.post1"),
         ("1.0+local", "1.0"),
+        ("1.0_1", "1.0-1"),  # only "-" makes an implicit post-release (PEP 440)
     ],
 )
 def test_different_versions(a, b):
