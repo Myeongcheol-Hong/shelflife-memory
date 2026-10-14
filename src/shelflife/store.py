@@ -99,8 +99,9 @@ COMMIT;
 """
 
 
-# Common Korean particles. In a query word that mixes Latin letters and Hangul
-# ("Chatbox의"), a Hangul part that is one of these is dropped (D8).
+# Common Korean particles (D8). In a query word that mixes Latin letters and Hangul
+# ("Chatbox의"), a Hangul part that is one of these is dropped; drop_particle() also
+# drops one from the end of a pure-Hangul word.
 PARTICLES = frozenset("은 는 이 가 을 를 의 로 으로 에 에서 와 과 도 만".split())
 _SCRIPT_RUNS = re.compile(r"[\uac00-\ud7a3]+|[^\uac00-\ud7a3]+")
 _LONGEST_FIRST = sorted(PARTICLES, key=len, reverse=True)

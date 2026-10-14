@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from shelflife.store import PARTICLES, drop_particle
 from shelflife.verifiers.web_page import Block
 
-SELECTOR_VERSION = "s1"
+SELECTOR_VERSION = "s2"  # s2: claim words lose Korean particles (drop_particle)
 
 # Heading rank: h1-h6, then <summary> (an FAQ question) and <dt> (a term) below them.
 HEADING_LEVELS = {"h1": 1, "h2": 2, "h3": 3, "h4": 4, "h5": 5, "h6": 6, "summary": 7, "dt": 7}
@@ -65,13 +65,14 @@ def terms(text: str | None) -> set[str]:
     A word that mixes Hangul with other letters is split where the scripts meet, and a
     Hangul part that is a particle is dropped, as recall does (D8): "Chatbox의" gives
     "chatbox". A Hangul part also loses a trailing particle if 2 characters remain:
-    "가격은" gives "가격"."""
+    "가격은" gives "가격". The particle check comes after that, so a stacked particle
+    goes too: "API에서는" gives "api", not "api" and "에서"."""
     found: set[str] = set()
     for word in WORD.findall((text or "").casefold()):
         parts = SCRIPT_RUNS.findall(word) if HANGUL.search(word) else [word]
+        parts = [drop_particle(p) for p in parts]
         if len(parts) > 1:
             parts = [p for p in parts if p not in PARTICLES]
-        parts = [drop_particle(p) for p in parts]
         found.update(p for p in parts if p not in STOPWORDS and _long_enough(p))
     return found
 
