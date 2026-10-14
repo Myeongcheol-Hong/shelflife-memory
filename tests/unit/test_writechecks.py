@@ -87,6 +87,7 @@ def test_quote_on_source():
     other = RECORD | {"source_quote": "300 USD. Visit our pricing"}
     assert writechecks.quote_on_source(other, get_page) == (F, "quote not on the page")
     assert writechecks.quote_on_source(RECORD, failing(503)) == (B, "HTTP 503")
+    assert writechecks.quote_on_source(RECORD, failing(404)) == (F, "HTTP 404")  # gone
     assert writechecks.quote_on_source(RECORD | {"source_url": None}, get_page)[0] == S
 
 
@@ -134,6 +135,9 @@ def test_verifies_same():
     status, detail = writechecks.verifies_same(pypi | {"value": "2.2.0"}, fetch)
     assert (status, detail) == (F, "changed: 2.3.0")
     assert writechecks.verifies_same(pypi, failing(503))[0] == B
+    # A repository with no latest release: GitHub answers 404, so verify never says same.
+    github = {"check_method": "github_release", "check_target": "o/r", "value": "v1"}
+    assert writechecks.verifies_same(github, failing(404))[0] == F
     assert writechecks.verifies_same(RECORD, fetch) == (J, None)
     assert writechecks.verifies_same(pypi | {"value": None}, fetch)[0] == S
 
