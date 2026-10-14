@@ -230,8 +230,8 @@ def test_parse_version_rejects_what_is_not_a_version(text):
 
 
 class Response:
-    def __init__(self, body=b"ok"):
-        self.body = body
+    def __init__(self, body=b"ok", limit=None):
+        self.body, self.limit = body, limit
 
     def __enter__(self):
         return self
@@ -240,7 +240,8 @@ class Response:
         return False
 
     def read(self, n=-1):
-        assert n == verifiers.MAX_BYTES + 1  # never more than the limit is held in memory
+        # Never more than the limit is held in memory.
+        assert n == (self.limit or verifiers.MAX_BYTES) + 1
         return self.body[:n]
 
 
@@ -275,6 +276,21 @@ def test_http_get_refuses_a_body_over_the_limit(monkeypatch):
     opened(monkeypatch, Response(b"x" * 13))
     with pytest.raises(FetchError, match="larger than"):
         http_get("https://example.org/x", {})
+
+
+def test_pypi_gets_its_own_larger_limit(monkeypatch):
+    monkeypatch.setattr(verifiers, "MAX_BYTES", 12)
+    monkeypatch.setattr(verifiers, "PYPI_MAX_BYTES", 20)
+    pypi_json = "https://pypi.org/pypi/grpcio/json"
+    opened(monkeypatch, Response(b"x" * 20, limit=20))
+    assert http_get(pypi_json, {}) == b"x" * 20
+    opened(monkeypatch, Response(b"x" * 21, limit=20))
+    with pytest.raises(FetchError, match="larger than"):
+        http_get(pypi_json, {})
+    # Any other host keeps the smaller limit, even with pypi.org in its path.
+    opened(monkeypatch, Response(b"x" * 13))
+    with pytest.raises(FetchError, match="larger than"):
+        http_get("https://api.github.com/repos/pypi.org/x", {})
 
 
 @pytest.mark.parametrize(

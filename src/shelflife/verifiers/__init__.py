@@ -17,7 +17,10 @@ from dataclasses import dataclass
 from shelflife.models import CheckMethod, CheckResult
 
 TIMEOUT_SECONDS = 15
-MAX_BYTES = 10 * 2**20  # the largest response body read
+MAX_BYTES = 10 * 2**20  # the largest response body read, except from PyPI
+# PyPI's project JSON lists every file of every release, so it grows with each release
+# (grpcio's is over 9 MB). The pypi verifier fixes the host, so it gets its own cap.
+PYPI_MAX_BYTES = 50 * 2**20
 USER_AGENT = "shelflife-memory (+https://github.com/Myeongcheol-Hong/shelflife-memory)"
 
 # (url, extra headers) -> response body. Raises FetchError.
@@ -46,19 +49,21 @@ Verifier = Callable[[str, str | None, Fetch], Outcome]
 
 
 def http_get(url: str, headers: Mapping[str, str]) -> bytes:
-    """The real `Fetch`: a GET with a timeout and a User-Agent. A body over MAX_BYTES is
-    refused, and a redirect to another origin drops the Authorization header."""
+    """The real `Fetch`: a GET with a timeout and a User-Agent. A body over MAX_BYTES
+    (PYPI_MAX_BYTES from pypi.org) is refused, and a redirect to another origin drops the
+    Authorization header."""
     request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, **headers})
+    limit = PYPI_MAX_BYTES if urllib.parse.urlsplit(url).hostname == "pypi.org" else MAX_BYTES
     try:
         opener = urllib.request.build_opener(_SameOriginAuthorization)
         with opener.open(request, timeout=TIMEOUT_SECONDS) as response:
-            body = response.read(MAX_BYTES + 1)
+            body = response.read(limit + 1)
     except urllib.error.HTTPError as e:
         raise FetchError(f"HTTP {e.code} from {url}", status=e.code) from None
     except (OSError, http.client.HTTPException) as e:  # URLError and timeouts are OSErrors
         raise FetchError(f"cannot reach {url}: {e}") from None
-    if len(body) > MAX_BYTES:
-        raise FetchError(f"response larger than {MAX_BYTES // 2**20} MB from {url}")
+    if len(body) > limit:
+        raise FetchError(f"response larger than {limit // 2**20} MB from {url}")
     return body
 
 

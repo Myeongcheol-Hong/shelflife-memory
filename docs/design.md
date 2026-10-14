@@ -287,6 +287,7 @@ The user decides what to remember and gives the claim sentence (D2, D3). When Cl
 - **Comparisons**: Haiku vs Sonnet, full page vs relevant section only
 - **Trap pairs**: the page layout changed but the value did not (false-alarm trap), and pages that show two similar values such as monthly vs annual price (wrong-value trap).
 - **Failure attribution**: for every miss, record whether the selected section contained the evidence. "Extraction miss" and "judgment miss" need opposite fixes, so they are counted separately.
+- **Hidden-text rules**: extraction drops text with an inline `opacity:0` or `font-size:0`, which also hides text a reader sees: content a page fades in with JavaScript, or a `font-size:0` parent whose children set their own size. A correct quote from such text gives a wrong `cannot_tell`, the safe side. Measure how often: count the `cannot_tell` results whose evidence on the page sits inside such an element.
 
 ### 6.3 Eval hygiene (patterns borrowed from mature memory repos)
 
