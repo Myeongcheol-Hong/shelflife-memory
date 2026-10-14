@@ -18,9 +18,10 @@ from shelflife.verifiers.web_page import fetch_page
 
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
-    """One JSON object per line; blank lines are skipped."""
+    """One JSON object per line; blank lines are skipped. A UTF-8 byte-order mark, which
+    some Windows editors write, is ignored."""
     try:
-        text = path.read_text(encoding="utf-8")
+        text = path.read_text(encoding="utf-8-sig")
     except UnicodeDecodeError as e:
         raise ValueError(f"{path}: not UTF-8 ({e.reason})") from None
     records = []
@@ -83,7 +84,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "import":
             try:
                 imported, skipped = store.import_claims(records)
-            except ValueError as e:
+            except (ValueError, sqlite3.DatabaseError) as e:  # "database is locked" too
                 print(f"error: {e}", file=sys.stderr)
                 return 1
             print(f"imported {imported} claims, skipped {skipped} already stored")

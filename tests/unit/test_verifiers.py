@@ -1,8 +1,10 @@
 import urllib.error
+import urllib.request
 from pathlib import Path
 
 import pytest
 
+from shelflife import verifiers
 from shelflife.models import CheckResult
 from shelflife.verifiers import (
     FetchError,
@@ -81,7 +83,10 @@ def test_pypi_reports_fetch_and_format_errors(route, evidence):
 )
 def test_pypi_cannot_tell_without_a_verbatim_version(body):
     outcome = pypi.check("mcp", "2.3.0", fetcher({PYPI_MCP: body}))
-    assert (outcome.result, outcome.evidence) == (CheckResult.CANNOT_TELL, None)
+    assert (outcome.result, outcome.evidence) == (
+        CheckResult.CANNOT_TELL,
+        "version not found verbatim",
+    )
 
 
 @pytest.mark.parametrize("name", ["../etc", "mcp/../x", "mcp-", "mcp/json"])
@@ -169,7 +174,11 @@ def test_github_release_rejects_a_bad_repo_without_fetching(repo):
 
 
 def test_evidence_must_appear_verbatim_in_the_fetched_body():
-    assert compare_version("1.0", "1.0", body="{}").result is CheckResult.CANNOT_TELL
+    outcome = compare_version("1.0", "1.0", body="{}")
+    assert (outcome.result, outcome.evidence) == (
+        CheckResult.CANNOT_TELL,
+        "version not found verbatim",
+    )
     assert compare_version("1.0", "1.0", body='{"version": "1.0"}').result is CheckResult.SAME
 
 
@@ -220,27 +229,89 @@ def test_parse_version_rejects_what_is_not_a_version(text):
     assert parse_version(text) is None
 
 
+class Response:
+    def __init__(self, body=b"ok", limit=None):
+        self.body, self.limit = body, limit
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def read(self, n=-1):
+        # Never more than the limit is held in memory.
+        assert n == (self.limit or verifiers.MAX_BYTES) + 1
+        return self.body[:n]
+
+
+def opened(monkeypatch, result):
+    """Replace the network step of http_get's opener; returns the requests and handlers."""
+    seen = []
+
+    def open(self, request, timeout):
+        assert timeout > 0 and request.get_header("User-agent")
+        seen.append((request, self.handlers))
+        if isinstance(result, BaseException):
+            raise result
+        return result
+
+    monkeypatch.setattr(urllib.request.OpenerDirector, "open", open)
+    return seen
+
+
 def test_http_get_returns_the_body_and_sends_the_headers(monkeypatch):
-    sent = {}
-
-    class Response:
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *exc):
-            return False
-
-        def read(self):
-            return b"ok"
-
-    def urlopen(request, timeout):
-        sent.update(request.header_items())
-        return Response()
-
-    monkeypatch.setattr("urllib.request.urlopen", urlopen)
+    seen = opened(monkeypatch, Response(b"ok"))
     assert http_get("https://example.org/x", {"Authorization": "Bearer t"}) == b"ok"
-    assert sent["Authorization"] == "Bearer t"
-    assert "shelflife" in sent["User-agent"]
+    [(request, handlers)] = seen
+    assert request.get_header("Authorization") == "Bearer t"
+    assert "shelflife" in request.get_header("User-agent")
+    assert any(isinstance(h, verifiers._SameOriginAuthorization) for h in handlers)
+
+
+def test_http_get_refuses_a_body_over_the_limit(monkeypatch):
+    monkeypatch.setattr(verifiers, "MAX_BYTES", 12)
+    opened(monkeypatch, Response(b"x" * 12))
+    assert http_get("https://example.org/x", {}) == b"x" * 12
+    opened(monkeypatch, Response(b"x" * 13))
+    with pytest.raises(FetchError, match="larger than"):
+        http_get("https://example.org/x", {})
+
+
+def test_pypi_gets_its_own_larger_limit(monkeypatch):
+    monkeypatch.setattr(verifiers, "MAX_BYTES", 12)
+    monkeypatch.setattr(verifiers, "PYPI_MAX_BYTES", 20)
+    pypi_json = "https://pypi.org/pypi/grpcio/json"
+    opened(monkeypatch, Response(b"x" * 20, limit=20))
+    assert http_get(pypi_json, {}) == b"x" * 20
+    opened(monkeypatch, Response(b"x" * 21, limit=20))
+    with pytest.raises(FetchError, match="larger than"):
+        http_get(pypi_json, {})
+    # Any other host keeps the smaller limit, even with pypi.org in its path.
+    opened(monkeypatch, Response(b"x" * 13))
+    with pytest.raises(FetchError, match="larger than"):
+        http_get("https://api.github.com/repos/pypi.org/x", {})
+
+
+@pytest.mark.parametrize(
+    ("newurl", "kept"),
+    [
+        ("https://api.github.com/repositories/1/releases/latest", True),  # same origin
+        ("https://API.github.com:443/x", True),  # the default port, other case
+        ("https://objects.githubusercontent.com/x", False),  # another host
+        ("http://api.github.com/x", False),  # another scheme
+        ("https://api.github.com:8443/x", False),  # another port
+    ],
+)
+def test_a_redirect_to_another_origin_drops_the_authorization(newurl, kept):
+    request = urllib.request.Request(
+        "https://api.github.com/repos/a/b/releases/latest",
+        headers={"Authorization": "Bearer t", "Accept": "application/json"},
+    )
+    handler = verifiers._SameOriginAuthorization()
+    new = handler.redirect_request(request, None, 302, "Found", {}, newurl)
+    assert new.has_header("Authorization") is kept
+    assert new.get_header("Accept") == "application/json"  # other headers still follow
 
 
 @pytest.mark.parametrize(
@@ -252,11 +323,7 @@ def test_http_get_returns_the_body_and_sends_the_headers(monkeypatch):
     ],
 )
 def test_http_get_turns_failures_into_fetch_errors(monkeypatch, raised, message):
-    def urlopen(request, timeout):
-        assert timeout > 0 and request.get_header("User-agent")
-        raise raised
-
-    monkeypatch.setattr("urllib.request.urlopen", urlopen)
+    opened(monkeypatch, raised)
     with pytest.raises(FetchError, match=message) as error:
         http_get("https://example.org/x", {})
     assert error.value.status == (503 if isinstance(raised, urllib.error.HTTPError) else None)

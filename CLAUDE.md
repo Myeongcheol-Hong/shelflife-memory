@@ -39,7 +39,7 @@ These do not speed up: "move as fast as the work allows" does not apply to them.
 - **PR description:** a top part of at most 10 lines: **What changed**, **Read these first** (1-3 core files or functions), **Decisions needed**, **Removed or simplified**. Then **Proof** (each added test and what it asserts, one line each; commands run and their results), **Confidence** (high, medium or low per part, with a reason for anything not high), **Rollback** (how to undo it; write ONE-WAY DOOR if it changes the DB schema or stored data), then **Details**.
 - **Code the maintainer always reads:** the `store.py` schema and transactions, the MCP tool interfaces, quote and `record_check` validation, and eval scoring. A PR that changes one lists it under "Read these first".
 - **Simpler:** prefer the simpler fix and deleting code, and say what was removed.
-- **Packages:** only with the maintainer's approval and after checking the package exists on PyPI. CI fails on a change to the dependencies in `pyproject.toml` until the maintainer adds the `deps-approved` label.
+- **Packages:** only with the maintainer's approval and after checking the package exists on PyPI. CI fails on a change to the dependencies in `pyproject.toml` or to `uv.lock` until the maintainer adds the `deps-approved` label.
 - **Reviews:** use the `pr-reviewer` agent; its checklist is the `pr-review` skill.
 
 ## Tech constraints

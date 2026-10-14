@@ -326,7 +326,7 @@ async def test_verify_returns_a_judgment_prompt_and_records_nothing(client, rout
     # The heading is page text: shown inside the prompt's fence, not as a field (D10).
     assert "\nHeading: Exam cost\n" in judge["prompt"]
     assert "heading" not in judge["section"]
-    assert judge["section"]["selector_version"] == "s2"
+    assert judge["section"]["selector_version"] == "s3"
     assert f"Claim id: {claim['id']}\n" in judge["prompt"]
     assert AWS_QUOTE in " ".join(judge["prompt"].split())
     assert store.last_check(claim["id"]) is None
@@ -348,7 +348,7 @@ async def test_record_check_stores_a_quoted_judgment(client, routes, store, cloc
     assert stored.page_sha256 == hashlib.sha256(body).hexdigest()
     assert stored.reason is None
     # M4 tells a selector change from a page change by these two (D10).
-    assert (stored.selector_version, stored.fetched_at) == ("s2", clock.now)
+    assert (stored.selector_version, stored.fetched_at) == ("s3", clock.now)
     # M4 compares the section's core, not the section grown around it (D10).
     blocks = extract(decode(body))
     section = select_section(

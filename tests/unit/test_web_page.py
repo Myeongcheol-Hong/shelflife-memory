@@ -374,6 +374,31 @@ def test_fetch_page_follows_only_checked_redirects(direct, monkeypatch):
     assert opened == [old, new, evil]
 
 
+def test_each_request_gets_the_time_left_and_none_starts_after_the_deadline(direct, monkeypatch):
+    old, new = "https://93.184.215.14/old", "https://93.184.215.15/new"
+    now, timeouts = [0.0], []
+    took = {old: 20, new: 5}  # seconds each request takes
+
+    def do_open(self, connection, req, **kw):  # the network step, after the time check
+        timeouts.append((req.full_url, req.timeout))
+        now[0] += took[req.full_url]
+        if req.full_url == old:
+            return Raw(old, 301, {"Location": new})
+        return Raw(new, 200, {"Content-Type": "text/html"}, b"<p>Fee: $200</p>")
+
+    monkeypatch.setattr(web_page._HTTPSHandler, "do_open", do_open)
+    page = fetch_page(old, clock=lambda: now[0])
+    assert page.body == b"<p>Fee: $200</p>"
+    # The first request gets the usual timeout; the redirect only the 10 s left.
+    assert timeouts == [(old, web_page.TIMEOUT_SECONDS), (new, 10)]
+
+    now[0], timeouts[:] = 0.0, []
+    took[old] = 31  # the deadline passes before the redirect
+    with pytest.raises(FetchError, match="took longer than 30 s"):
+        fetch_page(old, clock=lambda: now[0])
+    assert timeouts == [(old, web_page.TIMEOUT_SECONDS)]  # the redirect never started
+
+
 def test_the_default_opener_has_only_checked_handlers(direct):
     opener = web_page._opener()
     kinds = {type(handler) for handler in opener.handlers}
@@ -472,6 +497,14 @@ def texts(html):
         "<p hidden='false'>$300</p>",  # a boolean attribute: any value hides
         "<p style='color:red;display:\tnone'>$300</p>",
         "<p style='visibility: collapse'>$300</p>",
+        "<p style='opacity: 0'>$300</p>",
+        "<p style='opacity:.0 !important'>$300</p>",
+        "<p style='font-size: 0'>$300</p>",
+        "<p style='font-size:0px'>$300</p>",
+        "<p style='position:absolute; left:-9999px'>$300</p>",
+        "<p style='top: -1000px'>$300</p>",
+        "<p style='text-indent:-100em'>$300</p>",
+        "<p style='text-indent: -9999rem'>$300</p>",
         "<dialog><p>$300</p></dialog>",  # a dialog that is not open
         "<title>$300</title>",
         "<video>Your browser cannot play $300</video>",
@@ -521,6 +554,29 @@ def test_extract_splits_blocks_at_line_breaks_and_unclosed_tags():
     html = "<ul><li>Associate<br>$99<li>Developer<br/>$125</ul><p>Next"
     assert texts(html) == ["Associate", "$99", "Developer", "$125", "Next"]
     assert normalize(page_text(extract(html))) == "Associate $99 Developer $125 Next"
+
+
+@pytest.mark.parametrize(
+    "style",
+    [
+        "opacity: 0.5",
+        "font-size: 0.8em",
+        "left: -999px",  # not far enough to be off screen
+        "top: -99em",
+        "text-indent: -99.9rem",
+        "left: 9999px",  # off screen to the right is not read as hidden
+        "margin-left: -9999px",  # only left, top and text-indent are read
+        "x-opacity: 0",
+    ],
+)
+def test_an_inline_style_that_does_not_hide_keeps_the_text(style):
+    assert texts(f"<p style='{style}'>$300</p>") == ["$300"]
+
+
+def test_extract_reads_only_the_first_part_of_a_huge_page(monkeypatch):
+    html = "<p>$250</p><p>$300 and more</p>"
+    monkeypatch.setattr(web_page, "MAX_PARSED", html.index("00 and"))
+    assert texts(html) == ["$250", "$3"]  # text past the cut is never seen
 
 
 def test_a_self_closed_hidden_element_is_empty():

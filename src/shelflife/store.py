@@ -530,11 +530,14 @@ class Store:
         else:
             volatility, volatility_source = DEFAULT_VOLATILITY[kind_], FieldSource.DEFAULT
 
+        # Volatility none means the claim never changes, so nothing should check it: the
+        # rule does not run, and a check_method from the caller is refused below.
         target = f["check_target"]
+        rule_may_apply = fact and volatility is not Volatility.NONE
         if f["check_method"] is not None:
             method = parse_enum(CheckMethod, f["check_method"], "check_method")
             method_source = FieldSource.CALLER
-        elif fact and (
+        elif rule_may_apply and (
             ruled_check := rules.infer_check(target, f["source_url"], f["attribute"], f["value"])
         ):
             (method, target), method_source = ruled_check, FieldSource.RULE
@@ -543,6 +546,11 @@ class Store:
         if method is not CheckMethod.NONE:
             if kind_ in (Kind.PREFERENCE, Kind.DECISION):
                 raise ValueError(f"{kind_} claims are never checked; leave check_method empty")
+            if volatility is Volatility.NONE:
+                raise ValueError(
+                    "volatility none means the claim never changes, so it is never checked; "
+                    "leave check_method empty or give another volatility"
+                )
             if target is None:
                 raise ValueError(f"check_target is required when check_method is {method}")
             if method is CheckMethod.WEB_PAGE and not is_http_url(target):
@@ -711,13 +719,14 @@ class Store:
 
     def needs_check_method(self) -> list[Claim]:
         """World facts nothing can check, because no check method was given or found.
-        A none the caller set on purpose is a decision, not a gap, so it is left out (D10)."""
+        A none the caller set on purpose is a decision, not a gap, so it is left out (D10),
+        and so is a claim with volatility none, which is never checked (D5)."""
         with self._lock:
             rows = self._conn.execute(
                 """
                 SELECT * FROM claims
                 WHERE kind = 'world_fact' AND check_method = 'none' AND status != 'retired'
-                  AND check_method_source != 'caller'
+                  AND check_method_source != 'caller' AND volatility != 'none'
                 ORDER BY recorded_at, id
                 """
             ).fetchall()
