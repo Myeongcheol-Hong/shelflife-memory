@@ -206,6 +206,20 @@ def _parse_observed_at(value: str, today: date) -> date:
     return observed
 
 
+def _create_private(path: str | Path) -> None:
+    """Create an empty database file readable by its owner only (0600), unless the file
+    exists. SQLite reads an empty file as an empty database and gives its -wal and -shm
+    files the database file's mode."""
+    try:
+        os.close(os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600))
+    except FileExistsError:
+        pass
+
+
+class StaleCheck(ValueError):
+    """A check whose source was fetched before the claim's last check: not recorded."""
+
+
 class Store:
     """All reads and writes of the SQLite file.
 
@@ -215,7 +229,9 @@ class Store:
 
     def __init__(self, path: str | Path, now: Clock = system_clock) -> None:
         if str(path) != ":memory:":
-            Path(path).parent.mkdir(parents=True, exist_ok=True)
+            # Only what Shelf Life creates is made private; an existing one keeps its mode.
+            Path(path).parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+            _create_private(path)
         # Claude Desktop and Claude Code each run their own server process on this file.
         # WAL lets readers and a writer work at the same time, and a writer waits for
         # another writer's lock (busy timeout) instead of failing at once.
@@ -292,6 +308,7 @@ class Store:
                 backup = f"{self._path}.bak-v1"
                 if os.path.exists(backup):
                     backup += self._now().astimezone(UTC).strftime(".%Y%m%dT%H%M%SZ")
+                _create_private(backup)
                 with (
                     closing(
                         sqlite3.connect(self._path, timeout=MIGRATION_TIMEOUT_SECONDS)
@@ -389,18 +406,19 @@ class Store:
         The claim keeps its value: same makes it fresh, changed makes it changed, and
         error or cannot_tell leave its status alone. next_check_at follows
         scheduler.next_check_after. A web_page judgment also stores its prompt_version,
-        page_sha256, section_sha256, reason, selector_version and fetched_at (D10), so
-        M4 can tell a selector change from a page change. With `fetched_at`, the time of
-        the judgment's page fetch, a claim checked at or after that second is refused, so a stale
-        judgment cannot overwrite a newer check from the other server process. Raises
-        ValueError for an unknown or retired claim, or one without a check method.
+        page_sha256, section_sha256, reason and selector_version (D10), so M4 can tell a
+        selector change from a page change. `fetched_at` is when the source was fetched,
+        taken before the fetch: a claim checked at or after that second is refused with
+        StaleCheck, so a stale result cannot overwrite a newer check from the other
+        server process. Raises ValueError for an unknown or retired claim, or one
+        without a check method.
         """
         now = self._now()
         with self._lock, self._write():
             claim = self._get_checkable(claim_id)
             fetched = fetched_at and fetched_at.astimezone(UTC).replace(microsecond=0)
             if fetched and claim.last_checked_at and claim.last_checked_at >= fetched:
-                raise ValueError(
+                raise StaleCheck(
                     f"claim {claim_id!r} was checked after this page was fetched; call verify again"
                 )
             check = Check(

@@ -1,10 +1,12 @@
 """Call the tools through an in-process MCP client, the way Claude Desktop would."""
 
+import functools
 import hashlib
 import json
 from datetime import timedelta
 from pathlib import Path
 
+import anyio
 import pytest
 from mcp import Client
 
@@ -239,6 +241,42 @@ async def test_verify_refuses_claims_it_cannot_check(client, store):
         store._conn.execute("UPDATE claims SET value = NULL WHERE id = ?", (no_value["id"],))
     message = await call_error(client, "verify", claim_id=no_value["id"])
     assert "has no value to compare with the source" in message
+
+
+async def test_two_interleaved_verifies_keep_the_newer_check(store, clock):
+    # Claude Desktop and Claude Code each run a server on the file. A's fetch is slow:
+    # while it loads, B fetches the new release and records changed. A's "same" was
+    # read before that, so it is not recorded and cannot mark the claim fresh again.
+    claim = store.remember(
+        "The latest mcp is 2.3.0",
+        "world_fact",
+        value="2.3.0",
+        volatility="fast",
+        check_method="pypi",
+        check_target="mcp",
+    )
+    start = clock.now
+
+    def new_release(url, headers):
+        return b'{"info": {"version": "2.4.0"}}'
+
+    async with Client(build_server(store, fetch=new_release, now=clock)) as b:
+
+        def slow_old_release(url, headers):
+            clock.now += timedelta(seconds=30)
+            anyio.from_thread.run(functools.partial(call, b, "verify", claim_id=claim.id))
+            clock.now += timedelta(seconds=30)
+            return (FIXTURES / "pypi/mcp.json").read_bytes()  # 2.3.0, the claim's value
+
+        async with Client(build_server(store, fetch=slow_old_release, now=clock)) as a:
+            verified = await call(a, "verify", claim_id=claim.id)
+
+    check = verified["check"]
+    assert (check["result"], check["new_value"]) == ("changed", "2.4.0")  # B's check
+    assert check["checked_at"] == (start + timedelta(seconds=30)).isoformat()
+    assert (verified["claim"]["status"], verified["claim"]["value"]) == ("changed", "2.3.0")
+    rows = store._conn.execute("SELECT result, fetched_at FROM checks").fetchall()
+    assert [tuple(r) for r in rows] == [("changed", (start + timedelta(seconds=30)).isoformat())]
 
 
 async def test_due_returns_three_lists(client, routes):
@@ -554,4 +592,4 @@ async def test_the_tool_interface_is_pinned(client):
     interface = [words(client.instructions)]
     interface += [[t.name, words(t.description), t.input_schema] for t in tools]
     digest = hashlib.sha256(json.dumps(interface, sort_keys=True).encode()).hexdigest()
-    assert digest == "c2f7040f1b3c3a1539392085881c439aa58af85c8c522c78df02f309ecfe25b8"
+    assert digest == "b8b7198f96803c102975905b56e8f84ccd664f9f7451776c2367cabfc3b12b0b"

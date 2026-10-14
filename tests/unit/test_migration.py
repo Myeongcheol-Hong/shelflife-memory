@@ -1,6 +1,8 @@
 """Schema v1 to v2 (D10): a one-way door, so the v1 file is backed up first."""
 
+import os
 import sqlite3
+import stat
 import threading
 from contextlib import closing
 from datetime import UTC, datetime
@@ -145,6 +147,8 @@ def test_a_v1_file_is_backed_up_then_migrated(v1_file, clock, capsys):
         assert copy.execute("SELECT id FROM claims").fetchall() == [("c1",)]  # from the -wal
         assert copy.execute("SELECT id FROM checks").fetchall() == [("k1",)]
     assert not backup.with_name("shelflife.db.bak-v1-wal").exists()
+    if os.name != "nt":
+        assert stat.S_IMODE(backup.stat().st_mode) == 0o600  # a copy of private data
     err = capsys.readouterr().err
     assert f"database upgraded to schema v2; the v1 file is saved as {backup}" in err
 

@@ -1,4 +1,6 @@
+import os
 import sqlite3
+import stat
 import threading
 from datetime import UTC, date, datetime, timedelta, timezone
 
@@ -440,3 +442,33 @@ def test_db_path_comes_from_env_or_home(monkeypatch, tmp_path):
     monkeypatch.delenv("SHELFLIFE_DB")
     monkeypatch.setenv("HOME", str(tmp_path))
     assert default_db_path() == tmp_path / ".shelflife" / "shelflife.db"
+
+
+# --- file modes -----------------------------------------------------------------------
+
+posix_modes = pytest.mark.skipif(os.name == "nt", reason="POSIX file modes")
+
+
+def mode(path):
+    return stat.S_IMODE(path.stat().st_mode)
+
+
+@posix_modes
+def test_a_new_database_and_its_folder_are_private(tmp_path, clock):
+    path = tmp_path / "new" / "shelflife.db"
+    with Store(path, now=clock) as store:
+        store.remember("A note", "note")
+        files = {p.name: mode(p) for p in path.parent.iterdir()}
+    assert mode(path.parent) == 0o700
+    assert files == {"shelflife.db": 0o600, "shelflife.db-wal": 0o600, "shelflife.db-shm": 0o600}
+
+
+@posix_modes
+def test_an_existing_database_and_folder_keep_their_modes(tmp_path, clock):
+    path = tmp_path / "shelflife.db"
+    path.touch()
+    path.chmod(0o644)
+    tmp_path.chmod(0o755)
+    with Store(path, now=clock) as store:
+        store.remember("A note", "note")
+    assert (mode(tmp_path), mode(path)) == (0o755, 0o644)
