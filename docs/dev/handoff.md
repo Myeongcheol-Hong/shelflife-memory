@@ -13,7 +13,7 @@ Where the work stands. Each session's last PR overwrites this file (CLAUDE.md); 
 
 1. Confirm D12's sessions rule (#29), written before any run. In dev, mcp loses 0 to 9 of its 20 claims per seed; test drops none.
 2. Confirm D12's proposed line (#30): 6.1 keeps no per-claim rows; scoring again means running again.
-3. Merge #29, then #30. If #29 merges first, retarget #30 to `main` and merge `main` into its branch (merge commits only).
+3. Merge #29, then #30. After #29 merges, check that #30's base is `main`, and merge `main` into #30's branch (merge commits only).
 4. Open, no rush: whether the github_release verifier should read a project's tag pattern too (D11).
 
 ## Next session: start here
