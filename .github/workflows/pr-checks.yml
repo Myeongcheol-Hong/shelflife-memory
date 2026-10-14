@@ -1,0 +1,91 @@
+name: PR checks
+
+# Both jobs compare the PR's merge commit (HEAD) with its first parent, the base branch,
+# so they see exactly what merging the PR would change. labeled and unlabeled re-run
+# them when the owner adds or removes deps-approved.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+jobs:
+  dependencies:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+      - name: Dependencies unchanged, or the PR has the deps-approved label
+        env:
+          APPROVED: ${{ contains(github.event.pull_request.labels.*.name, 'deps-approved') }}
+        shell: python3 {0}
+        run: |
+          import os, subprocess, sys, tomllib
+
+          def deps(rev):
+              text = subprocess.run(
+                  ["git", "show", f"{rev}:pyproject.toml"],
+                  check=True, capture_output=True, text=True,
+              ).stdout
+              data = tomllib.loads(text)
+              project = data.get("project", {})
+              return {
+                  "project.dependencies": project.get("dependencies"),
+                  "project.optional-dependencies": project.get("optional-dependencies"),
+                  "dependency-groups": data.get("dependency-groups"),
+                  "build-system": data.get("build-system"),
+                  "tool.uv": data.get("tool", {}).get("uv"),
+              }
+
+          before, after = deps("HEAD^1"), deps("HEAD")
+          changed = [key for key in before if before[key] != after[key]]
+          if not changed:
+              print("Dependencies in pyproject.toml are unchanged.")
+              sys.exit(0)
+          for key in changed:
+              print(f"{key}:\n  before: {before[key]}\n  after:  {after[key]}")
+          if os.environ["APPROVED"] == "true":
+              print("Changed, and the PR has the deps-approved label.")
+              sys.exit(0)
+          print("::error::Dependencies in pyproject.toml changed. The owner approves by adding the deps-approved label.")
+          sys.exit(1)
+
+  size:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+      - name: Changed lines, excluding tests, fixtures, eval data and uv.lock (limit 600)
+        shell: python3 {0}
+        run: |
+          import os, re, subprocess, sys
+
+          LIMIT = 600
+          EXCLUDED = re.compile(r"^(tests/|eval/data/|uv\.lock$)|(^|/)fixtures/")
+          # -z writes "added\tdeleted\tpath\0", or for a rename "added\tdeleted\t\0old\0new\0",
+          # so a moved file counts only the lines that changed in it.
+          fields = subprocess.run(
+              ["git", "diff", "--numstat", "-M", "-z", "HEAD^1", "HEAD"],
+              check=True, capture_output=True, text=True,
+          ).stdout.split("\0")
+          rows = []
+          while len(fields) > 1:
+              added, deleted, path = fields.pop(0).split("\t", 2)
+              if not path:
+                  path = fields[1]
+                  del fields[:2]
+              if added == "-" or EXCLUDED.search(path):  # binary or excluded
+                  continue
+              rows.append((int(added) + int(deleted), path))
+          total = sum(n for n, _ in rows)
+          report = [f"Changed lines (excluding tests, fixtures, eval data and uv.lock): {total} (limit {LIMIT})", ""]
+          report += [f"{n:6} {path}" for n, path in sorted(rows, reverse=True)]
+          print("\n".join(report))
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
+              summary.write("```\n" + "\n".join(report) + "\n```\n")
+          if total > LIMIT:
+              print(f"::error::{total} changed lines is above the limit of {LIMIT}. Split the PR.")
+              sys.exit(1)
