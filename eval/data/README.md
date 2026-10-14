@@ -17,16 +17,21 @@ Ground truth for the 6.1 replay: when the latest version of each project changed
   - GitHub: among releases published by the end of the day and not marked pre-release, the one created last (`created_at` is the date of the release's commit, so a backport made after a newer release is usually created later too).
   - Releases whose tag is outside the project's `tag` pattern never count.
   - Repositories that patch several release lines in parallel, or whose GitHub latest is set by hand, were cut (D11): under the GitHub rule their latest keeps jumping between lines, or is not what GitHub showed.
-- **Young projects.** Some projects start after the replay does: claude-agent-sdk, mcp, graphiti and hindsight in the first run (the collector's "first release ... after the replay starts" line names each). The replay creates a project's claims only after its first release: before it there is no version to claim.
+- **Young projects.** Four projects start after the replay does: claude-agent-sdk, mcp, graphiti and hindsight (the collector's "first release ... after the replay starts" line names each). The replay creates a project's claims only after its first release: before it there is no version to claim.
 - **Split** (D11): dev is 2024-01-01 to 2024-12-31, test is 2025-01-01 to 2026-09-30, by time only. Policies are tuned on dev and reported on test.
 - **What the data cannot see.**
   - When a version was yanked: a yanked version never counts as latest, even before its yank.
   - Releases deleted since, and versions removed from PyPI.
-  - Which GitHub release was shown as latest on a past day. GitHub marks a newly published release latest unless the publisher opts out (`make_latest`), so a release published long after its commit may have been shown as latest although the rule keeps a newer one. On a repository with a tag pattern, another product's release may have been shown as latest too; the github_release verifier, which reads no pattern, would have reported it. The collector counts those days per repository; the maintainer kept the rule for react, TypeScript and ollama, 3 to 4 days each (D11).
+  - Which GitHub release was shown as latest on a past day. GitHub marks a newly published release latest unless the publisher opts out (`make_latest`), so a release published long after its commit may have been shown as latest although the rule keeps a newer one. On a repository with a tag pattern, another product's release may have been shown as latest too; the github_release verifier, which reads no pattern, would have reported it. The collector counts those days per repository; the maintainer kept the rule for react (4 days), TypeScript (3), ollama (4) and hugo (1) (D11).
   - A GitHub pre-release flag changed after publishing: the stored flag is today's.
   - Versions PEP 440 cannot read: they are left out.
   - The collector's `check:` lines (`problems()`) also flag a disagreement with what the source called latest at collection, a first release after the replay starts (a young project, or a release list cut short), GitHub tags with several prefixes (a monorepo), and a latest at collection outside the tag pattern (the github_release verifier reads GitHub's latest, pattern or not).
-- **Collected:** not yet. Counts per project, the collection date and any `check:` lines go here after the run.
+- **Collected** on 2026-10-14, 15:34 to 15:36 UTC, on the maintainer's Mac (script `t1`, the second run; the first one's files were deleted). Every listed project has its file.
+  - 52 PyPI projects with 12,141 versions, and 20 GitHub repositories with 6,463 releases after the tag patterns. Each file's release count is its line count minus the header.
+  - The latest changed 1,626 times in dev (PyPI 1,129, GitHub 497) and 3,071 times in test (PyPI 2,059, GitHub 1,012). Per project, over both splits, from once (python-dateutil, six) to 657 times (boto3).
+  - No change in dev: jq, bat, hindsight and claude-agent-sdk (the last two start later). No change in test: httpx, python-dateutil and six.
+  - `check:` lines: a first release after 2024-01-01 for claude-agent-sdk, mcp, graphiti and hindsight; disputed days for react (4), TypeScript (3), ollama (4) and hugo (1), where the rule stays (D11). No project's latest disagreed with what the source called latest at collection, and none had an error.
+  - The tag patterns left out only the releases expected (the collector's "left out" lines): react's `0.14.10` from 2020 and its `eslint-plugin-react-hooks@` releases, graphiti's `mcp-`, TypeScript's `vscode-typescript/` and home-assistant's last-python release.
 - **License.** Version strings, dates and flags are factual metadata from the PyPI JSON API and the GitHub REST API, kept only for this evaluation. No package contents or release notes are stored.
 
 ## Smoke corpus (`smoke/`)
