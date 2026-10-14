@@ -14,8 +14,9 @@ import random
 from bisect import bisect_left, bisect_right
 from collections import Counter
 from collections.abc import Callable
-from dataclasses import astuple, dataclass
+from dataclasses import dataclass
 from datetime import date, timedelta
+from operator import add
 
 from eval.replay.timelines import DEV, LABELS, TEST, Timeline, changes, latest_on
 from shelflife.models import Volatility
@@ -25,6 +26,8 @@ SPLITS = {"dev": DEV, "test": TEST}
 CLAIMS_PER_PROJECT = 20
 QUESTION_RATES = {"2 a month": 2 / 30, "1 a week": 1 / 7, "1 a day": 1.0}  # per claim-day
 FIXED = (3, 7, 14, 30, 60, 90, 180)  # days, for the fixed-interval curve
+SESSION = 10  # claims made on one day, about as many projects, in the sessions scenario
+JITTERED = {"per-class": None, "fixed 7": 7, "fixed 30": 30}  # also run with jitter (D12)
 
 
 @dataclass(frozen=True)
@@ -72,22 +75,59 @@ def stream(*parts: object) -> random.Random:
 
 
 def claims(
-    project: str, label: str, truth: Truth, split: str, seed: int, rate: float
+    project: str,
+    label: str,
+    truth: Truth,
+    split: str,
+    seed: int,
+    rate: float,
+    placed: list[date] | None = None,
 ) -> list[Claim]:
     """CLAIMS_PER_PROJECT claims, each created on a uniform random day from the project's
-    first day with a latest to the day before the split ends (D12). On each later day a
-    question comes with probability `rate`; a draw per day keeps every draw on random()."""
+    first day with a latest to the day before the split ends, or on the days `placed`
+    gives (sessions(); D12). On each later day a question comes with probability `rate`;
+    a draw per day keeps every draw on random()."""
     end, first = SPLITS[split][1], first_day(truth, split)
     if first is None or first >= end:
         return []
     out = []
-    for i in range(CLAIMS_PER_PROJECT):
+    for i in range(CLAIMS_PER_PROJECT if placed is None else len(placed)):
         rng = stream(seed, split, project, i)
         created = first + timedelta(days=int(rng.random() * (end - first).days))
+        created = created if placed is None else placed[i]
         days = (created + timedelta(days=k) for k in range(1, (end - created).days + 1))
         out.append(
             Claim(project, label, created, end, tuple(d for d in days if rng.random() < rate))
         )
+    return out
+
+
+def sessions(truths: dict[str, Truth], split: str, seed: int) -> dict[str, list[date]]:
+    """Creation days for the sessions scenario (D12): claims made SESSION at a time on one
+    day, about SESSION different projects. The session days are uniform over the split,
+    like the uniform scenario's creation days. In date order, each session takes the
+    projects with a latest that day and claims left that are furthest behind an even
+    spread of their claims over their own sessions, ties at random. So each project's
+    claims spread over its own window as in the uniform scenario, and the two scenarios
+    differ only in the clustering. A claim no session can take is dropped."""
+    start, end = SPLITS[split]
+    first = {p: f for p in sorted(truths) if (f := first_day(truths[p], split)) and f < end}
+    rng = stream(seed, split, "sessions")
+    n = -(-CLAIMS_PER_PROJECT * len(first) // SESSION)
+    days = sorted(start + timedelta(days=int(rng.random() * (end - start).days)) for _ in range(n))
+    window = {p: sum(day >= f for day in days) for p, f in first.items()}
+    seen = dict.fromkeys(first, 0)
+    out: dict[str, list[date]] = {p: [] for p in first}
+    for day in days:
+        behind = {}
+        for p, f in first.items():
+            if f <= day:
+                seen[p] += 1
+                if len(out[p]) < CLAIMS_PER_PROJECT:
+                    due = CLAIMS_PER_PROJECT * seen[p] / window[p]
+                    behind[p] = (due - len(out[p]), rng.random())
+        for p in sorted(behind, key=behind.__getitem__, reverse=True)[:SESSION]:
+            out[p].append(day)
     return out
 
 
@@ -145,10 +185,7 @@ def interval(days: int | None, jitter: bool = False) -> Policy:
 POLICIES: dict[str, Policy] = {"never": never, "every read": every_read, "oracle": oracle}
 POLICIES |= {f"fixed {n}": interval(n) for n in FIXED}
 POLICIES["per-class"] = interval(None)
-POLICIES |= {
-    f"{name} + jitter": interval(n, jitter=True)
-    for name, n in (("per-class", None), ("fixed 7", 7), ("fixed 30", 30))
-}
+POLICIES |= {f"{name} + jitter": interval(n, jitter=True) for name, n in JITTERED.items()}
 
 
 @dataclass
@@ -166,23 +203,22 @@ class Counts:
     undetected: float = 0  # changes no check found before the claim ended (censored)
 
     def __add__(self, other: Counts) -> Counts:
-        return Counts(*(a + b for a, b in zip(astuple(self), astuple(other), strict=True)))
+        return Counts(*map(add, vars(self).values(), vars(other).values()))
 
 
 def outcome(claim: Claim, truth: Truth, checks: list[date]) -> Counts:
     """The claim's counts when checked on `checks`. A check adopts the latest of its day.
     The latest never returns to an earlier value (D12), so the stored value is stale on a
     day exactly when the latest changed since the creation or the last check."""
-    anchors = [claim.created, *checks]
-    c = Counts(claims=1, days=(claim.end - claim.created).days, checks=len(checks))
+    anchors, qs = [claim.created, *checks], claim.questions  # both ascending
+    c = Counts(1, len(qs), days=(claim.end - claim.created).days, checks=len(checks))
     for k, anchor in enumerate(anchors):
+        # From this read to the day before the next, the value is stale from the first
+        # change on, and so is every answer then (a check runs before that day's questions).
         until = anchors[k + 1] - timedelta(days=1) if k + 1 < len(anchors) else claim.end
         if (x := truth.change_after(anchor)) is not None and x <= until:
             c.stale_days += (until - x).days + 1
-    for q in claim.questions:
-        x = truth.change_after(anchors[bisect_right(anchors, q) - 1])
-        c.questions += 1
-        c.stale_answers += x is not None and x <= q
+            c.stale_answers += bisect_right(qs, until) - bisect_left(qs, x)
     for x in changes_in(claim, truth):
         if (i := bisect_left(checks, x)) < len(checks):
             c.detected += 1
@@ -210,16 +246,23 @@ def replay(
     seeds: list[int],
     rate: float,
     policies: dict[str, Policy] = POLICIES,
+    scenario: str = "uniform",
 ) -> list[Row]:
-    """Every policy over every project's claims, for each seed. `labels` maps a project to
-    the maintainer's volatility label; a project without one is refused."""
+    """Every policy over every project's claims, for each seed, in the uniform or the
+    sessions scenario. `labels` maps a project to the maintainer's volatility label; a
+    project without one is refused."""
     if missing := [t.project for t in timelines if labels.get(t.project) not in LABELS]:
         raise ValueError(f"no volatility label for {missing[:3]}")
+    if scenario not in ("uniform", "sessions"):
+        raise ValueError(f"no scenario {scenario!r}")
+    truths = {t.project: truth(t, split) for t in timelines}
+    placed = {s: sessions(truths, split, s) for s in seeds} if scenario == "sessions" else {}
     rows = []
     for t in timelines:
-        tr = truth(t, split)
+        tr = truths[t.project]
         for seed in seeds:
-            cs = claims(t.project, labels[t.project], tr, split, seed, rate)
+            days = placed[seed].get(t.project, []) if placed else None
+            cs = claims(t.project, labels[t.project], tr, split, seed, rate, days)
             for name, policy in policies.items():
                 counts, daily = Counts(), Counter()
                 for i, claim in enumerate(cs):
@@ -228,3 +271,12 @@ def replay(
                     daily.update(checks)
                 rows.append(Row(seed, t.project, name, counts, daily))
     return rows
+
+
+def changes_per_year(truth: Truth, split: str) -> float:
+    """How often the latest changed in the split, from the project's first day with a
+    latest; a first release (from no version) is not a change here."""
+    if (first := first_day(truth, split)) is None:
+        return 0.0
+    n = len(truth.days) - (truth.before is None)
+    return n / (((SPLITS[split][1] - first).days + 1) / 365)

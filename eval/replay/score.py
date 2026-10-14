@@ -3,10 +3,10 @@ can be scored again without replaying it."""
 
 from __future__ import annotations
 
+import functools
 import math
 from collections import Counter, defaultdict
-from collections.abc import Callable
-from dataclasses import astuple
+from collections.abc import Callable, Sequence
 from statistics import fmean
 
 from eval.replay.replay import SPLITS, Counts, Row, stream
@@ -36,7 +36,7 @@ def per_project(rows: list[Row], policy: str) -> dict[str, Counts]:
         if r.policy == policy:
             by[r.project].append(r.counts)
     mean = {
-        p: Counts(*(sum(x) / len(cs) for x in zip(*map(astuple, cs), strict=True)))
+        p: Counts(*(sum(x) / len(cs) for x in zip(*(vars(c).values() for c in cs), strict=True)))
         for p, cs in by.items()
     }
     return {p: c for p, c in mean.items() if c.claims}  # no claim in the split: not a unit
@@ -56,10 +56,8 @@ def ci(
     names = sorted(projects)
     a = [METRICS[metric](projects[p]) for p in names]
     b = [METRICS[metric](minus[p]) for p in names] if minus is not None else None
-    rng = stream("resample", len(names))  # the same resamples for every metric and policy
     found = []
-    for _ in range(RESAMPLES):
-        pick = [int(rng.random() * len(names)) for _ in names]
+    for pick in _resamples(len(names)):
         v = _ratio(a, pick)
         if b is not None and v is not None:
             w = _ratio(b, pick)
@@ -90,7 +88,53 @@ def peak(rows: list[Row], policy: str, split: str) -> tuple[float, float]:
     return fmean(peaks), fmean(ratios)
 
 
-def _ratio(pairs: list[tuple[float, float]], pick: list[int]) -> float | None:
+def peak_ci(
+    rows: list[Row], policy: str, split: str, minus: str | None = None
+) -> tuple[float, float]:
+    """The 95% interval of peak(), or of its paired difference from another policy, over
+    the same resamples of whole projects as ci(); the peak is taken per seed each time."""
+    names = sorted(per_project(rows, policy))
+    a = _daily(rows, policy, split)
+    b = _daily(rows, minus, split) if minus is not None else None
+    if b is not None and not b:
+        raise ValueError(f"no rows for {minus!r}")
+    found = []
+    for pick in _resamples(len(names)):
+        chosen = [names[i] for i in pick]
+        found.append(_peak(a, chosen) - (_peak(b, chosen) if b is not None else 0))
+    return percentiles(found)
+
+
+def _daily(rows: list[Row], policy: str, split: str) -> dict[int, dict[str, list[int]]]:
+    """Each seed's checks per day of the split, per project."""
+    start, end = SPLITS[split]
+    out: defaultdict[int, dict[str, list[int]]] = defaultdict(dict)
+    for r in rows:
+        if r.policy == policy:
+            days = [0] * ((end - start).days + 1)
+            for day, n in r.daily.items():
+                days[(day - start).days] += n
+            out[r.seed][r.project] = days
+    return out
+
+
+def _peak(daily: dict[int, dict[str, list[int]]], chosen: list[str]) -> float:
+    return fmean(max(map(sum, zip(*(by[p] for p in chosen), strict=True))) for by in daily.values())
+
+
+def _resamples(n: int) -> tuple[tuple[int, ...], ...]:
+    """RESAMPLES draws of n project indices with replacement, the same for every metric and
+    policy, so differences are paired."""
+    return _draw(n, RESAMPLES)
+
+
+@functools.cache
+def _draw(n: int, count: int) -> tuple[tuple[int, ...], ...]:
+    rng = stream("resample", n)
+    return tuple(tuple(int(rng.random() * n) for _ in range(n)) for _ in range(count))
+
+
+def _ratio(pairs: list[tuple[float, float]], pick: Sequence[int]) -> float | None:
     num = sum(pairs[i][0] for i in pick)
     den = sum(pairs[i][1] for i in pick)
     return num / den if den else None
