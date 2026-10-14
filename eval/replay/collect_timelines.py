@@ -36,7 +36,7 @@ from eval.replay.timelines import (
 )
 from shelflife.verifiers import Fetch, FetchError, TooLarge, http_get
 
-SCRIPT_VERSION = "t1"
+SCRIPT_VERSION = "t2"  # t2: a release on two pages is read once (by id)
 PER_PAGE = 100  # GitHub's largest page
 MIN_PER_PAGE = 10  # the smallest page tried when a page is over the size cap
 GITHUB_HEADERS = {"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}
@@ -64,9 +64,10 @@ def collect_github(
     repo: str, fetch: Fetch, token: str | None
 ) -> tuple[str, str | None, list[dict[str, Any]]]:
     """(url, latest, releases) from GitHub's REST API, page by page. Drafts are left out
-    (a token with push access would list them). Each release lists its assets, so a page
-    can be over the 10 MB cap (caddy's): then the listing starts again from page 1 with
-    half the page size, down to MIN_PER_PAGE, so the page offsets stay consistent."""
+    (a token with push access would list them), and so is a release already read (by id).
+    Each release lists its assets, so a page can be over the 10 MB cap (caddy's): then the
+    listing starts again from page 1 with half the page size, down to MIN_PER_PAGE, so the
+    page offsets stay consistent."""
     headers = GITHUB_HEADERS | ({"Authorization": f"Bearer {token}"} if token else {})
     base = f"https://api.github.com/repos/{repo}/releases"
     per_page = PER_PAGE
@@ -90,19 +91,23 @@ def collect_github(
 def _all_pages(
     base: str, per_page: int, fetch: Fetch, headers: dict[str, str]
 ) -> list[dict[str, Any]]:
-    releases, page = [], 1
+    releases, seen, page = [], set(), 1
     while True:
         batch = json.loads(fetch(f"{base}?per_page={per_page}&page={page}", headers))
-        releases += [
-            {
-                "version": r["tag_name"],
-                "published": utc_text(parse_utc(r["published_at"])),
-                "created": utc_text(parse_utc(r["created_at"])),
-                "prerelease": bool(r["prerelease"]),
-            }
-            for r in batch
-            if not r["draft"]
-        ]
+        for r in batch:
+            # A release published while the pages are read shifts the rest down a place,
+            # so one can show up on two pages; its id says it is the same release.
+            if r["draft"] or r["id"] in seen:
+                continue
+            seen.add(r["id"])
+            releases.append(
+                {
+                    "version": r["tag_name"],
+                    "published": utc_text(parse_utc(r["published_at"])),
+                    "created": utc_text(parse_utc(r["created_at"])),
+                    "prerelease": bool(r["prerelease"]),
+                }
+            )
         if len(batch) < per_page:
             return releases
         page += 1

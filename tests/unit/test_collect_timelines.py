@@ -27,8 +27,9 @@ def fetcher(routes):
     return fetch
 
 
-def gh_release(tag, day, *, created=None, prerelease=False, draft=False):
+def gh_release(tag, day, *, created=None, prerelease=False, draft=False, id=None):
     return {
+        "id": id or tag,
         "tag_name": tag,
         "created_at": f"{created or day}T08:00:00Z",
         "published_at": f"{day}T09:00:00Z",
@@ -38,14 +39,16 @@ def gh_release(tag, day, *, created=None, prerelease=False, draft=False):
 
 
 def test_pypi_from_a_recorded_response():
-    # PyPI's JSON for mcp, trimmed to the fields read (tests/fixtures/README.md).
+    # PyPI's JSON for mcp, trimmed to four versions and the fields read (fixtures README).
     body = (FIXTURES / "pypi-mcp.json").read_bytes()
     url, latest, releases = collect_pypi("mcp", fetcher({"https://pypi.org/pypi/mcp/json": body}))
     assert (url, latest) == ("https://pypi.org/pypi/mcp/json", "2.3.0")
-    files = json.loads(body)["releases"]
-    assert len(releases) == len(files)
-    first = min(f["upload_time_iso_8601"] for f in files["1.0.0"])
-    assert {"version": "1.0.0", "published": first[:19] + "Z", "yanked": False} in releases
+    assert releases == [  # each version's first file, to the second
+        {"version": "0.9.1", "published": "2024-11-20T11:37:34Z", "yanked": False},
+        {"version": "1.0.0", "published": "2024-11-25T14:27:34Z", "yanked": False},
+        {"version": "2.0.0rc1", "published": "2026-07-27T13:35:13Z", "yanked": False},
+        {"version": "2.3.0", "published": "2026-10-02T22:06:52Z", "yanked": False},
+    ]
 
 
 def test_pypi_dates_a_version_by_its_first_file_and_yanks_it_only_when_all_files_are():
@@ -94,6 +97,29 @@ def test_github_reads_every_page_and_leaves_out_drafts(monkeypatch):
         "prerelease": False,
     }
     assert all(h["Authorization"] == "Bearer t" for _, h in fetch.calls)
+
+
+def test_github_reads_a_release_shifted_onto_the_next_page_once(monkeypatch):
+    # A release published while the pages were read pushed v1.0 down onto page 2.
+    monkeypatch.setattr(collect_timelines, "PER_PAGE", 2)
+    base = "https://api.github.com/repos/o/r/releases"
+    fetch = fetcher(
+        {
+            f"{base}?per_page=2&page=1": [
+                gh_release("v1.1", "2024-03-01", id=11),
+                gh_release("v1.0", "2024-02-01", id=10),
+            ],
+            f"{base}?per_page=2&page=2": [
+                gh_release("v1.0", "2024-02-01", id=10),
+                gh_release("v1.0", "2024-02-01", id=9),  # another release with the same tag
+            ],
+            f"{base}?per_page=2&page=3": [],
+            f"{base}/latest": {"tag_name": "v1.1"},
+        }
+    )
+    _, _, releases = collect_github("o/r", fetch, token=None)
+    # Release 10 once; release 9 is kept, and problems() names its tag.
+    assert [r["version"] for r in releases] == ["v1.1", "v1.0", "v1.0"]
 
 
 def test_github_stops_at_a_short_page_and_reads_no_latest_as_none():

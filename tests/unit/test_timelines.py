@@ -76,6 +76,33 @@ def test_github_latest_is_the_stable_release_created_last():
     assert latest_on(t, date(2024, 10, 1)) == "v1.0.0"
 
 
+def test_github_replays_a_created_at_later_than_the_publish_as_the_publish():
+    # v2.0.0's tag moved on 2024-06-15, which reset its created_at: on 2024-05-01 that
+    # timestamp was still in the future, so it cannot have made v2.0.0 the latest then.
+    releases = (
+        Release("v1.0.0", at("2023-10-01"), created=at("2023-10-01")),
+        Release("v2.0.0", at("2024-03-01T09:00"), created=at("2024-06-15")),
+        Release("v2.0.1", at("2024-05-01T09:00"), created=at("2024-05-01")),
+    )
+    # The smoke case smoke-org/moved-tag shows the replay; at collection GitHub read
+    # created_at as stored, so the source's latest must be v2.0.0, not v2.0.1.
+    assert problems(timeline("github", *releases, latest="v2.0.1")) == [
+        "latest by our rules is v2.0.0, the source said v2.0.1"
+    ]
+
+
+def test_same_second_releases_give_one_answer_whatever_their_order():
+    a = Release("v1.1.0", at("2024-02-01T09:00"), created=at("2024-02-01T08:00"))
+    b = Release("v1.2.0", at("2024-02-01T09:00"), created=at("2024-01-20T08:00"))
+    c = Release("v1.1.1", at("2024-02-01T09:00"), created=at("2024-02-01T08:00"))
+    for rows in ([a, b, c], [c, b, a]):
+        t = timeline("github", Release("v1.0.0", at("2023-06-01")), *rows, latest="v1.1.1")
+        # Created and published in the same second: the tag later in string order.
+        # Published-last ties break on created_at first, so v1.2.0 loses there too and no
+        # day is disputed.
+        assert (latest_on(t, date(2024, 2, 1)), problems(t)) == ("v1.1.1", [])
+
+
 def test_a_tag_pattern_leaves_out_the_releases_of_other_products():
     releases = (
         Release("v1.0.0", at("2024-01-10"), created=at("2024-01-10")),
@@ -115,6 +142,14 @@ def test_problems_names_a_disagreement_a_late_start_and_mixed_tag_prefixes():
         latest="pkg-b-v2.0",
     )
     assert problems(t) == ["tags with several prefixes (per-package tags?): ['pkg-a-', 'pkg-b-']"]
+    t = timeline(
+        "github",
+        Release("1.66.0", at("2022-12-15"), created=at("2022-12-15")),
+        Release("1.66.1", at("2023-01-11"), created=at("2023-01-10")),
+        Release("1.66.1", at("2023-01-11"), created=at("2023-01-10")),  # GitHub lists it twice
+        latest="1.66.1",
+    )
+    assert problems(t) == ["tags listed more than once: ['1.66.1']"]
     t = timeline("github", Release("v1.0", at("2024-01-01")), latest="v1.0")
     assert problems(t) == []
 
@@ -252,6 +287,7 @@ def test_the_smoke_corpus_matches_its_projects_and_flags_what_it_was_built_to():
         "smoke-backport": [],
         "smoke-prerelease-only": ["first release on 2024-02-01, after the replay starts"],
         "smoke-quiet": [],
+        "smoke-org/moved-tag": [],
         "smoke-org/out-of-order": [
             "2 days when the release created last was not the one published last, first"
             " 2024-04-02: GitHub may have shown the other as latest"
@@ -274,6 +310,7 @@ def test_the_smoke_corpus_gives_the_changes_it_was_built_for():
             [],
         ),
         "smoke-quiet": ([], []),
+        "smoke-org/moved-tag": ([(date(2024, 3, 1), "v2.0.0"), (date(2024, 5, 1), "v2.0.1")], []),
         "smoke-org/out-of-order": ([(date(2024, 1, 10), "v1.0.0")], [(date(2025, 3, 5), "v1.1.0")]),
         "smoke-org/two-products": (
             [(date(2024, 3, 1), "v1.1.0"), (date(2024, 9, 1), "v1.2.0")],
@@ -283,9 +320,8 @@ def test_the_smoke_corpus_gives_the_changes_it_was_built_for():
 
 
 def test_the_collected_timelines_load_and_match_projects_toml():
-    # Before the maintainer collects the data there are no timeline files, and this
-    # only reads projects.toml. After, every listed project has its timeline, collected
-    # with the tag pattern it has now.
+    # Every listed project has its timeline, collected with the tag pattern it has now,
+    # and no other timeline is left behind; deleting the data fails here.
     projects = {(p.source, p.name, p.tag) for p in load_projects(REAL / "projects.toml")}
-    if timelines := load_all(REAL):
-        assert {(t.source, t.project, t.tag) for t in timelines} == projects
+    assert {(t.source, t.project, t.tag) for t in load_all(REAL)} == projects
+    assert len(projects) == 70

@@ -12,6 +12,8 @@ from __future__ import annotations
 import json
 import re
 import tomllib
+from collections import Counter
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path
@@ -47,7 +49,9 @@ class Release:
     published: datetime  # UTC: PyPI's first upload of the version, GitHub's published_at
     yanked: bool = False  # PyPI: every file of the version was yanked by collection time
     prerelease: bool = False  # GitHub's flag; PyPI's comes from the version (PEP 440)
-    created: datetime | None = None  # GitHub's created_at, which orders "latest"
+    # GitHub's created_at, which orders "latest", as of collection: it moves with its tag,
+    # so it can be later than `published` (replayed as `published`, _created())
+    created: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -74,16 +78,13 @@ def latest_on(timeline: Timeline, day: date) -> str | None:
     PyPI, as its `info.version`: the highest version by PEP 440 among those uploaded by
     then and not yanked, leaving out pre-releases unless there is nothing else; a version
     PEP 440 cannot read is left out. GitHub, as `/releases/latest`: among releases
-    published by then and not marked pre-release, the one created last. Releases outside
-    the tag pattern never count (counted()).
+    published by then and not marked pre-release, the one created last (_created()).
+    Releases outside the tag pattern never count (counted()).
     """
     end = datetime.combine(day, time.max, UTC)
     out = [r for r in counted(timeline) if r.published <= end]
     if timeline.source == "github":
-        stable = [r for r in out if not r.prerelease]
-        if not stable:
-            return None
-        return max(stable, key=lambda r: (r.created or r.published, r.published)).version
+        return _created_last(out, _created)
     versions = []
     for r in out:
         if r.yanked:
@@ -121,13 +122,16 @@ def problems(timeline: Timeline) -> list[str]:
       source's latest is outside the tag pattern (the github_release verifier reads it);
     - the first release comes after the replay starts (a young project, or a release
       list cut short);
-    - GitHub tags with several prefixes (a monorepo's per-package tags);
+    - GitHub tags with several prefixes (a monorepo's per-package tags), or listed twice;
     - GitHub days in the replay when the release created last, which the rule picks, is
       not the one published last. GitHub marks a newly published release latest by
       default (`make_latest`), so on those days a backport may have been the latest.
     """
     found = []
-    ours = latest_on(timeline, timeline.collected_at.date())
+    if timeline.source == "github":  # GitHub read created_at as it was then, not clamped
+        ours = _created_last(counted(timeline), lambda r: r.created or r.published)
+    else:
+        ours = latest_on(timeline, timeline.collected_at.date())
     theirs = timeline.latest_at_collection
     if timeline.tag and theirs and not re.search(timeline.tag, theirs):
         found.append(f"the source's latest, {theirs}, is outside the tag pattern {timeline.tag}")
@@ -140,6 +144,8 @@ def problems(timeline: Timeline) -> list[str]:
         prefixes = {tag_prefix(r.version) for r in releases}
         if len(prefixes) > 1:
             found.append(f"tags with several prefixes (per-package tags?): {sorted(prefixes)[:5]}")
+        if twice := sorted(v for v, n in Counter(r.version for r in releases).items() if n > 1):
+            found.append(f"tags listed more than once: {twice[:5]}")
         disputed = [
             day
             for day in _publish_days(timeline)
@@ -162,7 +168,26 @@ def _publish_days(timeline: Timeline) -> list[date]:
 def _published_last(timeline: Timeline, day: date) -> str | None:
     end = datetime.combine(day, time.max, UTC)
     stable = [r for r in counted(timeline) if r.published <= end and not r.prerelease]
-    return max(stable, key=lambda r: r.published).version if stable else None
+    if not stable:
+        return None
+    return max(stable, key=lambda r: (r.published, _created(r), r.version)).version  # ties
+
+
+def _created(r: Release) -> datetime:
+    """A GitHub release's created_at for replaying a past day: no later than its publish
+    time. The stored created_at is today's and moves with the tag, so a later one is a
+    timestamp from after the release (ollama's v0.40.0 was published 2026-09-25 and
+    shows 2026-10-06)."""
+    return min(r.created, r.published) if r.created else r.published
+
+
+def _created_last(releases: list[Release], created: Callable[[Release], datetime]) -> str | None:
+    """The stable release created last; a tie goes to the one published last, then to the
+    tag later in string order, so the answer never depends on the order of the rows."""
+    stable = [r for r in releases if not r.prerelease]
+    if not stable:
+        return None
+    return max(stable, key=lambda r: (created(r), r.published, r.version)).version
 
 
 def tag_prefix(tag: str) -> str:
@@ -189,8 +214,14 @@ def load_projects(path: Path) -> list[Project]:
                 raise ValueError(f"{path}: not a {source} name: {name!r}")
             if label not in ("", *LABELS):
                 raise ValueError(f"{path}: {name}: volatility must be one of {LABELS} or empty")
-            if tag is not None and (source != "github" or tag == "" or not _is_regex(tag)):
-                raise ValueError(f"{path}: {name}: tag must be a regular expression, for GitHub")
+            if tag is not None:
+                bad_tag = f"{path}: {name}: tag must be a regular expression, for GitHub"
+                if source != "github" or not isinstance(tag, str) or not tag:
+                    raise ValueError(bad_tag)
+                try:
+                    re.compile(tag)
+                except re.error:
+                    raise ValueError(bad_tag) from None
             folded = re.sub(r"[-_.]+", "-", name.lower()) if source == "pypi" else name.lower()
             key = (source, folded)  # PyPI names compare under PEP 503, GitHub's ignore case
             if key in seen:
@@ -226,14 +257,6 @@ def load(path: Path) -> Timeline:
         )
     except (KeyError, TypeError, ValueError) as e:
         raise ValueError(f"{path}: {e}") from None
-
-
-def _is_regex(text: object) -> bool:
-    try:
-        re.compile(text)  # type: ignore[arg-type]
-    except (re.error, TypeError):  # TypeError: not a string
-        return False
-    return True
 
 
 def load_all(folder: Path) -> list[Timeline]:
