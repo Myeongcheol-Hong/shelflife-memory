@@ -5,12 +5,13 @@ from __future__ import annotations
 import os
 import re
 import sqlite3
+import sys
 import threading
 import time
 import urllib.parse
 import uuid
 from collections.abc import Callable, Iterable, Iterator, Mapping
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 from dataclasses import asdict
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
@@ -46,7 +47,7 @@ OPTIONAL_FIELDS = (
     "depends_on",
 )
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 BUSY_TIMEOUT_SECONDS = 5
 
 # Design 5.1, plus the *_source columns and the triggers that keep the
@@ -78,7 +79,9 @@ CREATE TABLE IF NOT EXISTS depends_on (
 CREATE TABLE IF NOT EXISTS checks (
   id TEXT PRIMARY KEY, claim_id TEXT NOT NULL, checked_at TEXT NOT NULL,
   method TEXT NOT NULL, result TEXT NOT NULL,   -- same | changed | cannot_tell | error
-  old_value TEXT, new_value TEXT, evidence TEXT, cost_usd REAL
+  old_value TEXT, new_value TEXT, evidence TEXT, cost_usd REAL,
+  prompt_version TEXT, page_sha256 TEXT, section_sha256 TEXT,  -- web_page (v2, D10)
+  reason TEXT                                                   -- cannot_tell (v2, D10)
 );
 CREATE VIRTUAL TABLE IF NOT EXISTS claims_fts
   USING fts5(text, subject, content='claims', tokenize='trigram');
@@ -94,9 +97,11 @@ CREATE TRIGGER IF NOT EXISTS claims_au AFTER UPDATE OF text, subject ON claims B
     VALUES ('delete', old.rowid, old.text, old.subject);
   INSERT INTO claims_fts(rowid, text, subject) VALUES (new.rowid, new.text, new.subject);
 END;
-PRAGMA user_version = 1;
+PRAGMA user_version = 2;
 COMMIT;
 """
+# Columns schema v2 adds to checks (D10).
+V2_COLUMNS = ("prompt_version", "page_sha256", "section_sha256", "reason")
 
 
 # Common Korean particles. In a query word that mixes Latin letters and Hangul
@@ -198,6 +203,7 @@ class Store:
             str(path), check_same_thread=False, timeout=BUSY_TIMEOUT_SECONDS
         )
         self._conn.row_factory = sqlite3.Row
+        self._path = str(path)
         self._lock = threading.Lock()
         self._clock = now
         try:
@@ -237,10 +243,40 @@ class Store:
         version = self._conn.execute("PRAGMA user_version").fetchone()[0]
         if version == 0:
             self._conn.executescript(SCHEMA)
+        elif version == 1:
+            self._migrate_v1()
         elif version != SCHEMA_VERSION:
             raise RuntimeError(
                 f"database schema version {version} is not supported (expected {SCHEMA_VERSION})"
             )
+
+    def _migrate_v1(self) -> None:
+        """Schema v1 to v2: the D10 columns on checks. A one-way door, so the v1 file is
+        first copied to <path>.bak-v1, and the copy and the migration happen under the
+        write lock: a second server process opening the file waits, then finds v2.
+
+        The copy goes through a second connection, because SQLite's backup cannot read
+        from a connection inside a write transaction; in WAL mode that reader sees the
+        last commit, which the lock keeps current. It includes what still sits in the
+        -wal file, and is switched to a rollback journal so it is one file.
+        """
+        backup = f"{self._path}.bak-v1"
+        with self._write():
+            if self._conn.execute("PRAGMA user_version").fetchone()[0] != 1:
+                return  # another process migrated it while this one waited
+            with (
+                closing(sqlite3.connect(self._path)) as source,
+                closing(sqlite3.connect(backup)) as copy,
+            ):
+                source.backup(copy)
+                copy.execute("PRAGMA journal_mode = DELETE")
+            for column in V2_COLUMNS:
+                self._conn.execute(f"ALTER TABLE checks ADD COLUMN {column} TEXT")
+            self._conn.execute("PRAGMA user_version = 2")
+        print(
+            f"shelflife: upgraded {self._path} to schema v2; the v1 file is saved as {backup}",
+            file=sys.stderr,
+        )
 
     def _now(self) -> datetime:
         now = self._clock()
@@ -302,17 +338,31 @@ class Store:
         result: CheckResult,
         new_value: str | None = None,
         evidence: str | None = None,
+        *,
+        prompt_version: str | None = None,
+        page_sha256: str | None = None,
+        section_sha256: str | None = None,
+        reason: str | None = None,
+        fetched_at: datetime | None = None,
     ) -> tuple[Claim, Check]:
         """Record a check of a claim, update the claim and return both (D9).
 
         The claim keeps its value: same makes it fresh, changed makes it changed, and
         error or cannot_tell leave its status alone. next_check_at follows
-        scheduler.next_check_after. Raises ValueError for an unknown or retired claim, or
-        one without a check method.
+        scheduler.next_check_after. A web_page judgment also stores its prompt_version,
+        page_sha256, section_sha256 and reason (D10). With `fetched_at`, the judgment's
+        page fetch, a claim checked at or after that second is refused, so a stale
+        judgment cannot overwrite a newer check from the other server process. Raises
+        ValueError for an unknown or retired claim, or one without a check method.
         """
         now = self._now()
         with self._lock, self._write():
             claim = self._get_checkable(claim_id)
+            fetched = fetched_at and fetched_at.astimezone(UTC).replace(microsecond=0)
+            if fetched and claim.last_checked_at and claim.last_checked_at >= fetched:
+                raise ValueError(
+                    f"claim {claim_id!r} was checked after this page was fetched; call verify again"
+                )
             check = Check(
                 id=uuid.uuid4().hex[:12],
                 claim_id=claim.id,
@@ -322,6 +372,10 @@ class Store:
                 old_value=claim.value,
                 new_value=new_value,
                 evidence=evidence,
+                prompt_version=prompt_version,
+                page_sha256=page_sha256,
+                section_sha256=section_sha256,
+                reason=reason,
             )
             row = asdict(check) | {"checked_at": check.checked_at.isoformat()}
             columns, placeholders = ", ".join(row), ", ".join(f":{c}" for c in row)
@@ -611,12 +665,14 @@ class Store:
             return [self._to_claim(r) for r in rows]
 
     def needs_check_method(self) -> list[Claim]:
-        """World facts nothing can check, because no check method was given or found."""
+        """World facts nothing can check, because no check method was given or found.
+        A none the caller set on purpose is a decision, not a gap, so it is left out (D10)."""
         with self._lock:
             rows = self._conn.execute(
                 """
                 SELECT * FROM claims
                 WHERE kind = 'world_fact' AND check_method = 'none' AND status != 'retired'
+                  AND check_method_source != 'caller'
                 ORDER BY recorded_at, id
                 """
             ).fetchall()

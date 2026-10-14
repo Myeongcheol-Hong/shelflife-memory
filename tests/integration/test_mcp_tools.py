@@ -1,14 +1,19 @@
 """Call the tools through an in-process MCP client, the way Claude Desktop would."""
 
+import hashlib
+import json
 from datetime import timedelta
 from pathlib import Path
 
 import pytest
 from mcp import Client
 
+from shelflife.models import CheckResult
 from shelflife.server import build_server
 from shelflife.store import OPTIONAL_FIELDS
 from shelflife.verifiers import FetchError
+from shelflife.verifiers.section import select_section
+from shelflife.verifiers.web_page import Page, decode, extract, normalize
 
 FIXTURES = Path(__file__).parents[1] / "fixtures"
 PYPI_MCP = "https://pypi.org/pypi/mcp/json"
@@ -29,14 +34,17 @@ def routes():
 
 
 @pytest.fixture
-async def client(store, routes):
+async def client(store, routes, clock):
     def fetch(url, headers):
         route = routes.get(url, FetchError(f"no route for {url}"))
         if isinstance(route, Exception):
             raise route
         return (FIXTURES / route).read_bytes()
 
-    async with Client(build_server(store, fetch=fetch)) as c:
+    def get_page(url):
+        return Page(url, url, 200, "text/html", None, fetch(url, {}))
+
+    async with Client(build_server(store, fetch=fetch, get_page=get_page, now=clock)) as c:
         yield c
 
 
@@ -54,7 +62,7 @@ async def call_error(client, tool, **arguments) -> str:
 
 async def test_lists_the_tools(client):
     tools = {t.name: t for t in (await client.list_tools()).tools}
-    assert set(tools) == {"remember", "recall", "due", "verify", "forget"}
+    assert set(tools) == {"remember", "recall", "due", "verify", "forget", "record_check"}
     schema = tools["remember"].input_schema
     assert set(schema["required"]) == {"text", "kind"}
     assert set(schema["properties"]) == {"text", "kind", *OPTIONAL_FIELDS}
@@ -220,11 +228,7 @@ async def test_verify_error_keeps_the_claim_due(client, routes):
 
 
 async def test_verify_refuses_claims_it_cannot_check(client, store):
-    page = await remember_version(
-        client, check_method="web_page", check_target="https://example.com/pricing"
-    )
     unverifiable = await call(client, "remember", text="Seoul has 25 districts", kind="world_fact")
-    assert "verify cannot check it yet" in await call_error(client, "verify", claim_id=page["id"])
     assert "has no check_method" in await call_error(client, "verify", claim_id=unverifiable["id"])
     assert "no claim with id 'nope'" in await call_error(client, "verify", claim_id="nope")
     # remember refuses a version claim without a value; a row written some other way
@@ -287,3 +291,180 @@ async def test_forget_retires_a_claim(client):
     assert (await call(client, "forget", claim_id=claim["id"]))["claim"] == forgotten["claim"]
     assert "no claim with id 'nope'" in await call_error(client, "forget", claim_id="nope")
     assert "is retired" in await call_error(client, "verify", claim_id=claim["id"])
+
+
+# --- web_page claims: verify returns a judgment prompt, record_check stores it (D10) ---
+
+AWS = "https://aws.amazon.com/certification/certified-generative-ai-developer-professional/"
+AWS_QUOTE = "multiple response Exam cost 300 USD"  # on the recorded page, in the fee section
+
+
+async def remember_page(client, routes, value="$300"):
+    routes[AWS] = "pages/aws-aip-c01.html"
+    return await call(
+        client,
+        "remember",
+        text=f"The AWS AIP-C01 exam fee is {value}",
+        kind="world_fact",
+        subject="AWS AIP-C01",
+        attribute="exam_fee",
+        value=value,
+        check_method="web_page",
+        check_target=AWS,
+        observed_at="2026-10-01",
+    )
+
+
+async def test_verify_returns_a_judgment_prompt_and_records_nothing(client, routes, store):
+    claim = await remember_page(client, routes)
+    verified = await call(client, "verify", claim_id=claim["id"])
+    assert verified["check"] is None
+    assert verified["claim"] == claim
+    judge = verified["judge"]
+    assert (judge["prompt_version"], judge["url"]) == ("j1", AWS)
+    assert judge["section"]["heading"] == "Exam cost"
+    assert judge["section"]["selector_version"] == "s1"
+    assert f"Claim id: {claim['id']}\n" in judge["prompt"]
+    assert AWS_QUOTE in " ".join(judge["prompt"].split())
+    assert store.last_check(claim["id"]) is None
+
+
+async def test_record_check_stores_a_quoted_judgment(client, routes, store):
+    claim = await remember_page(client, routes)
+    await call(client, "verify", claim_id=claim["id"])
+    recorded = await call(
+        client, "record_check", claim_id=claim["id"], result="same", quote=AWS_QUOTE
+    )
+    assert recorded["check"]["result"] == "same"
+    assert recorded["check"]["evidence"] == AWS_QUOTE
+    assert recorded["claim"]["status"] == "fresh"
+    assert recorded["claim"]["last_checked_at"] == "2026-10-12T09:30:00+00:00"
+    stored = store.last_check(claim["id"])
+    body = (FIXTURES / "pages/aws-aip-c01.html").read_bytes()
+    assert stored.prompt_version == "j1"
+    assert stored.page_sha256 == hashlib.sha256(body).hexdigest()
+    assert stored.reason is None
+    # M4 compares the section's core, not the section grown around it (D10).
+    blocks = extract(decode(body))
+    section = select_section(
+        blocks, text=claim["text"], subject="AWS AIP-C01", attribute="exam_fee", value="$300"
+    )
+    assert section.blocks != section.core
+    core = normalize(" ".join(blocks[i].text for i in section.core))
+    assert stored.section_sha256 == hashlib.sha256(core.encode()).hexdigest()
+    # One judgment per fetch: the check is newer than the fetch now.
+    message = await call_error(
+        client, "record_check", claim_id=claim["id"], result="same", quote=AWS_QUOTE
+    )
+    assert "call verify again" in message
+
+
+async def test_record_check_changed_keeps_the_claim_value(client, routes):
+    claim = await remember_page(client, routes, value="$250")
+    await call(client, "verify", claim_id=claim["id"])
+    recorded = await call(
+        client,
+        "record_check",
+        claim_id=claim["id"],
+        result="changed",
+        quote=AWS_QUOTE,
+        new_value="300 USD",
+    )
+    assert (recorded["check"]["old_value"], recorded["check"]["new_value"]) == ("$250", "300 USD")
+    assert (recorded["claim"]["value"], recorded["claim"]["status"]) == ("$250", "changed")
+
+
+async def test_cannot_tell_stores_its_reason_and_keeps_the_claim_due(client, routes, store):
+    claim = await remember_page(client, routes)
+    await call(client, "verify", claim_id=claim["id"])
+    recorded = await call(
+        client, "record_check", claim_id=claim["id"], result="cannot_tell", reason="no fee shown"
+    )
+    assert (recorded["check"]["result"], recorded["check"]["evidence"]) == ("cannot_tell", None)
+    assert recorded["claim"]["next_check_at"] == claim["next_check_at"]
+    assert store.last_check(claim["id"]).reason == "no fee shown"
+
+
+@pytest.mark.parametrize(
+    ("arguments", "error"),
+    [
+        ({"result": "same", "quote": "Exam cost 300 USD and more"}, "not on the page"),
+        ({"result": "same", "quote": "Exam cost"}, "at least 20 characters"),
+        ({"result": "changed", "quote": AWS_QUOTE}, "needs new_value"),
+        ({"result": "error"}, "result"),  # only the server records error
+    ],
+)
+async def test_record_check_refuses_a_bad_judgment_and_stores_nothing(
+    client, routes, store, arguments, error
+):
+    claim = await remember_page(client, routes)
+    await call(client, "verify", claim_id=claim["id"])
+    assert error in await call_error(client, "record_check", claim_id=claim["id"], **arguments)
+    assert store.last_check(claim["id"]) is None
+
+
+async def test_record_check_same_needs_the_claims_value_in_the_quote(client, routes):
+    claim = await remember_page(client, routes, value="$250")
+    await call(client, "verify", claim_id=claim["id"])
+    message = await call_error(
+        client, "record_check", claim_id=claim["id"], result="same", quote=AWS_QUOTE
+    )
+    assert "does not contain the claim's value '$250'" in message
+
+
+async def test_record_check_needs_a_page_verify_fetched_in_the_last_30_minutes(
+    client, routes, clock
+):
+    claim = await remember_page(client, routes)
+    arguments = {"claim_id": claim["id"], "result": "same", "quote": AWS_QUOTE}
+    assert "call verify again" in await call_error(client, "record_check", **arguments)
+    await call(client, "verify", claim_id=claim["id"])
+    clock.now += timedelta(minutes=30, seconds=1)
+    assert "call verify again" in await call_error(client, "record_check", **arguments)
+    await call(client, "verify", claim_id=claim["id"])
+    clock.now += timedelta(minutes=30)
+    assert (await call(client, "record_check", **arguments))["check"]["result"] == "same"
+
+
+async def test_record_check_refuses_a_fetch_older_than_the_last_check(client, routes, store, clock):
+    claim = await remember_page(client, routes)
+    await call(client, "verify", claim_id=claim["id"])
+    clock.now += timedelta(minutes=1)
+    store.add_check(claim["id"], CheckResult.CHANGED, "$250", "from the other server process")
+    message = await call_error(
+        client, "record_check", claim_id=claim["id"], result="same", quote=AWS_QUOTE
+    )
+    assert "was checked after this page was fetched" in message
+    assert store.last_check(claim["id"]).new_value == "$250"
+
+
+async def test_verify_records_an_error_when_the_page_cannot_be_fetched(client, routes):
+    claim = await remember_page(client, routes)
+    routes[AWS] = FetchError(f"HTTP 404 from {AWS}", status=404)
+    verified = await call(client, "verify", claim_id=claim["id"])
+    assert (verified["check"]["result"], verified["check"]["evidence"]) == (
+        "error",
+        f"HTTP 404 from {AWS}",
+    )
+    assert "judge" not in verified
+
+
+async def test_record_check_is_only_for_web_page_claims(client):
+    claim = await remember_version(client, check_method="pypi", check_target="mcp", value="2.3.0")
+    message = await call_error(client, "record_check", claim_id=claim["id"], result="cannot_tell")
+    assert "checked by pypi rules; use verify" in message
+
+
+async def test_the_tool_interface_is_pinned(client):
+    # Tool names, descriptions and input schemas, and the server instructions, are what
+    # the model reads. A change here is an interface change: update the hash and list it
+    # under "Read these first" in the PR. Whitespace is ignored: Python 3.13 dedents
+    # docstrings and 3.11 does not.
+    def words(text):
+        return " ".join(text.split())
+
+    tools = sorted((await client.list_tools()).tools, key=lambda t: t.name)
+    interface = [words(client.instructions)]
+    interface += [[t.name, words(t.description), t.input_schema] for t in tools]
+    digest = hashlib.sha256(json.dumps(interface, sort_keys=True).encode()).hexdigest()
+    assert digest == "75d10bdf38536af2f2ac562f5b797c14ea9ffecd5226b15988ef009204c9df7c"

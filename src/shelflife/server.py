@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import hashlib
 import inspect
+import threading
 from collections.abc import Callable
+from dataclasses import dataclass
+from datetime import datetime, timedelta
 from typing import Any, Literal
 
 from mcp.server.context import CallNext, HandlerResult, ServerRequestContext
@@ -12,10 +16,14 @@ from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import CallToolResult, TextContent
 
 from shelflife.models import CheckMethod, CheckResult, Claim, Kind, Volatility
-from shelflife.store import Store
-from shelflife.verifiers import Fetch, http_get, verifier_for
+from shelflife.store import Clock, Store, system_clock
+from shelflife.verifiers import Fetch, FetchError, http_get, judgment, verifier_for
+from shelflife.verifiers.section import Section, select_section
+from shelflife.verifiers.web_page import Page, extract, fetch_page, normalize, page_text
 
 RECALL_LIMIT = 10
+# How long the page verify fetched is held for record_check (D10).
+HOLD = timedelta(minutes=30)
 
 # D2: the user gives the sentence. D3: remember only when asked; Claude may offer, showing
 # the exact sentence, and waits for the user's confirmation of that sentence.
@@ -27,12 +35,32 @@ store, but never call remember until the user confirms; the user's yes approves 
 sentence. Store the user's sentence as given, in their language. Call recall before
 answering a question a remembered claim might cover, and say how old the claim is
 (observed_at) when that matters. Claims are checked against their source only when you
-call verify; nothing is re-checked automatically yet."""
+call verify; nothing is re-checked automatically yet. For a web_page claim, verify
+returns a page section for you to judge, and record_check stores your judgment."""
 
 
-def build_server(store: Store, fetch: Fetch = http_get) -> MCPServer:
-    """An MCPServer whose tools read and write `store`; verify fetches through `fetch`."""
+@dataclass(frozen=True)
+class _Fetched:
+    """A page verify fetched for a web_page claim, held for record_check (D10)."""
+
+    at: datetime
+    page: str  # normalize(page_text(blocks)): the text quotes are checked against
+    section: Section
+    page_sha256: str  # of the fetched body
+    section_sha256: str  # of the section's core, the baseline M4 compares (D10)
+
+
+def build_server(
+    store: Store,
+    fetch: Fetch = http_get,
+    get_page: Callable[[str], Page] = fetch_page,
+    now: Clock = system_clock,
+) -> MCPServer:
+    """An MCPServer whose tools read and write `store`. verify fetches rule-based sources
+    through `fetch` and web pages through `get_page`; `now` times the page hold."""
     declared: dict[str, set[str]] = {}
+    held: dict[str, _Fetched] = {}  # claim id -> the page verify fetched last
+    held_lock = threading.Lock()  # tools run in worker threads
 
     async def reject_unknown_arguments(
         ctx: ServerRequestContext[Any, Any], call_next: CallNext
@@ -159,7 +187,8 @@ def build_server(store: Store, fetch: Fetch = http_get) -> MCPServer:
           to remember the new sentence and forget this claim. A changed claim is also
           under due once its next check is due.
         - needs_check_method: world facts that nothing can check, because they have no
-          check_method. They are never due.
+          check_method, except those whose check_method none was set on purpose. They are
+          never due.
 
         Use when the user asks what in their memory needs re-checking. Do not use it to
         search for a topic (use recall). It checks and changes nothing; verify checks a
@@ -182,35 +211,147 @@ def build_server(store: Store, fetch: Fetch = http_get) -> MCPServer:
 
     @tool
     def verify(claim_id: str) -> dict[str, Any]:
-        """Check one claim against its source now, record the check and return both.
+        """Check one claim against its source now.
 
         Use when the user asks whether a remembered fact is still true, or to check a
-        claim that due lists. Works for claims whose check_method is pypi or
-        github_release and that have a value; web_page claims cannot be checked this way
-        yet.
+        claim that due lists.
 
+        For a pypi or github_release claim, the check is recorded and returned as check.
         check.result is same (the source still gives the claim's value), changed (the
-        source gives new_value), cannot_tell, or error (evidence says why). The claim keeps
-        the value it was stored with: after changed its status is changed, and to adopt
-        new_value the user asks you to remember the new sentence and forget this claim.
-        After cannot_tell or error the claim keeps its next_check_at, so a due claim stays
-        due and is tried again; the third such result in a row moves the next check out
-        by one class interval (see claim.next_check_at). Tell the user either way.
+        source gives new_value), cannot_tell, or error (evidence says why).
+
+        For a web_page claim, check is null and judge holds a prompt with the relevant
+        section of the page: follow it, then store your judgment with record_check within
+        30 minutes. If the page cannot be fetched, an error check is recorded instead.
+
+        The claim keeps the value it was stored with: after changed its status is
+        changed, and to adopt new_value the user asks you to remember the new sentence and
+        forget this claim. After cannot_tell or error the claim keeps its next_check_at, so
+        a due claim stays due and is tried again; the third such result in a row moves the
+        next check out by one class interval (see claim.next_check_at). Tell the user
+        either way.
         """
         try:
             claim = store.checkable(claim_id)
-            verifier = verifier_for(claim.check_method)
-            if verifier is None:
-                raise ValueError(
-                    f"claim {claim_id!r} is a web_page claim; verify cannot check it yet"
-                )
-            if claim.value is None:
+            if claim.check_method is CheckMethod.WEB_PAGE:
+                return judge(claim)
+            verifier = verifier_for(claim.check_method)  # pypi or github_release here
+            if verifier is None or claim.value is None:
                 raise ValueError(f"claim {claim_id!r} has no value to compare with the source")
             outcome = verifier(claim.check_target or "", claim.value, fetch)
             claim, check = store.add_check(
                 claim.id, outcome.result, outcome.new_value, outcome.evidence
             )
         except ValueError as e:
+            raise ToolError(str(e)) from e
+        return {"claim": claim.to_dict(), "check": check.to_dict()}
+
+    def judge(claim: Claim) -> dict[str, Any]:
+        """verify for a web_page claim (D10): fetch the page, select the section, hold the
+        page for record_check and return the judgment prompt. A failed fetch is recorded
+        as error."""
+        try:
+            page = get_page(claim.check_target or "")
+        except FetchError as e:
+            claim, check = store.add_check(claim.id, CheckResult.ERROR, evidence=str(e))
+            return {"claim": claim.to_dict(), "check": check.to_dict()}
+        blocks = extract(page.text())
+        section = select_section(
+            blocks,
+            text=claim.text,
+            subject=claim.subject,
+            attribute=claim.attribute,
+            value=claim.value,
+        )
+        core = normalize(" ".join(blocks[i].text for i in section.core))
+        fetched = _Fetched(
+            at=now(),
+            page=normalize(page_text(blocks)),
+            section=section,
+            page_sha256=page.sha256,
+            section_sha256=hashlib.sha256(core.encode()).hexdigest(),
+        )
+        with held_lock:
+            for stale in [k for k, v in held.items() if fetched.at - v.at > HOLD]:
+                del held[stale]
+            held[claim.id] = fetched
+        return {
+            "claim": claim.to_dict(),
+            "check": None,
+            "judge": {
+                "prompt_version": judgment.PROMPT_VERSION,
+                "prompt": judgment.render(claim, section, page.final_url),
+                "url": page.final_url,
+                "section": {
+                    "heading": section.heading,
+                    "start": section.start,
+                    "end": section.end,
+                    "score": section.score,
+                    "runner_up": section.runner_up,
+                    "selector_version": section.version,
+                },
+            },
+        }
+
+    @tool
+    def record_check(
+        claim_id: str,
+        result: Literal["same", "changed", "cannot_tell"],
+        quote: str | None = None,
+        new_value: str | None = None,
+        reason: str | None = None,
+    ) -> dict[str, Any]:
+        """Store your judgment of a web_page claim, made from the prompt verify returned.
+
+        Use only after verify returned judge for this claim, within 30 minutes; otherwise
+        call verify again. Not for pypi or github_release claims, which verify checks
+        itself.
+
+        - result: same, changed or cannot_tell.
+        - quote: for same and changed, copied exactly from the section: at least 20
+          characters and 3 words, appearing only once on the page, and containing the
+          claim's value (for changed, new_value).
+        - new_value: for changed, the value as the page writes it.
+        - reason: for cannot_tell, optionally a short reason.
+
+        The quote is checked in code against the page verify fetched; if it fails, nothing
+        is stored and the error says why. If no quote fits, record cannot_tell. Returns the
+        claim and the check, as verify does; the claim keeps the value it was stored with.
+        """
+        try:
+            claim = store.checkable(claim_id)
+            if claim.check_method is not CheckMethod.WEB_PAGE:
+                raise ValueError(
+                    f"claim {claim_id!r} is checked by {claim.check_method} rules; use verify"
+                )
+            with held_lock:
+                fetched = held.get(claim.id)
+            if fetched is None or now() - fetched.at > HOLD:
+                raise ValueError(
+                    f"no page fetched for claim {claim_id!r} in the last 30 minutes; "
+                    "call verify again"
+                )
+            judged = judgment.validate(
+                result,
+                value=claim.value,
+                page=fetched.page,
+                section=fetched.section,
+                quote=quote,
+                new_value=new_value,
+                reason=reason,
+            )
+            claim, check = store.add_check(
+                claim.id,
+                judged.result,
+                judged.new_value,
+                judged.quote,
+                prompt_version=judgment.PROMPT_VERSION,
+                page_sha256=fetched.page_sha256,
+                section_sha256=fetched.section_sha256,
+                reason=judged.reason,
+                fetched_at=fetched.at,
+            )
+        except ValueError as e:  # InvalidJudgment included
             raise ToolError(str(e)) from e
         return {"claim": claim.to_dict(), "check": check.to_dict()}
 

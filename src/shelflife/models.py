@@ -143,6 +143,12 @@ class Check:
     new_value: str | None  # the value found at the source
     evidence: str | None  # quoted verbatim from the fetched content, or the error
     cost_usd: float | None = None  # what an LLM judgment cost; None for rule-based checks
+    # web_page judgments (schema v2, D10): the template version, hashes of the fetched body
+    # and of the section's core, and the reason Claude may give for cannot_tell.
+    prompt_version: str | None = None
+    page_sha256: str | None = None
+    section_sha256: str | None = None
+    reason: str | None = None
 
     @classmethod
     def from_row(cls, row: Mapping[str, Any]) -> Check:
@@ -156,6 +162,10 @@ class Check:
             new_value=row["new_value"],
             evidence=row["evidence"],
             cost_usd=row["cost_usd"],
+            prompt_version=row["prompt_version"],
+            page_sha256=row["page_sha256"],
+            section_sha256=row["section_sha256"],
+            reason=row["reason"],
         )
 
     def to_dict(self) -> dict[str, Any]:
