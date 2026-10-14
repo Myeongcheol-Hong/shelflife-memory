@@ -41,15 +41,15 @@ Items marked **(maintainer)** are done by the maintainer by hand: ground-truth l
 
 ## M6: Replay simulator and baseline policies
 - [ ] Day-by-day replay over the timelines
-- [ ] Policies: never, every read, fixed 7/30 days, per-class
-- [ ] Metrics: stale-answer rate, checks per claim-month, days to detect
+- [ ] Policies: never, every read, fixed 3 to 180 days, per-class, oracle, jitter (D12)
+- [ ] Metrics: stale-answer rate, stale claim-days, checks per claim-month, days to detect with the undetected share, peak checks per day; 5 seeds and bootstrap intervals over projects (D12)
 - [ ] First results table
 
 ## M7: Adaptive and LLM-judged policies
 - [ ] Shared model runner (`claude -p --model`, repeats, run artifacts). It starts `claude -p` outside the repository, so the project's Stop hook and `CLAUDE.md` stay out of eval runs. M5b and M8 reuse it
 - [ ] Adaptive per-claim policy, tuned on dev split only
 - [ ] LLM-judged volatility policy
-- [ ] 5 seeds, bootstrap intervals, Pareto figure
+- [ ] Pareto figure (5 seeds and bootstrap intervals moved to M6, D12)
 - [ ] Volatility impact: maintainer labels vs Claude labels in the replay (design 6.0-3)
 
 ## M4: Decisions, scheduler, digest

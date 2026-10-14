@@ -9,6 +9,7 @@ network here: tests and CI run it on eval/data/smoke/.
 
 from __future__ import annotations
 
+import functools
 import json
 import re
 import tomllib
@@ -89,13 +90,20 @@ def latest_on(timeline: Timeline, day: date) -> str | None:
     for r in out:
         if r.yanked:
             continue
-        try:
-            versions.append((Version(r.version), r.version))
-        except InvalidVersion:
-            continue
+        if (parsed := _version(r.version)) is not None:
+            versions.append((parsed, r.version))
     stable = [v for v in versions if not v[0].is_prerelease]
     pool = stable or versions
     return max(pool)[1] if pool else None
+
+
+@functools.cache
+def _version(text: str) -> Version | None:
+    """A PyPI version parsed once per process (latest_on() runs for every publish day)."""
+    try:
+        return Version(text)
+    except InvalidVersion:
+        return None
 
 
 def changes(timeline: Timeline, start: date, end: date) -> list[tuple[date, str | None]]:

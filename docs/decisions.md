@@ -153,3 +153,36 @@ One entry per decision: the options, the option chosen, why, and when to revisit
   - Same-second ties in the published-last pick break on the creation time, then on the tag later in string order, so no answer depends on the order of the rows. The collector reads each release once by id (script `t2`), and `problems()` flags a tag listed more than once (rust's `1.66.1`).
   - Proposed by Claude, for the maintainer to confirm: the same tie-break in `latest_on()` (creation time, then publish time, then the tag later in string order). Before, `max()` kept the first row, the smaller tag, because the files are sorted by publish time and tag. It changes no day's latest on the 70 projects.
 - Revisit if: many collected timelines disagree with what the source called latest at collection (`problems()`), or the replay shows a project dominating the results.
+
+## D12: The 6.1 replay (M6)
+
+- Status: decided by the maintainer, 2026-10-14 (answers to the M6 plan, with an outside review's changes). Items marked "proposed" are Claude's and wait for the maintainer.
+- Claims: 20 per project, split and seed; projects weigh equally. A claim states the latest version on its creation day, a uniform random day from the project's first day with a latest in the split to the day before the split ends. It lives until the split ends, starts with no history (D11) and shares nothing with any other claim, even about the same project; no claim spans dev and test.
+- Questions: three rates, each run on its own: 2 a month, 1 a week (primary) and 1 a day. Proposed: on each day after the creation a question comes with that probability, one draw per day, so every draw is a `random()` call; at 1 a day every day has one.
+- Days: a day's checks and questions see the state at the end of that day, and checks run first. On detection the replay adopts the new value, while the product keeps the old one with status `changed` (D9). Reverts cannot occur, because both "latest" rules are monotone (a test checks every collected timeline), so a stored value is stale exactly when the latest changed since it was read.
+- Policies, nothing tuned on test:
+  - never;
+  - every read, shown as a line across the three question rates (0% stale by construction, at a cost equal to the question rate);
+  - fixed N for N in 3, 7, 14, 30, 60, 90 and 180 days: the curve that tells whether per-class lies below it or only buys more checks;
+  - per-class, with the maintainer's labels as they are, through `scheduler.next_check_at()`;
+  - oracle, a check on each change day: the lower bound;
+  - per-class, fixed 7 and fixed 30 with jitter.
+- Jitter: each scheduled check moves by a whole number of days drawn uniformly from -j to j, where j is a tenth of that check's interval rounded half up: 3 days gives 0 (no jitter), 7 and 14 give 1, 30 gives 3, 60 gives 6, 90 gives 9, 180 gives 18. It is drawn anew for every check and added to that check's interval, so the offsets add up from check to check.
+- Creation scenarios: uniform (each claim on its own day) and sessions (claims made 10 at a time on one day, about 10 different projects). The sessions rule is written into this entry before M6b's first run.
+- Metrics:
+  - The stale-answer rate and the share of claim-days stale are the headline. The share is exact, with no question noise, and should agree with the rate for every policy but every read.
+  - Checks per claim-month.
+  - Mean days to detect: right-censored (a late change counts only if found quickly, which flatters long intervals), so it is never reported without the share of changes left undetected.
+  - Peak checks per day, with the claim count and the peak-to-mean ratio. Proposed: the peak is taken per seed, then averaged, because averaging the days over seeds first would erase the clusters it measures.
+  - Breakdowns: by label, with n; by observed change rate (changes per year in the split, from the project's first day with a latest, its first release not counted): 0, under 6, 6 to 52, over 52.
+  - One more per-class line without lazygit, starship, zed and hugo, labeled after the first collection run (D11).
+- Intervals (moved from M7): 5 seeds. Each project's counts are averaged over the seeds; 2,000 resamples of whole projects; each ratio comes from the summed counts. The 95% percentile interval covers project sampling.
+- Splits: test is the headline. Dev claims live shorter, so dev is not compared with test.
+- Jitter's one primary comparison, pre-registered: peak checks per day for per-class, sessions scenario, 1 question a week, test split, jitter minus none. Jitter helps if that difference's 95% interval lies below zero and the stale-answer rate is not worse. Proposed: "not worse" means the upper end of the 95% interval of the stale-answer rate's paired difference is at most +0.5 percentage points. Everything else about jitter is exploratory.
+- Reproducibility: every random stream is seeded from sha256 of its parts (seed, split, project, claim, and the policy for jitter), never `hash()`, which changes per process for strings. Every draw is a `random()` call, the only draw Python keeps the same across versions. The smoke run's counts are pinned in a test that runs on 3.11 and 3.13. `config.json` records the `packaging` version (M6b).
+- Results in git: `config.json`, `metrics.json` and the markdown table of the headline run, not the per-claim raw output, which the same seed reproduces. `eval/results/` joins the size job's exclusions as generated output (M6b).
+- M7's adaptive policy, pre-registered before any test result (proposed):
+  - Family: per claim, a change rate from its own checks only, λ = (α + checks that found a change) / (α × the label's class interval + days since the creation). That is a Gamma prior whose mean is one change per class interval. The next check comes after -ln(1 - p) / λ days, the interval with probability p of a change under a Poisson model (Cho & Garcia-Molina 2003, Avrachenkov et al. 2020), clamped to 1 to `max` days.
+  - Dev grid, 30 points: p in 0.05, 0.1, 0.2, 0.3, 0.5; α in 0.5, 1, 2; `max` in 180, 365.
+  - Selection on dev only (uniform scenario, 1 question a week): the point with the lowest share of claim-days stale among those costing no more checks per claim-month than per-class on dev, ties to the cheaper. Test reports that one point; the grid's dev curve is exploratory.
+- Revisit if: the results move more with the number of claims or the question rate than with the policy, or the claim-days share and the stale-answer rate disagree beyond question noise.
