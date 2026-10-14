@@ -32,13 +32,16 @@ GetPage = Callable[[str], Page]
 
 
 def quote_on_source(record: Record, get_page: GetPage) -> Result:
-    """1. The source_quote appears verbatim, after normalize(), in the source page's text."""
+    """1. The source_quote appears verbatim, after normalize(), in the source page's text.
+    A source page that is gone (HTTP 404 or 410) fails, as in check 3."""
     quote, url = _field(record, "source_quote"), _field(record, "source_url")
     if not quote or not url:
         return SKIP, "no source_quote" if not quote else "no source_url"
     try:
         text = normalize(page_text(extract(get_page(url).text())))
-    except (FetchError, UnicodeError) as e:
+    except FetchError as e:
+        return (FAIL if e.status in GONE else BLOCKED), str(e)
+    except UnicodeError as e:  # a charset that cannot be used
         return BLOCKED, str(e)
     return (PASS, None) if normalize(quote) in text else (FAIL, "quote not on the page")
 
@@ -81,18 +84,29 @@ def target_exists(record: Record, fetch: Fetch, get_page: GetPage) -> Result:
 
 
 def verifies_same(record: Record, fetch: Fetch) -> Result:
-    """4. Verifying right after the write gives same. A web_page claim needs a judgment."""
+    """4. Verifying right after the write gives same. A web_page claim needs a judgment.
+    A verifier error from a source that is gone (HTTP 404 or 410, such as a repository with
+    no latest release) fails; other errors are blocked."""
     method, value = _method(record), _field(record, "value")
     if method in (None, CheckMethod.NONE) or not value:
         return SKIP, "no check_method or value"
     verifier = verifier_for(method)
     if verifier is None:
         return NEEDS_JUDGMENT, None
-    outcome = verifier(_field(record, "check_target") or "", value, fetch)
+    statuses: list[int | None] = []  # the verifier's Outcome drops a FetchError's status
+
+    def noting(url: str, headers: Mapping[str, str]) -> bytes:
+        try:
+            return fetch(url, headers)
+        except FetchError as e:
+            statuses.append(e.status)
+            raise
+
+    outcome = verifier(_field(record, "check_target") or "", value, noting)
     if outcome.result is CheckResult.SAME:
         return PASS, None
     if outcome.result is CheckResult.ERROR:
-        return BLOCKED, outcome.evidence
+        return (FAIL if statuses and statuses[-1] in GONE else BLOCKED), outcome.evidence
     return FAIL, f"{outcome.result}: {outcome.new_value or outcome.evidence}"
 
 

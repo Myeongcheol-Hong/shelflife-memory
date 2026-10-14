@@ -45,7 +45,8 @@ Answer with one result:
 - cannot_tell: the section does not settle the claim, for example because it does not
   mention it. You may give a short reason.
 
-For same and changed, copy a quote from the section exactly as written: at least
+For same and changed, copy a quote from the section's text (not its heading) exactly
+as written: at least
 20 characters and 3 words, long enough to appear only once on the page. If the claim
 has a remembered value, the quote must contain it (for changed, the new value).
 
@@ -106,7 +107,8 @@ def validate(
     section's offsets point into, and `value` is the claim's value. For same and changed,
     the quote, normalized, must be long enough, appear exactly once on the page and lie
     inside the section (D10). same needs the value in the quote; changed needs a new_value
-    in the quote that differs from the value and is not just part of it. A value must also
+    in the quote that differs from the value and is not just part of it while the quote
+    still holds the whole value ("300" for "$300"). A value must also
     hold in the quote widened to whole words on the page, so a quote that cuts "$3000" to
     "$300" does not count. A claim without a value gets the quote rules only, but a given
     new_value must still be in the quote. cannot_tell needs nothing; a quote or new_value
@@ -156,9 +158,10 @@ def validate(
         )
     if value is not None and same_value(value, found):
         raise InvalidJudgment(f"new_value {found!r} is the claim's value; record same")
-    if value is not None and value_in(found, value):
+    if value is not None and value_in(found, value) and quoted_whole(value):
         raise InvalidJudgment(
-            f"new_value {found!r} is part of the claim's value; record same or cannot_tell"
+            f"new_value {found!r} is part of the claim's value, which the quote still "
+            "contains; record same"
         )
     return Judgment(outcome, quote=quoted, new_value=found)
 
@@ -195,12 +198,15 @@ CURRENCIES = {
 }
 AMOUNT = r"\d+(?:\.\d+)?"
 CODE_AFTER = r"(usd|krw|eur|달러|원|유로|€)(?![a-z])"
-# A symbol or code before the amount; a code after it as well ("$125 USD") is dropped.
-# ASCII case folding only, so a look-alike such as "Uſd" is not a currency code.
-MONEY_BEFORE = re.compile(
-    rf"(?<![a-z])(us\$|\$|usd|₩|krw|€|eur)\s?({AMOUNT})(\s?{CODE_AFTER})?", re.I | re.A
+# One pass, left to right: an amount with a code after it ("300 USD"), or a symbol or
+# code before an amount ("$300"), which may have a code after it too ("$125 USD"). Each
+# code is used once, so "300 USD 65 questions" keeps 65 apart from USD. ASCII case folding
+# only, so a look-alike such as "Uſd" is not a currency code.
+MONEY = re.compile(
+    rf"({AMOUNT})\s?{CODE_AFTER}"
+    rf"|(?<![a-z])(us\$|\$|usd|₩|krw|€|eur)\s?({AMOUNT})(?:\s?{CODE_AFTER})?",
+    re.I | re.A,
 )
-MONEY_AFTER = re.compile(rf"({AMOUNT})\s?{CODE_AFTER}", re.I | re.A)
 
 
 def fold(text: str) -> str:
@@ -212,8 +218,12 @@ def fold(text: str) -> str:
     text = DASHES.sub("-", normalize(text))
     text = DOUBLE_QUOTES.sub('"', SINGLE_QUOTES.sub("'", text))
     text = ZERO_DECIMALS.sub(r"\1", THOUSANDS.sub("", text))
-    text = MONEY_BEFORE.sub(lambda m: f"{m[2]} {CURRENCIES[m[1].lower()]}", text)
-    return MONEY_AFTER.sub(lambda m: f"{m[1]} {CURRENCIES[m[2].lower()]}", text)
+    return MONEY.sub(_money, text)
+
+
+def _money(m: re.Match[str]) -> str:
+    amount, code = (m[1], m[2]) if m[1] else (m[4], m[3])
+    return f"{amount} {CURRENCIES[code.lower()]}"
 
 
 def value_in(value: str, text: str) -> bool:

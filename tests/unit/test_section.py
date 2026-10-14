@@ -33,6 +33,7 @@ SMALL = Weights(budget=200)
         ("The Exam_Fee is $300", {"exam", "fee", "300"}),
         ("Chatbox의 가격은 월 9,900원", {"chatbox", "가격", "월", "9,900", "원"}),
         ("AI모델은 속도가 회의", {"ai", "모델", "속도", "회의"}),  # 2 characters must remain
+        ("API에서는", {"api"}),  # a stacked particle is not left as a term
         ("mcp v2.3.0 and Claude Sonnet 5.5", {"mcp", "v2.3.0", "claude", "sonnet", "5.5"}),
         ("A b of the top 3 MCP", {"top", "3", "mcp"}),  # one-letter words, not digits, dropped
         (None, set()),

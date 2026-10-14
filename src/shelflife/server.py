@@ -295,8 +295,10 @@ def build_server(
             "check": None,
             "judge": {
                 "prompt_version": judgment.PROMPT_VERSION,
-                "prompt": judgment.render(claim, section, page.final_url),
-                "url": page.final_url,
+                # The stored URL, not the one the site redirected to: page-controlled
+                # text stays inside the fence (D10 follow-up 12).
+                "prompt": judgment.render(claim, section, claim.check_target or ""),
+                "url": claim.check_target,
                 # The heading is page text, so it is shown only inside the prompt's
                 # fence (D10 follow-up 12).
                 "section": {
