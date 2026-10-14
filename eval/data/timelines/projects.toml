@@ -102,7 +102,7 @@ github = [
   { name = "prettier/prettier", volatility = "slow" },
   { name = "rust-lang/rust", volatility = "medium" },
   { name = "sharkdp/bat", volatility = "fast" },
-  { name = "starship/starship", volatility = "" },
+  { name = "starship/starship", volatility = "fast" },
   { name = "vectorize-io/hindsight", volatility = "fast" },
-  { name = "zed-industries/zed", volatility = "" },
+  { name = "zed-industries/zed", volatility = "medium" },
 ]
