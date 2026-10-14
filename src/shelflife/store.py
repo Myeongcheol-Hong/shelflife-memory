@@ -137,10 +137,11 @@ def query_words(query: str) -> list[str]:
     words = []
     for word in re.findall(r"\w+", query):
         if re.search(r"[A-Za-z]", word) and re.search(r"[\uac00-\ud7a3]", word):
-            words += [part for part in _SCRIPT_RUNS.findall(word) if part not in PARTICLES]
+            # After drop_particle, so a stacked particle goes too: "API에서는" gives "API".
+            parts = [drop_particle(part) for part in _SCRIPT_RUNS.findall(word)]
+            words += [part for part in parts if part not in PARTICLES]
         else:
-            words.append(word)
-    words = [drop_particle(w) for w in words]
+            words.append(drop_particle(word))
     first_spelling: dict[str, str] = {}
     for w in words:
         first_spelling.setdefault(w.casefold(), w)

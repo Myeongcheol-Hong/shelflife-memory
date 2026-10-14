@@ -212,6 +212,7 @@ def test_recall_finds_korean_claims(store, korean, query, expected):
         ("Chatbox로 chatbox", ["Chatbox"]),  # deduplicated ignoring case
         ("가격은", ["가격"]),  # Hangul only: not split, but the particle goes
         ("AI모델은", ["AI", "모델"]),
+        ("API에서는", ["API"]),  # a stacked particle is not left as a word
         ("속도", ["속도"]),  # 2 characters must remain
         ("3월", ["3월"]),  # no Latin letter: not split
     ],
