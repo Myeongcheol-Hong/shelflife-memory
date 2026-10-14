@@ -45,6 +45,18 @@ def test_jitter_helps_only_by_the_pre_registered_rule(peak_hi, stale_hi, verdict
     assert run.helps(found) is verdict
 
 
+def test_the_claims_table_shows_each_rows_dropped_claims():
+    metrics = {
+        "dev / sessions / 1 a week": {"never": {"projects": 2, "claims": 35.6}},
+        "test / uniform / 1 a week": {"never": {"projects": 3, "claims": 60.0}},
+        "jitter": {"primary: helps": False},
+    }
+    assert run._claims(metrics)[2:] == [
+        "| dev / sessions / 1 a week | 2 | 35.6 | 4.4 |",
+        "| test / uniform / 1 a week | 3 | 60.0 | 0.0 |",
+    ]
+
+
 def test_the_smoke_run_writes_config_metrics_and_table(tmp_path, monkeypatch):
     # The whole pipeline on the smoke corpus, as CI runs every eval (CLAUDE.md). The labels
     # come from the test, written outside eval/data/ (D12); fewer seeds and resamples
@@ -80,6 +92,7 @@ def test_the_smoke_run_writes_config_metrics_and_table(tmp_path, monkeypatch):
     table = (folder / "table.md").read_text()
     assert table.startswith(f"# 6.1 replay, run {folder.name}")
     assert "Primary comparison (D12), sessions / per-class: jitter" in table
+    assert all(f"| {key} |" in table for key in combos)  # each row's claim count
     # Every row has its header's columns, so the Markdown renders.
     for block in table.split("\n\n"):
         rows = [line for line in block.splitlines() if line.startswith("|")]

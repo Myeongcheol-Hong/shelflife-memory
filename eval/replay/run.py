@@ -148,7 +148,20 @@ def table(metrics: dict, run_id: str) -> str:
     lines += _groups_table(head)
     lines += ["", "## Dev split (not compared with test: dev claims live shorter)", ""]
     lines += [_caption("dev", "uniform", "1 a week", dev), "", *_policies(dev)]
+    lines += ["", "## Claims in each results row (per seed, averaged over the seeds)", ""]
+    lines += _claims(metrics)
     return "\n".join(lines) + "\n"
+
+
+def _claims(metrics: dict) -> list[str]:
+    """Each row's projects and claims, and the claims no session could take (D12)."""
+    rows = []
+    for key, summary in metrics.items():
+        if key != "jitter":
+            projects, claims = summary["never"]["projects"], summary["never"]["claims"]
+            dropped = CLAIMS_PER_PROJECT * projects - claims
+            rows.append([key, str(projects), f"{claims:.1f}", f"{dropped:.1f}"])
+    return _table(["Split / scenario / questions", "Projects", "Claims", "Dropped"], rows)
 
 
 def _every_read(metrics: dict) -> list[str]:
