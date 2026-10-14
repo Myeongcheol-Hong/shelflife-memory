@@ -129,8 +129,9 @@ def query_words(query: str) -> list[str]:
 
     A word that mixes Latin letters and Hangul is split where the scripts meet, and a
     Hangul part that is a common particle is dropped: "Chatbox의" gives "Chatbox", and
-    "AI모델" gives "AI" and "모델". Words keep their spelling, because LIKE folds ASCII
-    case only.
+    "AI모델" gives "AI" and "모델". A Hangul word also loses a trailing particle if 2
+    characters remain (drop_particle): "가격은" gives "가격", which finds "가격이" too.
+    Words keep their spelling, because LIKE folds ASCII case only.
     """
     words = []
     for word in re.findall(r"\w+", query):
@@ -138,6 +139,7 @@ def query_words(query: str) -> list[str]:
             words += [part for part in _SCRIPT_RUNS.findall(word) if part not in PARTICLES]
         else:
             words.append(word)
+    words = [drop_particle(w) for w in words]
     first_spelling: dict[str, str] = {}
     for w in words:
         first_spelling.setdefault(w.casefold(), w)
