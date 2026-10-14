@@ -2,7 +2,7 @@
 
 Milestones are listed in dependency order. Each milestone ships as its own PR (or a short stack of PRs). Design details live in `docs/design.md`.
 
-Items marked **(owner)** are done by the maintainer by hand: ground-truth labels and open decisions. Tooling for them can be built ahead of time.
+Items marked **(owner)** are done by the maintainer by hand: ground-truth labels, open decisions and the owner's own cleanup pass before release. Tooling for them can be built ahead of time.
 
 ## M1: Core store and MCP server
 - [x] Package skeleton: `uv` package `shelflife-memory`, import name `shelflife`, pytest, ruff, SessionStart hook (`uv sync`)

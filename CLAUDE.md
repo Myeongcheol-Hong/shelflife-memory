@@ -33,7 +33,7 @@ The main contribution is the **eval**, not the feature list. Re-check tools alre
 
 ## Review rules
 
-- **Size:** under about 400 changed lines, excluding tests and fixtures (CI fails above 600). Review fixes that would go over move to the next PR.
+- **Size:** under about 400 changed lines, excluding tests, fixtures, `eval/data/` and `uv.lock` (CI counts the same and fails above 600). Review fixes that would go over move to the next PR.
 - **PR description:** a top part of at most 10 lines: **What changed**, **Read these first** (1-3 core files or functions), **Decisions needed**, **Removed or simplified**. Then **Proof** (each added test and what it asserts, one line each; commands run and their results), **Confidence** (high, medium or low per part, with a reason for anything not high), **Rollback** (how to undo it; write ONE-WAY DOOR if it changes the DB schema or stored data), then **Details**.
 - **Code the owner always reads:** the `store.py` schema and transactions, the MCP tool interfaces, quote and `record_check` validation, and eval scoring. A PR that changes one lists it under "Read these first".
 - **Simpler:** prefer the simpler fix and deleting code, and say what was removed.

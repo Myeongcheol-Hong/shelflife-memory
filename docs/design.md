@@ -53,7 +53,8 @@ The README names these projects openly.
       -> remember: decision + supporting claim ("Chatbox Pro costs $19.99/month", source URL, fast)
 
 (Jan) Me: "Which multi-LLM app did we pick?"
-      -> recall: the supporting claim is past its check date -> re-check the pricing page -> changed
+      -> recall: the supporting claim is past its check date -> verify re-checks the pricing page -> changed
+         (from M4, recall can re-check by itself with SHELFLIFE_RECALL_VERIFY=auto; it is off by default)
       Claude: "In October you picked Chatbox. The reason was 'Pro is $19.99/month',
                which is now $24.99 (checked today, source link). Want to revisit the decision?"
       (The price change is a made-up example.)
@@ -221,7 +222,7 @@ The user decides what to remember and gives the claim sentence (D2, D3). When Cl
    - The check_target exists (PyPI package, GitHub repo, URL responds)
    - **Verify right after write returns `same`**: if a just-written claim verifies as changed or cannot_tell, either the claim or the verifier is wrong
    - Metric: write integrity rate (share of claims passing all four)
-   - How they run (D10): pure functions over `remember`-shaped records, so the M8 write eval runs them without a database, plus a read-only CLI that writes one JSON line per claim and check; never inside `remember`. Check 3 fails only on HTTP 404 or 410; a 403, 429, 5xx or network error is reported as blocked. For `web_page`, check 4 needs a judgment and is left out of the rate until M5. The report gives pass, fail and skip counts per check, and the rate is over claims where all four checks applied
+   - How they run (D10): pure functions over `remember`-shaped records, so the M8 write eval runs them without a database, plus a read-only CLI that writes one JSON line per claim and check; never inside `remember`. Check 3 fails on HTTP 404 or 410 and on a malformed check_target; blocked is only for network or access problems, such as a 403, 429, 5xx or network error. For `web_page`, check 4 needs a judgment and is left out of the rate until M5. The report gives pass, fail and skip counts per check. In the rate, a claim with any failed check counts as failing, one that passed all four as passing, and the rest are left out
 2. **Labeled set (small, hand-made)**
    - 40 items from my own research conversations (certifications, multi-LLM apps, memory frameworks; no employer data). An item is one sentence I gave, plus the surrounding turn and the source URL if any (D2). The gold labels are the fields Claude should fill: kind, subject/attribute/value, volatility, check_method/check_target, observed_at and source
    - Metrics: per-field accuracy for the given sentences, volatility confusion matrix. Recall (missed claims) and precision (invented or unneeded claims) measure extraction, which is a stretch goal under D2
