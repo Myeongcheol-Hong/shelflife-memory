@@ -35,10 +35,6 @@ class Truth:
     values: tuple[str | None, ...]  # the latest from each of those days on
     before: str | None  # the latest on the day before the split
 
-    def on(self, day: date) -> str | None:
-        i = bisect_right(self.days, day)
-        return self.values[i - 1] if i else self.before
-
     def change_after(self, day: date) -> date | None:
         """The first day after `day` the latest changed."""
         i = bisect_right(self.days, day)
@@ -106,7 +102,7 @@ def never(claim: Claim, truth: Truth, rng: random.Random) -> list[date]:
 
 
 def every_read(claim: Claim, truth: Truth, rng: random.Random) -> list[date]:
-    return sorted(set(claim.questions))
+    return list(claim.questions)  # one question a day at most: one draw per day
 
 
 def oracle(claim: Claim, truth: Truth, rng: random.Random) -> list[date]:

@@ -1,4 +1,5 @@
 from collections import Counter
+from dataclasses import astuple
 from datetime import date
 from pathlib import Path
 
@@ -67,7 +68,7 @@ def test_outcome_counts_stale_days_stale_answers_and_detection_delays():
 
 
 def test_each_policy_checks_on_the_days_it_says():
-    medium = claim([d(1, 3), d(1, 3), d(1, 9)], end=d(3, 31), label="medium")
+    medium = claim([d(1, 3), d(1, 9)], end=d(3, 31), label="medium")
 
     def days(policy, c=medium):
         return POLICIES[policy](c, TRUTH, stream("test"))
@@ -79,6 +80,7 @@ def test_each_policy_checks_on_the_days_it_says():
     assert days("per-class") == days("fixed 30")  # medium: 30 days (design 4.2)
     assert days("fixed 7")[:3] == [d(1, 8), d(1, 15), d(1, 22)]
     assert days("oracle", claim(created=d(1, 10))) == [d(1, 20)]  # after the creation only
+    assert days("oracle", claim(end=d(1, 20))) == [d(1, 10), d(1, 20)]  # the last day too
 
 
 @pytest.mark.parametrize(("days", "j"), [(3, 0), (7, 1), (14, 1), (15, 2), (30, 3), (180, 18)])
@@ -137,14 +139,24 @@ def test_the_latest_never_returns_to_an_earlier_value(real):
 
 
 def test_scores_are_ratios_of_summed_counts_and_resample_whole_projects():
-    a, b = Counts(questions=4, stale_answers=1), Counts(questions=6, stale_answers=4)
+    a = Counts(claims=1, questions=4, stale_answers=1)
+    b = Counts(claims=1, questions=6, stale_answers=4)
     rows = [Row(0, "p", "x", a, Counter()), Row(1, "p", "x", b, Counter())]
-    assert score.per_project(rows, "x") == {"p": Counts(questions=5, stale_answers=2.5)}
+    rows.append(Row(0, "young", "x", Counts(), Counter()))  # no claim in this split
+    assert score.per_project(rows, "x") == {"p": Counts(1, questions=5, stale_answers=2.5)}
+    c = Counts(1, 4, 1, days=60, stale_days=6, checks=3, detected=4, delay_days=10, undetected=1)
+    assert {m: score.value(m, c) for m in score.METRICS} == {
+        "stale-answer rate": 0.25,
+        "stale claim-days": 0.1,
+        "checks per claim-month": 1.5,
+        "mean days to detect": 2.5,
+        "undetected share": 0.2,
+    }
     assert score.value("stale-answer rate", a + b) == 0.5
     assert score.value("mean days to detect", a) is None
     same = {"p": a, "q": a}
-    assert score.interval("stale-answer rate", same) == (0.25, 0.25)
-    assert score.interval("stale-answer rate", {"p": a, "q": b}, minus={"p": a, "q": b}) == (0, 0)
+    assert score.ci("stale-answer rate", same) == (0.25, 0.25)
+    assert score.ci("stale-answer rate", {"p": a, "q": b}, minus={"p": a, "q": b}) == (0, 0)
     assert score.percentiles(list(range(2000, 0, -1))) == (50, 1950)  # nearest rank
 
 
@@ -164,28 +176,29 @@ def test_the_smoke_run_gives_the_pinned_counts():
     found = {}
     for name in POLICIES:
         c = score.total(score.per_project(rows, name))
-        found[name] = (round(c.checks * 5), round(c.stale_answers * 5), round(c.stale_days * 5))
+        found[name] = tuple(round(x * 5) for x in astuple(c))  # summed over the 5 seeds
     assert found == PINNED
     projects = score.per_project(rows, "per-class")
-    lo, hi = score.interval("stale claim-days", projects, minus=score.per_project(rows, "fixed 30"))
+    lo, hi = score.ci("stale claim-days", projects, minus=score.per_project(rows, "fixed 30"))
     assert (round(lo, 6), round(hi, 6)) == PINNED_INTERVAL
 
 
-# checks, stale answers and stale claim-days, summed over the 5 seeds
+# Every count, summed over the 5 seeds: claims, questions, stale answers, claim-days, stale
+# claim-days, checks, detected changes, their delay days, undetected changes.
 PINNED = {
-    "never": (0, 3828, 27150),
-    "every read": (26380, 0, 288),
-    "oracle": (53, 0, 0),
-    "fixed 3": (61904, 11, 56),
-    "fixed 7": (26357, 22, 160),
-    "fixed 14": (13024, 43, 314),
-    "fixed 30": (5911, 118, 806),
-    "fixed 60": (2814, 244, 1766),
-    "fixed 90": (1769, 419, 2996),
-    "fixed 180": (758, 854, 6326),
-    "per-class": (11135, 435, 3318),
-    "per-class + jitter": (11133, 435, 3307),
-    "fixed 7 + jitter": (26373, 25, 188),
-    "fixed 30 + jitter": (5922, 114, 837),
+    "never": (600, 26380, 3828, 186291, 27150, 0, 0, 0, 53),
+    "every read": (600, 26380, 0, 186291, 288, 26380, 53, 288, 0),
+    "oracle": (600, 26380, 0, 186291, 0, 53, 53, 0, 0),
+    "fixed 3": (600, 26380, 11, 186291, 56, 61904, 53, 56, 0),
+    "fixed 7": (600, 26380, 22, 186291, 160, 26357, 53, 160, 0),
+    "fixed 14": (600, 26380, 43, 186291, 314, 13024, 53, 314, 0),
+    "fixed 30": (600, 26380, 118, 186291, 806, 5911, 53, 806, 0),
+    "fixed 60": (600, 26380, 244, 186291, 1766, 2814, 53, 1766, 0),
+    "fixed 90": (600, 26380, 419, 186291, 2996, 1769, 53, 2996, 0),
+    "fixed 180": (600, 26380, 854, 186291, 6326, 758, 53, 6326, 0),
+    "per-class": (600, 26380, 435, 186291, 3318, 11135, 53, 3318, 0),
+    "per-class + jitter": (600, 26380, 435, 186291, 3307, 11133, 53, 3307, 0),
+    "fixed 7 + jitter": (600, 26380, 25, 186291, 188, 26373, 53, 188, 0),
+    "fixed 30 + jitter": (600, 26380, 114, 186291, 837, 5922, 53, 837, 0),
 }
 PINNED_INTERVAL = (-0.003545, 0.041518)

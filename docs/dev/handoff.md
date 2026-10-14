@@ -12,7 +12,7 @@ Where the work stands. Each session's last PR overwrites this file (CLAUDE.md); 
 ## Waiting on the maintainer
 
 1. #27: keep or drop the `latest_on()` same-second tie-break (D11, proposed); the data card's wording on `created_at` (the PR's Details).
-2. M6a: confirm D12's "proposed" items: one question draw per day, the peak taken per seed, the +0.5 point margin for "not worse", and M7's adaptive family and dev grid.
+2. M6a: confirm D12's "proposed" items: jitter's rounding (half up, so 7 days get ±1, 14%) and its adding up; one question draw per day; the peak taken per seed; the change-rate definition; 2,000 nearest-rank resamples; the +0.5 point margin for "not worse"; M7's adaptive family and dev grid.
 3. Merge #27, then the M6a PR.
 4. Open, no rush: whether the github_release verifier should read a project's tag pattern too (D11).
 

@@ -266,7 +266,7 @@ The user decides what to remember and gives the claim sentence (D2, D3). When Cl
 - **Policies** (each mapped to who uses it today, so the comparison is against real prior-art behavior)
   - Never check: the default in Mem0, Zep and Hindsight, which react only to new input
   - Check on every read
-  - Fixed interval (7 and 30 days): a plain TTL
+  - Fixed interval (7 and 30 days, and a curve from 3 to 180 in D12, with jitter variants and an oracle lower bound): a plain TTL
   - Per-class interval (table 4.2): closest to memwatch and agent-memory-staleness-audit (per-type half-lives)
   - LLM-judged class interval
   - **Adaptive**: per-claim next check date from the observed change rate

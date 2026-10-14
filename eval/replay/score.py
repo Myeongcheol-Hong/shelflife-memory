@@ -35,17 +35,18 @@ def per_project(rows: list[Row], policy: str) -> dict[str, Counts]:
     for r in rows:
         if r.policy == policy:
             by[r.project].append(r.counts)
-    return {
+    mean = {
         p: Counts(*(sum(x) / len(cs) for x in zip(*map(astuple, cs), strict=True)))
         for p, cs in by.items()
     }
+    return {p: c for p, c in mean.items() if c.claims}  # no claim in the split: not a unit
 
 
 def total(projects: dict[str, Counts]) -> Counts:
     return sum(projects.values(), Counts())
 
 
-def interval(
+def ci(
     metric: str, projects: dict[str, Counts], minus: dict[str, Counts] | None = None
 ) -> tuple[float, float] | None:
     """The 95% percentile interval of a metric, or of its paired difference from the same
