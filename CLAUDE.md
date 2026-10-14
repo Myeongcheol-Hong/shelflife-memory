@@ -26,6 +26,8 @@ The main contribution is the **eval**, not the feature list. Re-check tools alre
 
 ### Needs maintainer approval
 
+These do not speed up: "move as fast as the work allows" does not apply to them.
+
 - **Ground-truth labels belong to the maintainer.** Never create, fill in or edit labels in `eval/data/` (Wayback pair labels, write-eval snippet labels, human volatility labels). Build the files, schemas and labeling tools, then stop and hand over.
 - **Decisions belong to the maintainer.** Propose options for any new decision and for any change to the schema or MCP tool interfaces; do not decide them. Decisions are recorded in `docs/decisions.md` (D1-D4 came from `docs/design.md` section 8 and are decided). Items marked **(maintainer)** in the roadmap are never done by Claude.
 - **New dependencies** need approval, and a check that the package exists on PyPI.

@@ -11,7 +11,7 @@ Where the work stands. Each session's last PR overwrites this file (CLAUDE.md); 
 ## Waiting on the maintainer
 
 - #24's three decisions: the volatility-`none` refusal also covers a note's default `none`; `needs_check_method` leaves out volatility-`none` claims; the 10 MB cap with grpcio's PyPI JSON at 9.1 MB.
-- M7's LLM-judged volatility policy and its volatility-impact item need the model runner and volatility labels, which are in M5b, after M7. Move the runner into M5a, or do those two items after M5b.
+- M7's LLM-judged volatility policy needs the model runner, which is in M5b, after M7; its volatility-impact item needs the maintainer's volatility labels for the replay's claims, which no milestone lists. Where do the runner and that labeling item go?
 - The M5a plan (no code yet). The timeline collection script runs on the maintainer's Mac.
 
 ## Next session: start here
@@ -23,6 +23,6 @@ Where the work stands. Each session's last PR overwrites this file (CLAUDE.md); 
 
 - M4: `checks` stores `selector_version` and `fetched_at`, so a selector change can be told apart from a page change.
 - M4: when a section is a window of one long block, `section_sha256` hashes the whole block, so any edit to a one-block page marks the claim "possibly changed".
-- `web_page.py` lets two decode errors out as `UnicodeError` (the `undefined` charset in `_codec`, IDNA in `check_url`); `judge()` records them as errors. An unknown charset label falls back to UTF-8 (kept on purpose).
+- `web_page.py` lets two decode errors out as `UnicodeError` (the `undefined` charset in `_codec`, IDNA in `check_url`); `judge()` records them as errors. An unknown charset label falls back to UTF-8 (D10 follow-up 19).
 - `now` is read before the write lock; it matters only with three writers within one second.
 - An INTEGER PRIMARY KEY for `claims` waits for schema v3. Never VACUUM without rebuilding `claims_fts`.

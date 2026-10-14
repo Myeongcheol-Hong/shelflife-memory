@@ -13,7 +13,7 @@ Only gaps that affect:
 
 - **correctness**: the code does the wrong thing for an input it will really get;
 - **security**: for example an unchecked URL or address, a path or SQL built from input, a secret in the repo;
-- **a decision** in `docs/decisions.md`, or a "Stop and ask" rule in `CLAUDE.md` (labels, decisions, dependencies).
+- **a decision** in `docs/decisions.md`, or a "Needs maintainer approval" rule in `CLAUDE.md` (labels, decisions, dependencies).
 
 A must-fix finding names a real caller or input that reaches the problem. If you cannot name one, it belongs in the optional list.
 

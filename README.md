@@ -1,6 +1,6 @@
 # Shelf Life
 
-**Memory with an expiry date.** Shelf Life is a small MCP memory server for Claude Desktop and Claude Code. It remembers facts together with where they came from and how fast they go stale, and re-checks them against the source when they are due, so an answer built on memory says when a fact has changed instead of repeating it.
+**Memory with an expiry date.** Shelf Life is a small MCP memory server for Claude Desktop and Claude Code. It remembers facts together with where they came from and how fast they go stale, tells you which ones are due for a check, and re-checks them against the source when you ask, so a fact that has changed is marked instead of repeated.
 
 ## The problem
 
@@ -9,7 +9,7 @@ Memory systems for AI assistants update a memory when new information arrives th
 ## What Shelf Life does
 
 - **Every memory carries its shelf life.** A claim stores its source, the date it was observed, a volatility class (fast, medium, slow or none) and how to check it: the PyPI project, the GitHub repository, or the web page it came from.
-- **Claims are re-checked when they are due.** `due` lists the claims past their check date, and `verify` re-checks one. Version claims are compared with PyPI and GitHub releases by code. For a web page, the server fetches the page and picks out the relevant section; Claude judges it in the conversation, and the result is stored only if its quote appears word for word on the page. A changed claim keeps its old value and is marked `changed`, so you decide what happens next.
+- **Claims can be re-checked when they are due.** `due` lists the claims past their check date, and `verify` re-checks one; nothing is re-checked automatically yet (a daily run is on the roadmap, M4). Version claims are compared with PyPI and GitHub releases by code. For a web page, the server fetches the page and picks out the relevant section; Claude judges it in the conversation, and a `same` or `changed` judgment is stored only if its quote appears word for word on the page. A changed claim keeps its old value and is marked `changed`, so you decide what happens next.
 - **Decisions remember their grounds.** A decision can point to the claims it rests on. Flagging the decision for review when one of them changes is on the roadmap (M4).
 - **It is light.** One SQLite file on your machine, no Docker, no services, no API keys. Search works in English and Korean.
 
@@ -27,12 +27,6 @@ claude mcp add -s user shelflife -- uv run --directory "$PWD" shelflife-memory
 ```
 
 The last line registers the server with Claude Code for all your projects; replace `"$PWD"` with the clone's path if you run it from elsewhere. The database lives at `~/.shelflife/shelflife.db`, or wherever `SHELFLIFE_DB` points.
-
-To start with some real examples:
-
-```sh
-uv run shelflife-memory import examples/seed_claims.jsonl
-```
 
 ## Tools
 
