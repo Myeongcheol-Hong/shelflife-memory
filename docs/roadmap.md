@@ -46,7 +46,7 @@ Items marked **(owner)** are done by the maintainer by hand: ground-truth labels
 - [ ] Write-eval item file format (one given sentence, the surrounding turn, the source URL; gold labels are the fields; design 6.0-2) and labeling tool
 - [ ] `eval/data/README.md` data card
 - [ ] Smoke corpus in `eval/data/smoke/`, wired into CI
-- [ ] Shared model runner (`claude -p --model`, repeats, run artifacts)
+- [ ] Shared model runner (`claude -p --model`, repeats, run artifacts). It starts `claude -p` outside the repository, so the project's Stop hook and `CLAUDE.md` stay out of eval runs
 - [ ] **(owner)** Label 30-40 Wayback pairs
 - [ ] **(owner)** Label 40 write-eval items, including about 10 trap cases (design 6.0-2)
 
