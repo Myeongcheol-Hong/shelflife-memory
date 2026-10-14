@@ -5,17 +5,17 @@ Where the work stands. Each session's last PR overwrites this file (CLAUDE.md); 
 ## State
 
 - `main` has M1-M3 and the hardening from the external review (#24): the store, the six MCP tools, the PyPI, GitHub release and web page checks, and the write checks. Schema v2 (#21) is a one-way door; the rollback steps are in design 5.1.
-- This file arrives with #25 (README, "maintainer" wording, roadmap in build order, `attribution.sessionUrl` off), the session's last PR. Nothing else is open.
+- This file arrives with #25 (README, "maintainer" wording, roadmap in build order, `attribution.sessionUrl` off). M5a is being built next, in its own PR, which will carry this file's next version.
 - Build order (roadmap): M1-M3, M5a, M6, M7, M4, M5b, M8, M9. Next is M5a: release timelines, dev/test split, smoke corpus, and the maintainer's volatility labels for the replay claims.
 
 ## Waiting on the maintainer
 
-- The M5a plan's five decisions (in the session's last message): the project list (about 70 candidates, cut to 50 + 20), the "latest" rules (PyPI: highest non-prerelease, non-yanked version by PEP 440; GitHub: the API's latest rule), the split (time only, or also hold out projects), `packaging` in a new `eval` dependency group, and `pythonpath = ["."]` for tests. The timeline collection script runs on the maintainer's Mac.
+- Nothing on #25. The M5a plan is answered: about 70 candidate projects in `projects.toml` (the maintainer cuts them to 50 + 20 and labels volatility while cutting, before any data is collected), the "latest" rules as proposed, a time-only split, `packaging` in an `eval` dependency group, and `pythonpath = ["."]`. The collection script runs on the maintainer's Mac.
 
 ## Next session: start here
 
-1. Check that #25 is merged.
-2. With the M5a plan's decisions answered, build M5a. Eval rules are in CLAUDE.md: the dev/test split is fixed before any tuning, and every eval also runs on `eval/data/smoke/` in CI. The volatility labeling file is built for the maintainer to fill; never fill it.
+1. Check that #25 and the M5a PR are merged.
+2. Continue M5a. Eval rules are in CLAUDE.md: the dev/test split is fixed before any tuning, and every eval also runs on `eval/data/smoke/` in CI. The volatility labeling file is built for the maintainer to fill; never fill it.
 
 ## Notes for later milestones
 
