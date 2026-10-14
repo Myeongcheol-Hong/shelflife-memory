@@ -2,6 +2,77 @@
 
 Handoff notes between working sessions. Newest entry first. Each entry says where the work stands, what waits on the owner, and what the next session should do first.
 
+## 2026-10-14: #16 reworked; the M3 stack built and reviewed, not yet opened (handoff)
+
+### State at the end of the session
+
+- Merged into `main` (f1d9c9d): #17, the previous handoff entry.
+- Open: [#16](https://github.com/Myeongcheol-Hong/shelflife-memory/pull/16). STEP 1 is done, CI is green and its description follows the new template. It waits for the owner's merge and three decisions, listed in its description. Also open: the PR that adds this entry.
+- STEP 2 is built on pushed branches, one per planned PR. No PRs are opened for it yet: the stack should go up after #16, so the new PR checks run on it.
+
+| Order | Branch | Base | Content | Changed lines (excl. tests) |
+|---|---|---|---|---|
+| 1 | `claude/tender-mayer-wts8cd-m3c-followups` (5d5e44c) | `main` | The owner's answers in D8, D9-5, D10, design and roadmap (M4 `SHELFLIFE_RECALL_VERIFY=never`, M9 launch-readiness pass); `drop_particle()`; 수수료; the fixtures README note | 62 |
+| 2 | `claude/tender-mayer-wts8cd-m3d` (90827eb) | 1 | `verifiers/judgment.py`: template `j1` (hash pinned), `render()`, `validate()`, value folding | 221 |
+| 3 | `claude/tender-mayer-wts8cd-m3e` (eafbd2f) | 2 | **ONE-WAY DOOR.** Schema v2 with the `.bak-v1` backup (SQLite backup API, under the write lock, notice on stderr); `verify` returns `judge` for web_page; `record_check`; `needs_check_method` leaves out a caller-set none; the tool interface hash is pinned | 269 |
+| 4 | `claude/tender-mayer-wts8cd-m3f` (6bf3747) | 3 | `writechecks.py` and `shelflife-memory check-writes`; seed edits (MemGuard none, "60%", eligibility phrase, five `source_quote` proposals); M3 ticked | 164 |
+| 5 | `claude/tender-mayer-wts8cd-recall-particles` (65ee73d) | 4 | `query_words()` uses `drop_particle()`, which closes D8's "가격이 vs 가격은" case | 10 |
+
+- All five pass ruff and pytest (on M3e also with Python 3.11).
+- A workflow reviewed PRs 1-4: a `pr-reviewer` stand-in plus one deep reviewer per PR, with two skeptics on each must-fix. **The findings below are not fixed yet.**
+- The branches are based on f612b2c, not on f1d9c9d, which differs from it only in this log.
+- PR descriptions drafted this session were in the container's scratch space and are gone. Rewrite them from the commit messages and these notes, in the CLAUDE.md template.
+
+### Fix first: findings confirmed by both skeptics
+
+**PR 1 (follow-ups):**
+- `drop_particle()` falls back to 로 when 으로 fails the 2-character guard, so "앞으로" gives "앞으". Fix: stop at the longest particle that ends the word, and drop it only if 2 characters remain. Add the test cases ("앞으로", "앞으로") and ("방법으로", "방법"). The skeptics rated this optional, but it is a 1-line change.
+- The description must not say that "가격" newly finds "가격은"; it already did. The change is that claim words such as "가격은" become "가격".
+
+**PR 2 (M3d, `judgment.py`):**
+1. The `ZERO_DECIMALS` lookahead does not fold "$300.00." before a full stop. A correct same is refused, and a false changed is accepted. Fix: `(?<![\d.])(\d+)\.0+(?!\d|\.\d)`, plus a test.
+2. A quote cut in the middle of a page number or word passes. For example, the page says "$3000" and the quote ends at "$300", which gives a false same. Fix: also check the value against the quote widened to whole words on the page (from the space before the quote to the space after it).
+3. Case: with the value "Free" and the page "free", same is refused but changed "free" is accepted, a false change. Fix: `same_value()` compares casefolded values. Raise case folding as a decision.
+4. A Hangul value has no start boundary, so "지원" is found in "미지원" and gives a false same. Fix: before a value that starts with Hangul, require `(?<![가-힣])`.
+5. changed with new_value "300" against the claim "$300" is accepted while the page still says "300 USD". Fix: refuse when `value_in(new_value, value)`.
+
+**PR 3 (M3e):**
+1. `judge.section.heading` puts page text outside the untrusted-data fence. Fix: drop `heading` from `judge.section`. If the heading should be shown, render it inside the fence and bump `PROMPT_VERSION`.
+2. `judge()` records an error only on `FetchError`. A bad host (idna) or a bad charset (`UnicodeError`, `LookupError`) escapes as a tool error and records nothing. Fix: catch `(FetchError, UnicodeError)` around the fetch, `text()`, `extract()` and the hashing. The root causes in `check_url` and `_codec` can go in a follow-up.
+3. The Rollback text must say: stop both servers, delete `shelflife.db-wal` and `shelflife.db-shm`, then copy (not move) `shelflife.db.bak-v1` to `shelflife.db`. A stale `-wal` file replays v2 or corrupts the copy.
+
+**PR 4 (M3f):**
+1. `summarize()` groups rows by `id`, so records without an id collapse into one. Fix: group by position in the input.
+2. A check 3 failure never lowers the rate, because check 4 is then blocked and the record is left out. This is a metric decision for the owner. Option (a): a record with any fail (and no skip or needs_judgment) counts as applied and failing.
+3. Check 3 builds URLs from an unvalidated `check_target`, so `mcp/2.3.0` passes. Fix: validate with `pypi.NAME` and `github_release.REPO`. Whether a mismatch is fail or blocked is the owner's call, since D10.7 says only 404 and 410 fail.
+4. A record whose check_method a rule would fill skips checks 3 and 4. Proposal: say that the checks take what `remember` stores (M8 passes `claim.to_dict()`); this is documentation only.
+5. `examples/README.md` lines 7-8 contradict the seed edits: there are now `source_quote` values, and MemGuard is a caller-set none, so the decision is never flagged. Fix both lines.
+6. A non-string value crashes `check-writes`. Fix: read fields through a `_clean`-like helper.
+
+**Optional, worth a look:**
+- M3e: take the fetch time before the fetch, not after.
+- M3f: check 3 sends no `GITHUB_TOKEN` or API headers; a web_page claim without a value gives skip on check 4.
+- M3d: "€" after an amount can take the next amount's symbol; `MONEY_AFTER` backtracks on very long digit runs; "Uſd" raises `KeyError`, which should be refused.
+- Follow-ups: design scenario 1 still shows `recall` re-checking by default; the roadmap's "(owner)" definition does not cover the M9 cleanup pass.
+
+### Waiting on the owner
+
+- Merge #16 and its three decisions: the `eval/data/` and `uv.lock` exclusions, the reviewer's file access, and the additions beyond the list. Merge this handoff PR.
+- New decisions from the M3 review, to raise in the PR descriptions:
+  - case folding in value matching;
+  - how a check 3 failure counts in the write integrity rate;
+  - fail or blocked for a malformed check_target;
+  - from M3e: the `judge.section` shape, `record_check` returning `{claim, check}`, `reason` stored but not shown, and the upgrade notice on stderr;
+  - from M3f: approval of the seed `source_quote` values and the two new values.
+
+### Next session: start here
+
+1. Check #16 and this handoff PR (merged? comments?). The `pr-reviewer` agent should load from this session on: the first agent file needed a restart.
+2. Fix the confirmed findings as new commits on each branch, starting with PR 1. Then merge each lower branch into the one above it, with merge commits and no rebase. Run the `pr-reviewer` agent on each PR, with two skeptics per must-fix.
+3. Open the PRs in order, at most 3 open, titled "[stack n/5]", each naming its base.
+   - Open them after #16 has merged, or merge `main` into the branch first. `pr-checks.yml` runs only on a PR whose merge commit contains it.
+   - M3e's description lists the migration under "Read these first" and says ONE-WAY DOOR.
+
 ## 2026-10-13: Review-rules rework and the rest of M3 approved (handoff)
 
 ### State at the end of the session
