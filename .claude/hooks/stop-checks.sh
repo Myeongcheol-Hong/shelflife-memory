@@ -3,7 +3,8 @@
 # working and shows it the output.
 cd "$CLAUDE_PROJECT_DIR" || exit 2
 if ! output=$( { uv run ruff check . && uv run ruff format --check . && uv run pytest -q; } 2>&1 ); then
-  echo "Checks fail; fix them before ending the session:" >&2
-  echo "$output" | tail -n 40 >&2
+  echo "Checks fail. Fix them before ending the session; do not skip a test or change the" >&2
+  echo "owner's work to get past this. If a failure is not yours, say so and why." >&2
+  echo "$output" | tail -c 4000 >&2
   exit 2
 fi

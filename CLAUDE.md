@@ -20,7 +20,7 @@ The main contribution is the **eval**, not the feature list. Re-check tools alre
 - One PR per milestone (roughly one plan week). Do not mix milestones in one PR. Keep each PR within the size limit in "Review rules" below; split larger work into stacked PRs.
 - In each PR description, explain the design choices and trade-offs so the owner understands and can explain every line. They go under "Details" (see "Review rules").
 - Never skip tests, the quote check or the eval rules below to go faster.
-- When the owner says a part is theirs to implement, leave a `TODO(mc)` stub with a failing or skipped test that describes the expected behavior.
+- When the owner says a part is theirs to implement, leave a `TODO(mc)` stub with a skipped or `xfail(strict=True)` test that describes the expected behavior (a plain failing test would block the Stop hook).
 - If the design doc is wrong or unclear, say so and propose an edit instead of silently diverging.
 - One session per milestone or so. Before a session ends, update `docs/session-log.md`.
 
@@ -37,7 +37,7 @@ The main contribution is the **eval**, not the feature list. Re-check tools alre
 - **PR description:** a top part of at most 10 lines: **What changed**, **Read these first** (1-3 core files or functions), **Decisions needed**, **Removed or simplified**. Then **Proof** (each added test and what it asserts, one line each; commands run and their results), **Confidence** (high, medium or low per part, with a reason for anything not high), **Rollback** (how to undo it; write ONE-WAY DOOR if it changes the DB schema or stored data), then **Details**.
 - **Code the owner always reads:** the `store.py` schema and transactions, the MCP tool interfaces, quote and `record_check` validation, and eval scoring. A PR that changes one lists it under "Read these first".
 - **Simpler:** prefer the simpler fix and deleting code, and say what was removed.
-- **Packages:** only with the owner's approval and after checking the package exists on PyPI. CI fails on a dependency change until the owner adds the `deps-approved` label.
+- **Packages:** only with the owner's approval and after checking the package exists on PyPI. CI fails on a change to the dependencies in `pyproject.toml` until the owner adds the `deps-approved` label.
 - **Reviews:** use the `pr-reviewer` agent; its checklist is the `pr-review` skill.
 
 ## Tech constraints

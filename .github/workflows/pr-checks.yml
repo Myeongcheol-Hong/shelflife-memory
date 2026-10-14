@@ -73,7 +73,7 @@ jobs:
           ).stdout.split("\0")
           rows = []
           while len(fields) > 1:
-              added, deleted, path = fields.pop(0).split("\t")
+              added, deleted, path = fields.pop(0).split("\t", 2)
               if not path:
                   path = fields[1]
                   del fields[:2]

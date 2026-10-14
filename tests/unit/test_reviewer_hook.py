@@ -21,8 +21,8 @@ def bash(command):
     "command",
     [
         "uv run pytest",
-        "uv run pytest -q tests/unit/test_section.py::test_split[a-b]",
-        "uv run pytest -k drop_particle -x",
+        "uv run pytest -q -x tests/unit/test_section.py::test_split[a-b]",
+        "uv run pytest -k drop_particle -v tests",
     ],
 )
 def test_allows_the_tests(command):
@@ -34,14 +34,14 @@ def test_allows_the_tests(command):
     [
         "git diff",
         "uv run pytestx",
-        "uv run pytest; rm -rf src",
-        "uv run pytest && git push",
-        "uv run pytest | tee out",
-        "uv run pytest > out",
+        "uv run pytest; rm -rf src",  # a shell operator
         "uv run pytest $(rm -rf src)",
-        "uv run pytest `rm -rf src`",
-        "uv run pytest -k 'a or b'",
         "uv run pytest\nrm -rf src",
+        "uv run pytest --basetemp=src",  # pytest deletes that directory
+        "uv run pytest --junitxml=CLAUDE.md",  # ... or overwrites that file
+        "uv run pytest src",  # tests outside tests/
+        "uv run pytest tests/../src",
+        "uv run pytest -k 'a or b'",
     ],
 )
 def test_blocks_anything_else(command):

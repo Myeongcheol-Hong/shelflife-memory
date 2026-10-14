@@ -23,8 +23,8 @@ A must-fix finding names a real caller or input that reaches the problem. If you
 |---|---|
 | Could it be simpler? What can be deleted? | optional |
 | Is a helper duplicated, here or elsewhere in the repo? | optional |
-| Does the PR change things outside its milestone's scope? | optional |
-| Does a test pass for the wrong reason (it would still pass if the code it covers were broken)? | must fix if nothing else tests that behavior, otherwise optional |
+| Does the PR change things outside its scope? | optional |
+| Does a test pass for the wrong reason (it would still pass if the code it covers were broken)? | optional; a bug it hides is a correctness finding |
 | Does a test duplicate another, or test a case that cannot happen? Propose tests to delete. | optional |
 | Is there defensive code for a case that cannot happen? | optional |
 | Is there a new dependency? | must fix without the owner's approval, otherwise optional |
