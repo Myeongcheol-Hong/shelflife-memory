@@ -2,6 +2,42 @@
 
 Handoff notes between working sessions. Newest entry first. Each entry says where the work stands, what waits on the owner, and what the next session should do first.
 
+## 2026-10-14: the M3 stack opened (#19-#21), M3f and recall pushed
+
+### State at the end of the session
+
+- Merged into `main`: #16 (review rules) and #18 (handoff). The owner answered #16's three questions and the M3 review's decisions; they are D10 follow-ups 9-17 and item 7, in #19.
+- Open: three stacked PRs (the limit). CI is green on each: tests on 3.11 and 3.13, size, and dependencies.
+
+| PR | Branch | Base | Content |
+|---|---|---|---|
+| [#19](https://github.com/Myeongcheol-Hong/shelflife-memory/pull/19) `[stack 1/5]` | `claude/tender-mayer-wts8cd-m3c-followups` | `main` | The owner's answers in D8, D9, D10 and the design; `drop_particle()`; this log entry |
+| [#20](https://github.com/Myeongcheol-Hong/shelflife-memory/pull/20) `[stack 2/5]` | `claude/tender-mayer-wts8cd-m3d` | #19 | `judgment.py`: template j2, `validate()`, value folding |
+| [#21](https://github.com/Myeongcheol-Hong/shelflife-memory/pull/21) `[stack 3/5]` | `claude/tender-mayer-wts8cd-m3e` | #20 | **ONE-WAY DOOR.** Schema v2, `verify` for web_page, `record_check`, the upgrade notice |
+
+- Pushed, not opened yet (no free slot):
+  - `claude/tender-mayer-wts8cd-m3f`, stack 4/5, base #21: the write checks and `check-writes`, and the seed edits.
+  - `claude/tender-mayer-wts8cd-recall-particles`, stack 5/5, base M3f: `recall` uses `drop_particle()`.
+  - Both are reviewed and fixed, and pass 634 and 638 tests. Their descriptions were drafted but live only in this session's scratch space; rewrite them from the commit messages in the CLAUDE.md template.
+- Every PR was reviewed by the `pr-reviewer` agent, which loads now, after the earlier round of reviewers and skeptics. Confirmed findings are fixed in new commits. Each PR's description lists what was left as optional.
+- Each lower branch was merged into the next one up with merge commits. When #19 merges, retarget #20 to `main`, and so on up the stack.
+
+### Waiting on the owner
+
+- Review and merge of #19, then #20, then #21.
+- No open decisions. Things to check:
+  - D10 follow-ups 9-17 say what the owner meant;
+  - #21's two rollback plans (plan A drops the four columns and keeps the data; it was checked against `main`'s v1 code).
+
+### Next session: start here
+
+1. Check #19-#21 (merged? comments? CI?). Retarget the next PR to `main` as each lower one merges.
+2. As slots free, open stack 4/5 (M3f) and then 5/5 (`recall`), with descriptions in the CLAUDE.md template.
+3. M3 is done when the stack lands; the roadmap's M3 boxes are ticked in M3e and M3f. Then show a plan for M4 (decisions, scheduler, digest; `recall(verify=auto)` behind `SHELFLIFE_RECALL_VERIFY=never`).
+4. Notes for M4 from the reviews:
+   - When a section is a window of one long block, `section_sha256` hashes the whole block, so any edit to a one-block page marks the claim "possibly changed".
+   - `web_page.py` lets two decode errors out as `UnicodeError` (the `undefined` charset in `_codec`, IDNA in `check_url`); `judge()` records them as errors.
+
 ## 2026-10-14: #16 reworked; the M3 stack built and reviewed, not yet opened (handoff)
 
 ### State at the end of the session

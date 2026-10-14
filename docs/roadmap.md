@@ -2,7 +2,7 @@
 
 Milestones are listed in dependency order. Each milestone ships as its own PR (or a short stack of PRs). Design details live in `docs/design.md`.
 
-Items marked **(owner)** are done by the maintainer by hand: ground-truth labels and open decisions. Tooling for them can be built ahead of time.
+Items marked **(owner)** are done by the maintainer by hand: ground-truth labels, open decisions and the owner's own cleanup pass before release. Tooling for them can be built ahead of time.
 
 ## M1: Core store and MCP server
 - [x] Package skeleton: `uv` package `shelflife-memory`, import name `shelflife`, pytest, ruff, SessionStart hook (`uv sync`)
@@ -35,7 +35,7 @@ Items marked **(owner)** are done by the maintainer by hand: ground-truth labels
 
 ## M4: Decisions, scheduler, digest
 - [ ] `depends_on` links; a changed claim flags dependent decisions for review
-- [ ] `recall(verify=auto/never/always)` (D9); for a due web_page claim, `auto` returns `verify`'s `judge` payload (D10)
+- [ ] `recall(verify=auto/never/always)` (D9); for a due web_page claim, `auto` returns `verify`'s `judge` payload (D10). Behind a setting that is off by default: `SHELFLIFE_RECALL_VERIFY=never` (D9)
 - [ ] Daily due run (cron/launchd), no LLM
 - [ ] Weekly digest
 - [ ] `supersede`: one call that remembers the new claim and retires the old one (D9). Decisions linked to the old claim stay linked to it and stay flagged for the owner's review
@@ -70,6 +70,8 @@ Items marked **(owner)** are done by the maintainer by hand: ground-truth labels
 - [ ] Optional: extraction recall and precision (a stretch goal under D2)
 
 ## M9: Release
+- [ ] Launch-readiness pass: an agent audit for performance, bugs, security and fit to `docs/design.md`
+- [ ] **(owner)** Cleanup and refactor pass
 - [ ] README: problem, demo GIF, install, results, limitations, prior art, real-use stats
 - [ ] PyPI release (`uvx shelflife-memory`), v0.1.0 tag, CHANGELOG
 - [ ] MCP registry listing

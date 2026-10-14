@@ -5,7 +5,7 @@ from datetime import UTC, date, datetime, timedelta, timezone
 import pytest
 
 from shelflife.models import CheckMethod, CheckResult, FieldSource, Status, Volatility
-from shelflife.store import Store, default_db_path, query_words
+from shelflife.store import Store, default_db_path, drop_particle, query_words
 
 # --- remember -------------------------------------------------------------------------
 
@@ -225,6 +225,23 @@ def test_query_words_split_latin_and_hangul(query, words):
 )
 def test_query_words_drop_each_listed_particle(particle):
     assert query_words("Chatbox" + particle) == ["Chatbox"]
+    assert drop_particle("가격" + particle) == "가격"
+
+
+@pytest.mark.parametrize(
+    ("word", "kept"),
+    [
+        ("학교으로", "학교"),  # the longest particle first, not "학교으"
+        ("앞으로", "앞으로"),  # 으로 would leave 1 character, so nothing is dropped
+        ("속도", "속도"),  # only 1 character would remain
+        ("회의", "회의"),
+        ("에서", "에서"),
+        ("가격", "가격"),
+        ("Chatbox의", "Chatbox의"),  # not pure Hangul: query_words splits these
+    ],
+)
+def test_drop_particle_keeps_two_characters(word, kept):
+    assert drop_particle(word) == kept
 
 
 def test_recall_drops_a_particle_after_a_latin_name(store, korean):
