@@ -4,17 +4,16 @@ Where the work stands. Each session's last PR overwrites this file (CLAUDE.md); 
 
 ## State
 
-- `main` has M1-M3, the hardening (#24), the repo presentation (#25) and M5a (#26). Schema v2 (#21) is a one-way door; the rollback steps are in design 5.1.
-- Open, stacked: #27 (M5a follow-ups: created_at clamp, ollama and react cut, 70 projects, dedupe by id; base `main`) and the M6a PR on top of it, which carries this file.
+- `main` has M1-M3, the hardening (#24), the repo presentation (#25), M5a (#26) and its follow-ups (#27: created_at clamp, ollama and react cut, 70 projects, dedupe by id). Schema v2 (#21) is a one-way door; the rollback steps are in design 5.1.
+- Open: the M6a PR (#28, base `main`), which carries this file.
 - M6a: `eval/replay/replay.py` (claims, questions, the policies, the event loop) and `eval/replay/score.py` (metrics, intervals over projects, the peak per day), with D12. The smoke run's counts are pinned in `tests/unit/test_replay.py`. No real run yet.
 - Build order (roadmap): M1-M3, M5a, M6, M7, M4, M5b, M8, M9.
 
 ## Waiting on the maintainer
 
-1. #27: keep or drop the `latest_on()` same-second tie-break (D11, proposed); the data card's wording on `created_at` (the PR's Details).
-2. M6a: confirm D12's "proposed" items: jitter's rounding (half up, so 7 days get ±1, 14%) and its adding up; one question draw per day; the peak taken per seed; the change-rate definition; 2,000 nearest-rank resamples; the +0.5 point margin for "not worse"; M7's adaptive family and dev grid.
-3. Merge #27, then the M6a PR.
-4. Open, no rush: whether the github_release verifier should read a project's tag pattern too (D11).
+1. M6a: confirm D12's "proposed" items: jitter's rounding (half up, so 7 days get ±1, 14%) and its adding up; one question draw per day; the peak taken per seed; the change-rate definition; 2,000 nearest-rank resamples; the +0.5 point margin for "not worse"; M7's adaptive family and dev grid.
+2. Merge #28.
+3. Open, no rush: whether the github_release verifier should read a project's tag pattern too (D11).
 
 ## Next session: start here
 
