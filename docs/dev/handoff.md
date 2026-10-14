@@ -17,8 +17,9 @@ Where the work stands. Each session's last PR overwrites this file (CLAUDE.md); 
 
 ## Next session: start here
 
-1. If the M6c PR is merged: M7. Its adaptive family, dev grid, selection rule and the label-free exploratory run are pre-registered in D12; the shared model runner (`claude -p`) comes first (roadmap).
-2. Every eval also runs on `eval/data/smoke/` in CI; never fill a label.
+1. If `eval/results/` has no run yet and the sessions rule is confirmed: run it on the M6c branch, commit config, metrics and the table, tick M6 in the roadmap.
+2. Then M7. Its adaptive family, dev grid, selection rule and the label-free exploratory run are pre-registered in D12; the shared model runner (`claude -p`) comes first (roadmap).
+3. Every eval also runs on `eval/data/smoke/` in CI; never fill a label.
 
 ## Notes for later milestones
 
