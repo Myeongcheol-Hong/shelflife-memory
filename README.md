@@ -62,7 +62,7 @@ Early and in active development. The store, the six tools, the PyPI, GitHub and 
 
 ## Prior art
 
-Memory systems such as [Hindsight](https://github.com/vectorize-io/hindsight) and Zep ([Graphiti](https://github.com/getzep/graphiti)) update a memory when contradicting information arrives, or leave invalidation to you. [Mem0](https://github.com/mem0ai/mem0)'s pipeline only adds memories, so they accumulate; a memory can carry an optional expiration date, after which search no longer returns it ([Mem0 docs](https://docs.mem0.ai/core-concepts/memory-operations/add), checked 2026-10-14 (via the maintainer)). A few tools are built on top of them to catch the changes nobody mentions:
+Memory systems such as [Hindsight](https://github.com/vectorize-io/hindsight) and Zep ([Graphiti](https://github.com/getzep/graphiti)) update a memory when contradicting information arrives, or leave invalidation to you. [Mem0](https://github.com/mem0ai/mem0)'s pipeline only adds memories, so they accumulate; a memory can carry an optional expiration date, after which search no longer returns it by default ([Mem0 docs](https://docs.mem0.ai/core-concepts/memory-operations/add), checked 2026-10-14 (via the maintainer)). A few tools are built on top of them to catch the changes nobody mentions:
 
 - [MemGuard](https://github.com/ac12644/MemGuard) re-fetches source URLs for Mem0, Zep and other memory stores, with trust scores and quarantine. It is the closest match to Shelf Life.
 - [agent-memory-staleness-audit](https://github.com/a-bhimava/agent-memory-staleness-audit) scores staleness from provenance and per-type half-lives, without going back to the source.

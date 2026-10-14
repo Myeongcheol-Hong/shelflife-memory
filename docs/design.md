@@ -12,7 +12,7 @@
 
 ## 1. Problem
 
-Today's memory systems (Zep/Graphiti, Hindsight and others) update a memory **when new information arrives and conflicts with the old**; Mem0's pipeline only adds memories, so they accumulate, and a memory can carry an optional expiration date, after which search no longer returns it. When the world changes and nobody tells the system, the stale memory keeps being served.
+Today's memory systems (Zep/Graphiti, Hindsight and others) update a memory **when new information arrives and conflicts with the old**; Mem0's pipeline only adds memories, so they accumulate, and a memory can carry an optional expiration date, after which search no longer returns it by default. When the world changes and nobody tells the system, the stale memory keeps being served.
 
 - Hindsight's own docs say that when a fact stops being true with nothing to replace it, nothing in the pipeline knows the world changed, so the user has to invalidate it by hand.
 - On evolving knowledge, RAG serves superseded values 15 to 40% of the time when forced to answer (MemStrata, arXiv 2606.26511).
@@ -29,7 +29,7 @@ The README names these projects openly.
 |---|---|---|
 | Zep / Graphiti | Bi-temporal knowledge graph. Invalidates an old fact when a contradicting new fact arrives | Misses changes when no new information arrives |
 | Hindsight | Separates world facts from experiences. Its curation API can invalidate and restore memories | Invalidation is manual |
-| Mem0 | An ADD-only pipeline, in the managed platform and the open-source library alike: memories accumulate. An optional `expiration_date` (YYYY-MM-DD) hides a memory from search and `get_all` after that date unless `show_expired` is passed; fetching it by id still returns it ([Mem0 docs](https://docs.mem0.ai/core-concepts/memory-operations/add), checked 2026-10-14 (via the maintainer)) | Nothing re-checks a memory against its source: an expiration date is a guess at when the fact goes stale. Says itself that staleness in high-relevance memories is an open problem |
+| Mem0 | An ADD-only pipeline, in the managed platform and the open-source library alike: memories accumulate. An optional `expiration_date` (YYYY-MM-DD) hides a memory from search and `get_all` after that date unless `show_expired` is passed; fetching it by id still returns it ([Mem0 docs](https://docs.mem0.ai/core-concepts/memory-operations/add), checked 2026-10-14 (via the maintainer)) | Nothing re-checks a memory against its source: an expiration date is a guess at when the fact goes stale |
 | MemStrata (arXiv 2606.26511) | Deterministic (subject, relation, object) supersession retires replaced values. Shows RAG serves 15-40% stale values | Also needs the new value to arrive |
 | [MemGuard](https://github.com/ac12644/MemGuard) | **Closest match.** Sidecar for Mem0/Zep/Letta/LangMem: re-fetches source URLs, trust scores, quarantine, 4 MCP tools | No published eval or benchmark. Heavy stack (Postgres, Redis, Celery, React). Decision dependencies ("causal chain") only on the roadmap. 3 stars, no commits since 2026-06 |
 | [agent-memory-staleness-audit](https://github.com/a-bhimava/agent-memory-staleness-audit) | Scores staleness from provenance, per-type half-lives and same-subject supersession | Deliberately no network re-validation. STALE eval planned, not yet run |
@@ -266,7 +266,7 @@ The user decides what to remember and gives the claim sentence (D2, D3). When Cl
 - **Policies** (each mapped to who uses it today, so the comparison is against real prior-art behavior)
   - Never check: the default in Mem0 (without an `expiration_date`), Zep and Hindsight, which react only to new input
   - Check on every read
-  - Fixed interval (7 and 30 days, and a curve from 3 to 180 in D12, with jitter variants and an oracle lower bound): a plain TTL. It is the re-check analogue of Mem0's `expiration_date`: where Mem0 hides a memory N days on, fixed N checks it again
+  - Fixed interval (7 and 30 days, and a curve from 3 to 180 in D12, with jitter variants and an oracle lower bound): a plain TTL. It is the re-check analogue of Mem0's `expiration_date`: where Mem0 hides a memory from search after a date the caller sets, fixed N checks it again N days on
   - Per-class interval (table 4.2): closest to memwatch and agent-memory-staleness-audit (per-type half-lives)
   - LLM-judged class interval
   - **Adaptive**: per-claim next check date from the observed change rate

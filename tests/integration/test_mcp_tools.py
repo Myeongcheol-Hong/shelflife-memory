@@ -630,6 +630,35 @@ async def test_a_check_recorded_while_the_page_loads_is_newer_than_the_fetch(sto
     assert "was checked after this page was fetched" in message
 
 
+async def test_a_newer_error_also_refuses_an_older_judgment(store, clock):
+    # D10 follow-up 20, decided: a newer inconclusive check refuses an older same or
+    # changed; the next verify reads the page again.
+    claim = store.remember(
+        "The AWS AIP-C01 exam fee is $300",
+        "world_fact",
+        subject="AWS AIP-C01",
+        attribute="exam_fee",
+        value="$300",
+        check_method="web_page",
+        check_target=AWS,
+    )
+    body = (FIXTURES / "pages/aws-aip-c01.html").read_bytes()
+
+    def slow_page(url):
+        clock.now += timedelta(seconds=30)  # the other server process fails meanwhile
+        store.add_check(claim.id, CheckResult.ERROR, None, "HTTP 503 in the other process")
+        clock.now += timedelta(seconds=30)
+        return Page(url, url, 200, "text/html", None, body)
+
+    async with Client(build_server(store, get_page=slow_page, now=clock)) as client:
+        await call(client, "verify", claim_id=claim.id)
+        message = await call_error(
+            client, "record_check", claim_id=claim.id, result="same", quote=AWS_QUOTE
+        )
+    assert "was checked after this page was fetched" in message
+    assert store.last_check(claim.id).result is CheckResult.ERROR
+
+
 async def test_a_page_error_older_than_the_last_check_is_not_recorded(store, clock):
     claim = store.remember(
         "The AWS AIP-C01 exam fee is $300",
