@@ -266,12 +266,12 @@ The user decides what to remember and gives the claim sentence (D2, D3). When Cl
 - **Policies** (each mapped to who uses it today, so the comparison is against real prior-art behavior)
   - Never check: the default in Mem0, Zep and Hindsight, which react only to new input
   - Check on every read
-  - Fixed interval (7 and 30 days): a plain TTL
+  - Fixed interval (7 and 30 days, and a curve from 3 to 180 in D12, with jitter variants and an oracle lower bound): a plain TTL
   - Per-class interval (table 4.2): closest to memwatch and agent-memory-staleness-audit (per-type half-lives)
   - LLM-judged class interval
   - **Adaptive**: per-claim next check date from the observed change rate
 - **Fairness**: the adaptive policy has parameters, so tune them on a dev split (2024 timelines) and report on a held-out test split (2025-01 to 2026-09). Run 5 random seeds for claim and question times and report the mean with a 95% bootstrap interval.
-- **Metrics**: stale-answer rate, checks per claim-month (cost), mean days to detect a change
+- **Metrics**: stale-answer rate, checks per claim-month (cost), mean days to detect a change. D12 adds the share of claim-days stale (a headline next to the rate), the share of changes left undetected (days to detect is right-censored), peak checks per day, a fixed-interval curve (3 to 180 days) and an oracle lower bound
 - **Headline figure**: x = checks per claim-month, y = stale-answer rate, one point per policy.
 - **Classic background**: search-engine crawlers deciding how often to revisit each page solve the same problem. This project brings a solved problem to a new domain.
   - Cho & Garcia-Molina (2003): sources don't announce changes, so they must be polled. Two freshness metrics and a Poisson change model -> used directly for the metric definitions
