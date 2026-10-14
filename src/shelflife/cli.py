@@ -1,4 +1,5 @@
-"""Command line: run the MCP server over stdio (default) or import claims from JSONL."""
+"""Command line: run the MCP server over stdio (default), import claims from JSONL, or run
+the write checks over a JSONL file."""
 
 from __future__ import annotations
 
@@ -9,8 +10,11 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from shelflife import writechecks
 from shelflife.server import build_server
 from shelflife.store import Store, default_db_path
+from shelflife.verifiers import http_get
+from shelflife.verifiers.web_page import fetch_page
 
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -47,7 +51,25 @@ def main(argv: list[str] | None = None) -> int:
         "import", help="import claims from a JSONL file; ids already stored are skipped"
     )
     import_cmd.add_argument("path", type=Path)
+    check_cmd = commands.add_parser(
+        "check-writes",
+        help="run the four write checks (design 6.0-1) over a JSONL file of claims and "
+        "print one JSON line per claim and check, then a summary; stores nothing",
+    )
+    check_cmd.add_argument("path", type=Path)
     args = parser.parse_args(argv)
+
+    if args.command == "check-writes":
+        try:
+            records = read_jsonl(args.path)
+        except (OSError, ValueError) as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 1
+        rows = writechecks.run(records, fetch=http_get, get_page=fetch_page)
+        for row in rows:
+            print(json.dumps(row, ensure_ascii=False))
+        print(json.dumps({"summary": writechecks.summarize(rows)}))
+        return 0
 
     try:
         # Read the file first, so a mistyped path does not create a database.

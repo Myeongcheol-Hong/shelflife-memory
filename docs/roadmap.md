@@ -30,7 +30,7 @@ Items marked **(owner)** are done by the maintainer by hand: ground-truth labels
 - [x] Select the relevant section: deterministic, with its position, heading and scores for 6.2 (M3c)
 - [x] Judgment per D4 (b): `record_check` with verbatim-quote validation in code, and a versioned judgment prompt template that `verify` returns for web_page claims and the eval harness reuses (D10; M3d template and checks, M3e tools)
 - [x] `checks` table populated for every check (M3e: schema v2 adds the judgment's prompt version, page and section hashes, and the `cannot_tell` reason)
-- [ ] Four automatic write checks (design 6.0-1)
+- [x] Four automatic write checks (design 6.0-1; M3f: `writechecks.py` and `shelflife-memory check-writes FILE`)
 - [x] **(owner)** D4 recorded (decided 2026-10-13)
 
 ## M4: Decisions, scheduler, digest
