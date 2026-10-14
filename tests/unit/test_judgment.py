@@ -78,26 +78,28 @@ def test_the_template_is_pinned_to_its_version():
     # A change to the template needs a new PROMPT_VERSION, then a new hash here.
     digest = hashlib.sha256(judgment.TEMPLATE.encode()).hexdigest()
     assert (judgment.PROMPT_VERSION, digest) == (
-        "j1",
-        "901f0a4e554c7707e9133833da2f9de5b1546bad4fbc4113e4c44caa5b978de7",
+        "j2",
+        "e7c5d8f539cb8bc856a6e960499efb9a6cdd3c7f762a3a72fe658393c50887f4",
     )
 
 
 def test_render_fills_in_the_claim_and_fences_the_section():
-    section = Section("Fee: $300 ``` not a fence ````", None, 0, 30, range(1), range(1), 1, 0)
+    section = Section("Fee: $300 ``` not a fence", "Fees ````", 0, 25, range(1), range(1), 1, 0)
     prompt = render(claim(), section, "https://example.com/exam")
     assert "Claim id: c1\n" in prompt
     assert "Remembered value: $300\n" in prompt
     assert "Remembered on: 2026-10-09\n" in prompt
     assert "Page: https://example.com/exam\n" in prompt
-    assert "\n`````\nFee: $300 ``` not a fence ````\n`````\n" in prompt  # 5 > 4 backticks
+    # The heading is page text too: it goes inside the fence, which is longer than any
+    # backtick run in the heading or the text (5 > 4).
+    assert "\n`````\nHeading: Fees ````\nFee: $300 ``` not a fence\n`````\n" in prompt
 
 
 def test_render_says_when_a_claim_has_no_value():
     prompt = render(claim(value=None, subject=None), SECTION, "https://example.com/exam")
     assert "Remembered value: (none: judge the claim as a whole)\n" in prompt
     assert "Subject: (none)\n" in prompt
-    assert "\n```\n" + BLOCKS[1] + "\n```\n" in prompt
+    assert "\n```\nHeading: (none)\n" + BLOCKS[1] + "\n```\n" in prompt
 
 
 def test_same_with_the_value_in_the_quote():
@@ -135,6 +137,7 @@ def test_cannot_tell_keeps_only_the_reason():
         ("changed", {"quote": QUOTE}, "needs new_value"),
         ("changed", {"quote": QUOTE, "new_value": "$250"}, "does not contain"),
         ("changed", {"quote": QUOTE, "new_value": "300 USD"}, "record same"),
+        ("changed", {"quote": QUOTE, "new_value": "300"}, "part of the claim's value"),
     ],
 )
 def test_refused(result, kwargs, error):
@@ -170,6 +173,59 @@ def test_a_claim_without_a_value_gets_the_quote_rules_only():
     assert check("changed", value=None, quote=quote).new_value is None
     with pytest.raises(InvalidJudgment, match="does not contain new_value"):
         check("changed", value=None, quote=quote, new_value="$250")  # given: must be quoted
+
+
+@pytest.mark.parametrize(
+    ("page", "value", "result", "quote", "new_value"),
+    [
+        # The quote cuts a number or word on the page short.
+        ("The exam fee is $3000 per attempt.", "$300", "same", "The exam fee is $300", None),
+        ("Top agent | 160.0% pass rate overall", "60%", "same", "60.0% pass rate overall", None),
+        (
+            "Exam fee AU$300 per attempt, paid when you book",
+            "$300",
+            "same",
+            "$300 per attempt, paid when",
+            None,
+        ),
+        (
+            "The exam fee is now $2500 per attempt.",
+            "$300",
+            "changed",
+            "The exam fee is now $250",
+            "$250",
+        ),
+        # A Hangul value inside a longer word.
+        (
+            "이 요금제에서 API 사용은 미지원 기능입니다",
+            "지원",
+            "same",
+            "이 요금제에서 API 사용은 미지원 기능입니다",
+            None,
+        ),
+        # A look-alike currency code is not one: refused, not a crash.
+        (
+            "Exam fee is U\u017fd 300 per attempt",
+            "$300",
+            "same",
+            "Exam fee is U\u017fd 300 per attempt",
+            None,
+        ),
+    ],
+)
+def test_a_value_must_be_whole_on_the_page(page, value, result, quote, new_value):
+    section = Section(page, None, 0, len(page), range(1), range(1), 1.0, 0.0)
+    with pytest.raises(InvalidJudgment, match="as written on the page"):
+        validate(result, value=value, page=page, section=section, quote=quote, new_value=new_value)
+
+
+def test_a_full_stop_after_zero_decimals_and_other_case_still_match():
+    page = "Plans. The exam fee is $300.00. The basic tier is free for students."
+    section = Section(page, None, 0, len(page), range(1), range(1), 1.0, 0.0)
+    for value, quote in (("$300", "The exam fee is $300.00."), ("Free", "basic tier is free for")):
+        assert validate("same", value=value, page=page, section=section, quote=quote).quote == quote
+    with pytest.raises(InvalidJudgment, match="record same"):  # "free" is no change from "Free"
+        validate("changed", value="Free", page=page, section=section, quote=quote, new_value="free")
 
 
 @pytest.mark.parametrize(
@@ -224,7 +280,11 @@ def test_a_real_quote_from_a_recorded_page(name, text, subject, attribute, value
         ("Pro", "NonPro plan", False),
         ("AIP-C01", "AIP\u2013C01", True),  # dashes
         ("\u201cbeta\u201d", '"beta"', True),  # quote marks
-        ("Partner Network", "partner network", False),  # case is kept
+        ("Partner Network", "partner network", True),  # case is ignored (D10 follow-up 9)
+        ("$300", "The exam fee is $300.00.", True),  # a full stop after zero decimals
+        ("지원", "한국어를 지원합니다", True),
+        ("지원", "미지원 기능", False),  # a Hangul value starts a word
+        ("$300", "U\u017fd 300", False),  # not a currency code
     ],
 )
 def test_value_in(value, text, found):
@@ -236,4 +296,5 @@ def test_values_are_compared_after_folding():
     assert same_value("$125", "$125 USD")  # symbol and code together are one amount
     assert same_value("₩9,900", "9900원")
     assert not same_value("$300", "$250")
+    assert same_value("Free", "free")
     assert fold("USD 1,000.0 \u2014 €5") == "1000 USD - 5 EUR"
