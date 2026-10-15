@@ -191,7 +191,7 @@ One entry per decision: the options, the option chosen, why, and when to revisit
 - Results in git: `config.json`, `metrics.json` and the markdown table of the headline run, not the per-claim raw output, which the same seed reproduces. `eval/results/` joins the size job's exclusions as generated output (M6c). Proposed by Claude and confirmed by the maintainer at #30's review: 6.1 keeps no per-claim rows at all; running again reproduces them exactly (the seeds), in minutes and with no model. `raw.jsonl` and rescoring from raw outputs apply to model evals, whose outputs do not repeat; a seeded, model-free replay reruns instead (CLAUDE.md). `table.md` ends with each results row's claim count.
 - M7's adaptive policy, pre-registered before any test result:
   - Family: per claim, a change rate λ from its own checks only. Each check says only whether the value changed since the last one, t days before, so the likelihood is the product of (1 - e^(-λt)) for a change and e^(-λt) for none (Cho & Garcia-Molina 2003; counting changed checks instead is biased low when several changes fall between checks). λ is the posterior mode under a Gamma(α, α × the label's class interval) prior, whose mean is one change per class interval, found by bisection. The next check comes after -ln(1 - p) / λ days, the interval with probability p of a change under a Poisson model (Avrachenkov et al. 2020), clamped to 1 to `max` days.
-  - Dev grid, 30 points: p in 0.05, 0.1, 0.2, 0.3, 0.5; α in 0.5, 1, 2; `max` in 180, 365.
+  - Dev grid, 30 points: p in 0.05, 0.1, 0.2, 0.3, 0.5; α in 0.5, 1, 2; `max` in 180, 365. 36 points since the pre-run fix below.
   - Selection on dev only (uniform scenario, 1 question a week): the point with the lowest share of claim-days stale among those costing no more checks per claim-month than per-class on dev, ties to the cheaper. Test reports that one point; the grid's dev curve is exploratory.
   - Exploratory only (the maintainer, at #28's review): the selected point also runs with a label-free prior, Gamma(α, α × 30 days) for every claim, so the results show whether labels still matter once a claim learns its own rate.
   - Reporting added by the maintainer after M6, before any M7 run; the selection rule above stays as it is: the selected point is also reported against fixed 30, paired, in test and dev, and placed on the fixed-N curve. Claude's reading, carried over from per-class against fixed 30 (#30): the same three metrics (stale-answer rate, stale claim-days, checks per claim-month) in the uniform scenario at 1 question a week. How the point is placed on the curve is proposed with M7's adaptive code, before any M7 run.
@@ -203,18 +203,23 @@ One entry per decision: the options, the option chosen, why, and when to revisit
     - The label-free run is on test only, with its paired difference from the selected point; both exploratory.
     - If no grid point costs at most per-class on dev, the run stops with an error; it never falls back to another rule. Ties in stale claim-days go to the cheaper point, then to the grid's order.
     - A cost check from M6's reported dev numbers (Claude's arithmetic, no M7 run): once a claim has learned its rate, it checks about 1 / -ln(1 - p) times per change, 1.44 times at p = 0.5. The oracle, one check per change, costs 1.88 checks per claim-month on dev, against per-class's 0.97. So the α = 2 points probably all cost more than per-class, and the rule would select an α ≤ 1 point, which waits `max` days before a claim's first change, or none.
-  - Pre-run fix, from dev costs alone (the maintainer, at #33's review, before any staleness of an adaptive point existed). `uv run python -m eval.replay.adaptive_run --dev-costs` counts each grid point's checks per claim-month on dev (uniform scenario, 1 question a week, the 5 seeds) from the replay's own claims and checks, without computing any staleness. On the 30 points (commit 6ba7593), no α = 2 point cost at most per-class's 0.970, so larger p were to be added, 0.7 first, then 0.9 and 0.97, until α = 2 points fall on both sides of per-class's cost. p = 0.7 was enough. The dev grid is now 36 points: p in 0.05, 0.1, 0.2, 0.3, 0.5, 0.7; α and `max` as above. Everything else above stands. The final grid's costs (commit 50afad2; * at or below per-class):
+  - Pre-run fix, from dev costs alone (the maintainer, at #33's review), made before any staleness of an adaptive point was seen. One earlier step went through the full replay: before #33, to time the run, three points ran on dev with 5 seeds, and that computed staleness in memory but printed only the times.
+    - `uv run python -m eval.replay.adaptive_run --dev-costs` counts each grid point's checks per claim-month on dev (uniform scenario, 1 question a week, the 5 seeds) from the replay's own claims and checks, without computing any staleness.
+    - The rule, as the maintainer set it: if no α = 2 point costs at most per-class, add larger p (the maintainer's examples: 0.7, 0.9, 0.97) until α = 2 points fall on both sides of per-class's cost, that is, at least one above it and at least one at or below it.
+    - On the 30 points (commit 6ba7593), no α = 2 point cost at most per-class's 0.970, so p = 0.7 was added. That was enough: in both `max` columns, α = 2 is above per-class up to p = 0.5 and below it at p = 0.7.
+    - The dev grid is now 36 points: p in 0.05, 0.1, 0.2, 0.3, 0.5, 0.7; α and `max` as above. Everything else above stands.
+    - The final grid's costs (commit 50afad2; * at or below per-class). The first five rows are the same as in the 30-point pass, since a point's cost does not depend on the other points:
 
-    | p | α=0.5 max=180 | α=0.5 max=365 | α=1 max=180 | α=1 max=365 | α=2 max=180 | α=2 max=365 |
-    |---|---|---|---|---|---|---|
-    | 0.05 | 2.755 | 0.000 * | 2.901 | 0.000 * | 13.136 | 13.136 |
-    | 0.1 | 1.689 | 0.000 * | 1.836 | 0.000 * | 8.298 | 8.298 |
-    | 0.2 | 0.680 * | 0.000 * | 0.891 * | 0.000 * | 4.404 | 4.404 |
-    | 0.3 | 0.296 * | 0.000 * | 0.502 * | 0.000 * | 2.696 | 2.696 |
-    | 0.5 | 0.101 * | 0.000 * | 0.193 * | 0.000 * | 1.125 | 1.107 |
-    | 0.7 | 0.085 * | 0.000 * | 0.110 * | 0.000 * | 0.524 * | 0.487 * |
+      | p | α=0.5 max=180 | α=0.5 max=365 | α=1 max=180 | α=1 max=365 | α=2 max=180 | α=2 max=365 |
+      |---|---|---|---|---|---|---|
+      | 0.05 | 2.755 | 0.000 * | 2.901 | 0.000 * | 13.136 | 13.136 |
+      | 0.1 | 1.689 | 0.000 * | 1.836 | 0.000 * | 8.298 | 8.298 |
+      | 0.2 | 0.680 * | 0.000 * | 0.891 * | 0.000 * | 4.404 | 4.404 |
+      | 0.3 | 0.296 * | 0.000 * | 0.502 * | 0.000 * | 2.696 | 2.696 |
+      | 0.5 | 0.101 * | 0.000 * | 0.193 * | 0.000 * | 1.125 | 1.107 |
+      | 0.7 | 0.085 * | 0.000 * | 0.110 * | 0.000 * | 0.524 * | 0.487 * |
 
-    The α ≤ 1, `max` = 365 points cost 0.000 to three places: a dev claim lives at most a year, so almost none reaches its first check.
+    - The α ≤ 1, `max` = 365 points cost 0.000 to three places: a dev claim lives at most a year, so almost none reaches its first check.
 - Revisit if: the results move more with the number of claims or the question rate than with the policy, or the claim-days share and the stale-answer rate disagree beyond question noise.
 
 ## D13: The shared model runner (M7)

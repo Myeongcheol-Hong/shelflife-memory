@@ -1,6 +1,8 @@
+import itertools
 import json
 import math
 import random
+import re
 from collections import Counter
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
@@ -138,13 +140,15 @@ def test_a_point_outside_the_curve_in_any_resample_gets_no_interval():
 
 def smoke(tmp_path):
     # Every eval runs on the smoke corpus in CI (CLAUDE.md); the labels come from the
-    # test, written outside eval/data/ (D12).
+    # test, written outside eval/data/ (D12): fast, medium and slow in turn.
     data = tmp_path / "data"
     for path in SMOKE.rglob("*.jsonl"):
         (data / path.relative_to(SMOKE)).parent.mkdir(parents=True, exist_ok=True)
         (data / path.relative_to(SMOKE)).write_bytes(path.read_bytes())
+    labels = itertools.cycle(("fast", "medium", "slow"))
     toml = (SMOKE / "projects.toml").read_text()
-    (data / "projects.toml").write_text(toml.replace('volatility = ""', 'volatility = "fast"'))
+    toml = re.sub('volatility = ""', lambda _: f'volatility = "{next(labels)}"', toml)
+    (data / "projects.toml").write_text(toml)
     return data
 
 
@@ -161,6 +165,7 @@ def test_dev_costs_are_the_selection_costs_without_any_staleness(tmp_path, monke
         raise AssertionError("dev_costs() must not compute staleness")
 
     monkeypatch.setattr(replay, "outcome", no_outcome)
+    assert "outcome" not in vars(adaptive_run)  # nor called directly
     found = adaptive_run.dev_costs(timelines, labels, seeds, policies)
     assert found == pytest.approx(expected, rel=1e-12) and len(set(found.values())) > 1
     monkeypatch.setattr(run, "SEEDS", [0])

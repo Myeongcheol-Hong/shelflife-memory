@@ -33,7 +33,7 @@ from eval.replay.replay import (
     stream,
     truth,
 )
-from eval.replay.timelines import Timeline, load_all, load_projects
+from eval.replay.timelines import LABELS, Timeline, load_all, load_projects
 
 RATE = "1 a week"
 CURVE = [f"fixed {n}" for n in FIXED]
@@ -91,6 +91,8 @@ def dev_costs(timelines, labels, seeds, policies: dict[str, Policy]) -> dict[str
     """Each policy's checks per claim-month on dev from its claims and checks alone. It
     never calls outcome(), so no staleness is computed: the maintainer's pre-run cost
     check (D12). The claims and streams are replay()'s, and the ratio is select()'s."""
+    if missing := [t.project for t in timelines if labels.get(t.project) not in LABELS]:
+        raise ValueError(f"no volatility label for {missing[:3]}")  # as replay() does
     checks: Counter[str] = Counter()
     days = 0
     for t in timelines:
