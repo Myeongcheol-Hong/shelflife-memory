@@ -21,8 +21,11 @@ from eval.replay.replay import Claim, Policy, Truth
 from shelflife.models import Volatility
 from shelflife.scheduler import DEFAULT_INTERVAL_DAYS
 
-# The dev grid, 30 points (D12): p, then the prior's strength α, then the longest wait.
-GRID = [(p, a, cap) for p in (0.05, 0.1, 0.2, 0.3, 0.5) for a in (0.5, 1, 2) for cap in (180, 365)]
+# The dev grid (D12): p, then the prior's strength α, then the longest wait. p = 0.7 was
+# added before any run, from dev costs alone, so α = 2 points fall on both sides of
+# per-class's cost (the maintainer, at #33's review).
+P = (0.05, 0.1, 0.2, 0.3, 0.5, 0.7)
+GRID = [(p, a, cap) for p in P for a in (0.5, 1, 2) for cap in (180, 365)]
 LABEL_FREE_DAYS = 30  # the exploratory prior's interval for every claim (D12)
 BISECTIONS = 40  # halvings of a bracket [λ, 2λ]: 2^-40 of λ
 
