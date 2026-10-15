@@ -11,7 +11,7 @@ Where the work stands. Each session's last PR overwrites this file (CLAUDE.md); 
 
 ## Waiting on the maintainer
 
-1. D13's proposals for the runner: `--safe-mode` in a temporary folder, no tools, the eval's own system prompt, the model check, calls one at a time, the run folder's name and files, and resuming a cut-off run.
+1. D13's proposals for the runner: `--safe-mode` and no settings files in a temporary folder, no tools, the eval's own system prompt, the environment variables it drops, the model check, calls one at a time with a stop after 3 failures in a row, a run folder named by the config's hash, and resuming a cut-off run. Claude Code still tells the model the date; no flag removes it. The roadmap's runner box is ticked once you confirm.
 2. The M5b proposal (`docs/dev/m5b-page-timelines.md`): the pages, the tracked values, and the D12 amendment for values that revert.
 3. Open, no rush: whether the github_release verifier should read a project's tag pattern too (D11).
 

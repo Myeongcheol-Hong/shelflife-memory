@@ -26,6 +26,7 @@ def test_each_call_runs_in_a_new_folder_outside_the_repository_with_no_customiza
     args = sent["args"]
     assert args[:3] == ["-p", "--model", "claude-test-1"]
     assert "--safe-mode" in args and "--no-session-persistence" in args
+    assert args[args.index("--setting-sources") + 1] == ""  # no settings file
     assert args[args.index("--tools") + 1] == ""  # no tools
     assert args[args.index("--output-format") + 1] == "json"
     assert args[args.index("--system-prompt") + 1] == "Answer in one word."
@@ -36,6 +37,12 @@ def test_each_call_runs_in_a_new_folder_outside_the_repository_with_no_customiza
     assert reply == Reply(reply.text, None, ("claude-test-1",), 0.001, 5)
 
 
+def test_variables_that_change_the_login_or_the_thinking_never_reach_claude(monkeypatch):
+    for name in ("ANTHROPIC_API_KEY", "CLAUDE_EFFORT", "MAX_THINKING_TOKENS", "KEEP_ME"):
+        monkeypatch.setenv(name, "1")
+    assert json.loads(fake()("s", "p").text)["env"] == ["KEEP_ME"]
+
+
 def test_effort_is_passed_and_recorded_only_when_set():
     args = json.loads(fake(effort="low")("s", "p").text)["args"]
     assert args[args.index("--effort") + 1] == "low"
@@ -44,18 +51,31 @@ def test_effort_is_passed_and_recorded_only_when_set():
 
 
 @pytest.mark.parametrize(
-    ("mode", "kept", "error"),
+    ("mode", "error"),
     [
         # `claude -p` prints an unknown model's error as a result with subtype success
-        ("error", False, "exit 1: There's an issue with the selected model."),
-        ("garbage", False, "exit 2: boom"),
-        ("other", True, "served by claude-other-0"),
+        ("error", "exit 1: There's an issue with the selected model."),
+        ("garbage", "exit 2: boom"),
+        ("other", 'served by claude-other-0: {"args"'),
     ],
 )
-def test_a_failed_call_or_another_model_never_counts_as_an_answer(monkeypatch, mode, kept, error):
+def test_a_failed_call_or_another_model_never_counts_as_an_answer(monkeypatch, mode, error):
     monkeypatch.setenv("FAKE_CLAUDE", mode)
     reply = fake()("s", "p")
-    assert reply.error == error and (reply.text is not None) is kept
+    assert reply.text is None and reply.error.startswith(error)
+
+
+@pytest.mark.parametrize(
+    ("reply", "code", "error"),
+    [
+        ({"is_error": True, "result": "API Error: 529"}, 0, "exit 0: API Error: 529"),
+        ({"is_error": False, "result": "half"}, 1, "exit 1: half"),
+        ({"is_error": False, "result": None}, 0, "exit 0: None"),
+    ],
+)
+def test_is_error_the_exit_code_and_a_missing_text_each_mark_an_error(reply, code, error):
+    out = json.dumps(reply | {"modelUsage": {"m": {}}})
+    assert runner.parse(out, code, "", "m") == Reply(None, error, ("m",))
 
 
 def test_a_call_with_no_reply_in_time_is_an_error(monkeypatch):
@@ -82,10 +102,10 @@ class Stub:
 ITEMS = [Item("a", "first"), Item("b", "second")]
 
 
-def ask(tmp_path, model, version="v1"):
+def ask(tmp_path, model, version="v1", day=15):
     data = tmp_path / "labels.toml"
     data.write_text("x")
-    now = lambda: datetime(2026, 10, 15, 9, 0, tzinfo=UTC)  # noqa: E731
+    now = lambda: datetime(2026, 10, day, 9, 0, tzinfo=UTC)  # noqa: E731
     return runner.run("demo", ITEMS, "Be brief.", version, model, [data], tmp_path / "out", now=now)
 
 
@@ -93,7 +113,7 @@ def test_a_run_asks_each_item_three_times_and_keeps_every_reply(tmp_path):
     stub = Stub()
     folder = ask(tmp_path, stub)
     assert stub.calls == ["first", "second"] * 3  # one pass over the items per repeat
-    assert re.fullmatch(r"2026-10-15-[0-9a-f]{7}-demo-stub-1", folder.name)
+    assert re.fullmatch(r"[0-9a-f]{7}-demo-stub-1-[0-9a-f]{8}", folder.name)
     config = json.loads((folder / "config.json").read_text())
     assert config["model"] == "stub-1" and config["prompt version"] == "v1"
     assert config["system prompt sha256"] == hashlib.sha256(b"Be brief.").hexdigest()
@@ -103,6 +123,7 @@ def test_a_run_asks_each_item_three_times_and_keeps_every_reply(tmp_path):
         "2026-10-15T09:00:00+00:00",
     )
     assert re.fullmatch(r"[0-9a-f]{40}", config["git sha"])
+    assert "uncommitted changes sha256" in config
     assert re.fullmatch(r"[0-9a-f]{64}", config["dataset sha256"])
     rows = runner.rows(folder)
     assert [(r["item"], r["repeat"], r["attempt"]) for r in rows] == [
@@ -141,7 +162,42 @@ def test_running_again_asks_only_the_pairs_that_failed(tmp_path):
     assert done.calls == []
 
 
-def test_a_run_folder_never_mixes_two_configs(tmp_path):
-    ask(tmp_path, Stub())
-    with pytest.raises(ValueError, match="another config"):
-        ask(tmp_path, Stub(), version="v2")
+def test_another_config_gets_its_own_folder_and_the_same_one_resumes(tmp_path):
+    first = ask(tmp_path, Stub())
+    other = Stub()
+    assert ask(tmp_path, other, version="v2") != first
+    assert len(other.calls) == 6 and len(runner.rows(first)) == 6
+    again = Stub()
+    assert ask(tmp_path, again, day=16) == first and again.calls == []  # the next day too
+
+
+def test_a_run_stops_after_three_failed_calls_in_a_row(tmp_path):
+    folder = ask(tmp_path, Stub(fail=(1, 2, 3)))
+    assert len(runner.rows(folder)) == 3
+    rest = Stub()
+    ask(tmp_path, rest)
+    assert len(rest.calls) == 6 and all(a["error"] is None for a in runner.answers(folder))
+
+
+def test_a_line_cut_off_mid_write_is_asked_again(tmp_path):
+    folder = ask(tmp_path, Stub())
+    raw = folder / "raw.jsonl"
+    raw.write_text(raw.read_text()[:-20])  # the last row lost its end
+    assert len(runner.rows(folder)) == 5
+    again = Stub()
+    ask(tmp_path, again)
+    assert again.calls == ["second"] and len(runner.answers(folder)) == 6
+    assert raw.read_text().endswith("\n") and len(runner.rows(folder)) == 6
+
+
+def test_item_ids_must_be_unique(tmp_path):
+    with pytest.raises(ValueError, match="unique"):
+        runner.run("demo", [Item("a", "x"), Item("a", "y")], "s", "v1", Stub(), [], tmp_path)
+
+
+def test_the_dataset_hash_names_files_from_the_repository_root(monkeypatch):
+    # So a worktree and the main checkout give the same hash for the same files.
+    toml = (ROOT / "pyproject.toml").read_bytes()
+    expected = hashlib.sha256(b"pyproject.toml\0" + toml).hexdigest()
+    monkeypatch.chdir(ROOT / "tests")
+    assert runner._files_sha256([Path("../pyproject.toml")]) == expected

@@ -1,6 +1,7 @@
 """A stand-in for `claude` in tests/unit/test_runner.py. It prints, in the shape of
-`claude -p --output-format json`, what the runner sent it: its arguments, its folder
-and its stdin. FAKE_CLAUDE picks a failure, shaped as the real ones are."""
+`claude -p --output-format json`, what the runner sent it: its arguments, its folder,
+its stdin and which watched environment variables reached it. FAKE_CLAUDE picks a
+failure, shaped as the real ones are."""
 
 import json
 import os
@@ -14,6 +15,8 @@ if args == ["--version"]:
 mode = os.environ.get("FAKE_CLAUDE", "ok")
 model = args[args.index("--model") + 1]
 stdin = sys.stdin.read()
+watched = ("ANTHROPIC_API_KEY", "CLAUDE_EFFORT", "MAX_THINKING_TOKENS", "KEEP_ME")
+env = sorted(k for k in watched if k in os.environ)
 if mode == "sleep":
     time.sleep(10)
 if mode == "garbage":
@@ -24,7 +27,7 @@ reply = {
     "type": "result",
     "subtype": "success",
     "is_error": False,
-    "result": json.dumps({"args": args, "cwd": os.getcwd(), "stdin": stdin}),
+    "result": json.dumps({"args": args, "cwd": os.getcwd(), "stdin": stdin, "env": env}),
     "total_cost_usd": 0.001,
     "duration_ms": 5,
     "modelUsage": {model: {}},
