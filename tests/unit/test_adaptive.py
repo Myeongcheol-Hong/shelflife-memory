@@ -7,8 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from eval.replay import adaptive, adaptive_run, run, score
-from eval.replay.replay import FIXED, Claim, Counts, Truth
+from eval.replay import adaptive, adaptive_run, replay, run, score
+from eval.replay.replay import FIXED, POLICIES, Claim, Counts, Truth
+from eval.replay.timelines import load_all, load_projects
 
 SMOKE = Path(__file__).parents[2] / "eval" / "data" / "smoke" / "timelines"
 
@@ -135,24 +136,63 @@ def test_a_point_outside_the_curve_in_any_resample_gets_no_interval():
     assert adaptive_run.place(projects, "x") == dict.fromkeys(found, None)
 
 
-def test_the_smoke_run_writes_config_metrics_and_table(tmp_path, monkeypatch):
+def smoke(tmp_path):
     # Every eval runs on the smoke corpus in CI (CLAUDE.md); the labels come from the
-    # test, written outside eval/data/ (D12); one seed and few resamples keep it fast.
-    monkeypatch.setattr(run, "SEEDS", [0])
-    monkeypatch.setattr(score, "RESAMPLES", 20)
+    # test, written outside eval/data/ (D12).
     data = tmp_path / "data"
     for path in SMOKE.rglob("*.jsonl"):
         (data / path.relative_to(SMOKE)).parent.mkdir(parents=True, exist_ok=True)
         (data / path.relative_to(SMOKE)).write_bytes(path.read_bytes())
     toml = (SMOKE / "projects.toml").read_text()
     (data / "projects.toml").write_text(toml.replace('volatility = ""', 'volatility = "fast"'))
+    return data
+
+
+def test_dev_costs_are_the_selection_costs_without_any_staleness(tmp_path, monkeypatch, capsys):
+    data = smoke(tmp_path)
+    labels = {p.name: p.volatility for p in load_projects(data / "projects.toml")}
+    timelines, seeds = load_all(data), [0, 1]
+    policies = {"per-class": POLICIES["per-class"]}
+    policies |= {adaptive.name(*point): adaptive.policy(*point) for point in adaptive.GRID[::7]}
+    full = adaptive_run._projects(timelines, labels, "dev", seeds, policies)
+    expected = {name: adaptive_run._cost(full[name]) for name in policies}
+
+    def no_outcome(*args):
+        raise AssertionError("dev_costs() must not compute staleness")
+
+    monkeypatch.setattr(replay, "outcome", no_outcome)
+    found = adaptive_run.dev_costs(timelines, labels, seeds, policies)
+    assert found == pytest.approx(expected, rel=1e-12) and len(set(found.values())) > 1
+    monkeypatch.setattr(run, "SEEDS", [0])
+    argv = ["--data", str(data), "--out", str(tmp_path / "out"), "--dev-costs"]
+    assert adaptive_run.main(argv) == 0 and not (tmp_path / "out").exists()
+    table = capsys.readouterr().out
+    assert table.startswith("Checks per claim-month on dev; per-class ")
+    assert len([line for line in table.splitlines() if line.startswith("|")]) == 2 + len(
+        {p for p, _, _ in adaptive.GRID}
+    )
+    assert "stale" not in table
+
+
+def test_the_cost_table_marks_the_points_at_or_below_per_class():
+    found = {adaptive.name(*point): 2.0 for point in adaptive.GRID} | {"per-class": 1.0}
+    found[adaptive.name(*adaptive.GRID[0])] = 1.0  # at per-class's cost exactly
+    table = adaptive_run.cost_table(found)
+    assert table.count(" *") == 1 and "| 1.000 * |" in table
+
+
+def test_the_smoke_run_writes_config_metrics_and_table(tmp_path, monkeypatch):
+    # One seed and few resamples keep it fast.
+    monkeypatch.setattr(run, "SEEDS", [0])
+    monkeypatch.setattr(score, "RESAMPLES", 20)
+    data = smoke(tmp_path)
     now = datetime(2026, 10, 15, 12, 0, tzinfo=UTC)
     argv = ["--data", str(data), "--out", str(tmp_path / "out")]
     assert adaptive_run.main(argv, now=lambda: now) == 0
     [folder] = (tmp_path / "out").iterdir()
     assert folder.name.endswith("-adaptive")
     config = json.loads((folder / "config.json").read_text())
-    assert config["seeds"] == [0] and len(config["grid"]) == 30
+    assert config["seeds"] == [0] and len(config["grid"]) == len(adaptive.GRID)
     metrics = json.loads((folder / "metrics.json").read_text())
     chosen = metrics["selected"]
     assert chosen in metrics["dev grid"] and chosen.startswith("adaptive ")

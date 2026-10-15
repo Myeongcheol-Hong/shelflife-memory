@@ -1,12 +1,13 @@
 """Run M7's adaptive policy (D12) and write eval/results/<run-id>/.
 
-    uv run python -m eval.replay.adaptive_run [--out eval/results]
+    uv run python -m eval.replay.adaptive_run [--out eval/results] [--dev-costs]
 
 Uniform scenario, 1 question a week, 5 seeds. Dev runs every grid point next to
 per-class and the fixed-N curve, and the point is selected there: the lowest stale
 claim-days among the points costing no more checks per claim-month than per-class,
 ties to the cheaper. Test then runs that one point, its label-free variant
-(exploratory), per-class and the curve. Nothing is chosen on test.
+(exploratory), per-class and the curve. Nothing is chosen on test. --dev-costs only
+prints each grid point's checks per claim-month on dev, with no staleness (D12).
 """
 
 from __future__ import annotations
@@ -14,13 +15,24 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from collections import Counter
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from eval.replay import adaptive, run, score
-from eval.replay.replay import FIXED, POLICIES, QUESTION_RATES, Counts, replay
+from eval.replay.replay import (
+    FIXED,
+    POLICIES,
+    QUESTION_RATES,
+    Counts,
+    Policy,
+    claims,
+    replay,
+    stream,
+    truth,
+)
 from eval.replay.timelines import Timeline, load_all, load_projects
 
 RATE = "1 a week"
@@ -73,6 +85,41 @@ def select(dev: dict[str, dict[str, Counts]], names: list[str]) -> str:
 
 def _cost(projects: dict[str, Counts]) -> float:
     return score.value("checks per claim-month", score.total(projects))
+
+
+def dev_costs(timelines, labels, seeds, policies: dict[str, Policy]) -> dict[str, float]:
+    """Each policy's checks per claim-month on dev from its claims and checks alone. It
+    never calls outcome(), so no staleness is computed: the maintainer's pre-run cost
+    check (D12). The claims and streams are replay()'s, and the ratio is select()'s."""
+    checks: Counter[str] = Counter()
+    days = 0
+    for t in timelines:
+        tr = truth(t, "dev")
+        for seed in seeds:
+            cs = claims(t.project, labels[t.project], tr, "dev", seed, QUESTION_RATES[RATE])
+            days += sum((c.end - c.created).days for c in cs)
+            for name, policy in policies.items():
+                for i, c in enumerate(cs):
+                    checks[name] += len(policy(c, tr, stream(seed, "dev", t.project, i, name)))
+    return {name: 30 * checks[name] / days for name in policies}
+
+
+def cost_table(found: dict[str, float]) -> str:
+    """dev_costs() of per-class and the grid: a row per p, a column per α and `max`; *
+    marks a point at or below per-class's cost."""
+    cap = found["per-class"]
+    columns = sorted({(a, m) for _, a, m in adaptive.GRID})
+    rows = [
+        [f"{p:g}", *(_mark(found[adaptive.name(p, a, m)], cap) for a, m in columns)]
+        for p in sorted({p for p, _, _ in adaptive.GRID})
+    ]
+    header = ["p", *(f"α={a:g} max={m}" for a, m in columns)]
+    lines = [f"Checks per claim-month on dev; per-class {cap:.3f}.", ""]
+    return "\n".join([*lines, *run._table(header, rows)]) + "\n"
+
+
+def _mark(cost: float, cap: float) -> str:
+    return f"{cost:.3f}" + (" *" if cost <= cap else "")
 
 
 def place(projects: dict[str, dict[str, Counts]], name: str) -> dict:
@@ -170,8 +217,14 @@ def main(
     parser = argparse.ArgumentParser(prog="adaptive_run", description=__doc__)
     parser.add_argument("--data", type=Path, default=Path("eval/data/timelines"))
     parser.add_argument("--out", type=Path, default=Path("eval/results"))
+    parser.add_argument("--dev-costs", action="store_true", help="print dev costs; write nothing")
     args = parser.parse_args(argv)
     labels = {p.name: p.volatility for p in load_projects(args.data / "projects.toml")}
+    if args.dev_costs:
+        grid = {adaptive.name(*point): adaptive.policy(*point) for point in adaptive.GRID}
+        policies = {"per-class": POLICIES["per-class"]} | grid
+        print(cost_table(dev_costs(load_all(args.data), labels, run.SEEDS, policies)), end="")
+        return 0
     cfg = run.config(args.data, now())
     del cfg["question rates per claim-day"], cfg["session size"]  # M6's other scenarios
     cfg |= {"run": cfg["run"] + "-adaptive", "decision": "D12 (M7)", "scenario": "uniform"}
