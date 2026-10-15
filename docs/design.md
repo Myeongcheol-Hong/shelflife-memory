@@ -270,6 +270,7 @@ The user decides what to remember and gives the claim sentence (D2, D3). When Cl
   - Per-class interval (table 4.2): closest to memwatch and agent-memory-staleness-audit (per-type half-lives)
   - LLM-judged class interval. Claude's labels and the maintainer's both use present-day knowledge of 2025-2026 releases, so the comparison is of label quality, not foresight; the results say so (D13)
   - **Adaptive**: per-claim next check date from the observed change rate (`eval/replay/adaptive.py`; family, dev grid and selection pre-registered in D12)
+  - Budget-aware allocation (Cho & Garcia-Molina 2003): each claim's check frequency from its estimated change rate under one budget multiplier, so claims that change too often get fewer checks; added after M7b's results and decided in D12
 - **Fairness**: the adaptive policy has parameters, so tune them on a dev split (2024 timelines) and report on a held-out test split (2025-01 to 2026-09). Run 5 random seeds for claim and question times and report the mean with a 95% bootstrap interval.
 - **Metrics**: stale-answer rate, checks per claim-month (cost), mean days to detect a change. D12 adds the share of claim-days stale (a headline next to the rate), the share of changes left undetected (days to detect is right-censored), peak checks per day, a fixed-interval curve (3 to 180 days) and an oracle lower bound
 - **Headline figure**: x = checks per claim-month, y = stale-answer rate, one point per policy.
