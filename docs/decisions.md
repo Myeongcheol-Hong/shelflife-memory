@@ -232,7 +232,7 @@ One entry per decision: the options, the option chosen, why, and when to revisit
     - First the dev cost at μ = 1, 2, 4, …, 64 days, reported; 64 is fixed 180, so its cost must equal fixed 180's. A longer μ lengthens every wait for a given λ, so the cost should not rise as μ grows. The run stops with an error, never falling back to another rule, if it rises from one μ to the next, or if fixed 30's cost lies outside the grid's costs.
     - Then 20 halvings of log μ inside the doubling bracket where the cost crosses fixed 30's. μ is the end of the final bracket whose cost is at most fixed 30's. Claude's reading of "matches", confirmed: at most, so the policy never spends more checks than fixed 30 on dev.
     - The grid's costs and μ are written into D12 and committed before any staleness of the policy is computed, as M7b's pre-run fix was.
-    - The dev cost pass (`uv run python -m eval.replay.budget --dev-costs` at commit 7422cb5, on a clean tree; no staleness computed), recorded before any staleness of the policy:
+    - The dev cost pass (`uv run python -m eval.replay.budget --dev-costs` at commit 7422cb5 on a clean tree, and again at ad044be after the review's changes, with identical costs and μ; no staleness computed), recorded before any staleness of the policy:
       - fixed 30 costs 0.9201 checks per claim-month on dev, and fixed 180 0.0853;
       - the grid: μ = 1 day 2.7566, 2 days 1.7620, 4 1.0677, 8 0.6107, 16 0.2913, 32 0.1399, and 64 0.0853, fixed 180's, as it must be. The costs never rise;
       - the halvings of log μ between 4 and 8 days end at μ = 4.845574065445341 days, which costs 0.9199, at most fixed 30's 0.9201. `budget.MU` holds that value;
