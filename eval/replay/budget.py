@@ -30,7 +30,8 @@ from eval.replay.timelines import load_all, load_projects
 ALPHA, CAP = 2, 180  # M7b's selected point's prior strength and longest wait (D12)
 GRID = [2**k for k in range(7)]  # μ in days; from 53.7 every wait is the cap: fixed 180
 HALVINGS = 20  # of log μ inside the grid's bracket
-MU: float | None = None  # set on dev by cost alone and recorded in D12 before any run
+# Set on dev by cost alone (--dev-costs at 7422cb5) and recorded in D12 before any run.
+MU: float | None = 4.845574065445341
 
 
 def name(mu: float) -> str:

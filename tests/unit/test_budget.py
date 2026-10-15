@@ -120,6 +120,7 @@ def test_the_smoke_corpus_sets_mu_from_costs_and_then_runs(tmp_path, monkeypatch
     argv = ["--data", str(data), "--out", str(out)]
     assert budget.main([*argv, "--dev-costs"]) == 0 and not out.exists()
     assert f"μ = {found['μ']!r} days" in capsys.readouterr().out
+    monkeypatch.setattr(budget, "MU", None)
     assert budget.main(argv) == 1  # MU not set: no run before μ is recorded
     monkeypatch.setattr(budget, "MU", found["μ"])
     assert budget.main(argv, now=lambda: NOW) == 0
