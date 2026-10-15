@@ -47,7 +47,7 @@ Items marked **(maintainer)** are done by the maintainer by hand: ground-truth l
 
 ## M7: Adaptive and LLM-judged policies
 - [x] Shared model runner (`claude -p --model`, repeats, run artifacts; `eval/runner.py`, D13). It starts `claude -p` outside the repository, so the project's Stop hook and `CLAUDE.md` stay out of eval runs. M5b and M8 reuse it
-- [ ] Adaptive per-claim policy, tuned on dev split only
+- [x] Adaptive per-claim policy, tuned on dev split only: `eval/results/2026-10-15-e2d0e3d-adaptive/table.md` (D12)
 - [ ] LLM-judged volatility policy
 - [ ] Pareto figure (5 seeds and bootstrap intervals moved to M6, D12)
 - [ ] Volatility impact: maintainer labels vs Claude labels in the replay (design 6.0-3)

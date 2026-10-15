@@ -6,20 +6,20 @@ Where the work stands. Each session's last PR overwrites this file (CLAUDE.md); 
 
 - `main` has M1-M3, the hardening (#24), the repo presentation (#25), M5a (#26) and its follow-ups (#27), M6 (#28, #29, #30), the outside-review fixes (#31) and M7a, the shared model runner (#32, D13 decided). Schema v2 (#21) is a one-way door; the rollback steps are in design 5.1.
 - M6's run is `eval/results/2026-10-14-369cb77/`. With the labels as they are, fixed 30 is fresher than per-class in both splits at no detectably higher cost. No class interval or policy changes because of a test result (D12).
-- Open: the M7b PR (base `main`), which carries this file: the adaptive policy (`eval/replay/adaptive.py`) and its run (`adaptive_run.py`): the dev grid, the selection on dev, the test run, the comparisons with per-class and fixed 30, the place on the fixed-N curve, and the label-free exploratory run. The maintainer confirmed the proposals in D12. A cost-only pass on dev (`--dev-costs`, no staleness) found no α = 2 point within per-class's cost, so p = 0.7 was added before any run (D12, 36 points). No real run yet; the smoke corpus runs it in CI.
+- M7b's run is `eval/results/2026-10-15-e2d0e3d-adaptive/` (D12, 36-point dev grid after the pre-run cost fix). Selected on dev: adaptive p=0.7 a=2 max=180. On test, paired: against per-class, 7.6 points more stale answers (5.3 to 10.0) at 0.34 fewer checks per claim-month (0.12 to 0.56); against fixed 30, 16.2 points more stale answers (10.7 to 21.4) at no detectably different cost. Its stale claim-days are 11.2 points above the fixed-N curve at its cost (6.7 to 15.6). Label-free (exploratory) shows no detectable difference. No policy changes because of a test result (D12).
+- Open: the M7b PR (base `main`), which carries this file, the adaptive policy, its run script with `--dev-costs`, and the results folder.
 - Build order (roadmap): M1-M3, M5a, M6, M7, M4, M5b, M8, M9.
 
 ## Waiting on the maintainer
 
-1. The maintainer's OK to run M7b on the 36-point grid (D12's pre-run fix).
+1. Review of the M7b PR, with its results.
 2. The M5b proposal (`docs/dev/m5b-page-timelines.md`): the pages, the tracked values, and the D12 amendment for values that revert.
 3. Open, no rush: whether the github_release verifier should read a project's tag pattern too (D11).
 
 ## Next session: start here
 
-1. After the maintainer's OK: `uv run python -m eval.replay.adaptive_run` on a clean tree (a few minutes), commit `eval/results/<run-id>-adaptive/` to the M7b PR, tick the roadmap's adaptive box, and report the selected point.
-2. Then the LLM-judged volatility policy: Claude labels each project through `eval/runner.py` (3 repeats), the replay runs per-class with those labels, and the volatility-impact comparison (design 6.0-3) puts them next to the maintainer's. Its results say that both label sets use present-day knowledge, so the comparison is of label quality, not foresight (D13).
-3. Every eval also runs on `eval/data/smoke/` in CI, with a stub model for the model evals. Never fill a label.
+1. M7's next box, the LLM-judged volatility policy: Claude labels each project through `eval/runner.py` (3 repeats), the replay runs per-class with those labels, and the volatility-impact comparison (design 6.0-3) puts them next to the maintainer's. Its results say that both label sets use present-day knowledge, so the comparison is of label quality, not foresight (D13).
+2. Every eval also runs on `eval/data/smoke/` in CI, with a stub model for the model evals. Never fill a label.
 
 ## Notes for later milestones
 
