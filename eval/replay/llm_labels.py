@@ -51,10 +51,10 @@ def item(project: Project) -> runner.Item:
     return runner.Item(project.name, f"Claim: {claim}\nWhich class fits this claim?")
 
 
-def parse(text: str | None) -> str | None:
+def parse(text: str) -> str | None:
     """A label, if the answer is one after lowercasing and dropping surrounding space and
-    a final period; otherwise None, as for a failed call."""
-    word = (text or "").strip().lower().removesuffix(".").strip()
+    a final period; otherwise None."""
+    word = text.strip().lower().removesuffix(".").strip()
     return word if word in LABELS else None
 
 
@@ -66,12 +66,18 @@ def median(answers: list[str | None]) -> str | None:
     return valid[(len(valid) - 1) // 2] if valid else None
 
 
+class Unfinished(Exception):
+    """Some pair (project, repeat) was never asked, or its last call failed."""
+
+
 def answers(folder: Path, names: list[str], repeats: int) -> dict[str, list[str | None]]:
-    """Each project's parsed answers by repeat, from raw.jsonl. ValueError while a pair
-    has never been asked: a run cut short is resumed first (D13)."""
+    """Each project's parsed answers by repeat, from raw.jsonl. A failed call is not an
+    answer: until every pair's last attempt succeeded, Unfinished, and running again asks
+    the missing and failed pairs (D13). So the scores never depend on how often it ran."""
     last = {(r["item"], r["repeat"]): r for r in runner.answers(folder)}
-    if missing := [(n, k) for n in names for k in range(repeats) if (n, k) not in last]:
-        raise ValueError(f"{len(missing)} answers never asked, the first {missing[0]}")
+    pairs = [(n, k) for n in names for k in range(repeats)]
+    if todo := [pair for pair in pairs if pair not in last or last[pair]["error"]]:
+        raise Unfinished(f"{len(todo)} answers missing or failed, the first {todo[0]}")
     return {n: [parse(last[n, k]["text"]) for k in range(repeats)] for n in names}
 
 
@@ -90,6 +96,10 @@ def agreement(found: dict[str, list[str | None]], theirs: dict[str, str]) -> dic
         "answers": _shares([(theirs[n], a) for n, ans in found.items() for a in ans]),
         "projects whose answers all agree": sum(
             len(set(a)) == 1 and a[0] is not None for a in found.values()
+        ),
+        # Two valid answers that differ: the faster wins (median), which favours Claude.
+        "projects decided between two different answers": sum(
+            len(v := [x for x in a if x]) == 2 and v[0] != v[1] for a in found.values()
         ),
         "projects with no valid answer": sorted(n for n, label in ours.items() if not label),
     }
@@ -112,9 +122,9 @@ def _shares(pairs: list[tuple[str, str | None]]) -> dict:
 
 
 def evaluate(timelines: list[Timeline], theirs: dict, ours: dict, seeds: list[int]) -> dict:
-    """Per split: the three policies, Claude's labels minus the maintainer's and minus
-    fixed 30, paired, and Claude's place on the fixed-N curve. The claims do not depend
-    on the labels, so the two replays share them."""
+    """Per split: the three policies; paired, Claude's labels minus the maintainer's (also
+    without the four projects labeled late, D11) and minus fixed 30; and Claude's place on
+    the fixed-N curve. The claims do not depend on the labels, so the replays share them."""
     base = {n: POLICIES[n] for n in ("per-class", *adaptive_run.CURVE)}
     out = {}
     for split in ("test", "dev"):
@@ -127,10 +137,17 @@ def evaluate(timelines: list[Timeline], theirs: dict, ours: dict, seeds: list[in
             timelines, filled, split, seeds, {OURS: POLICIES["per-class"]}
         )
         projects |= mine
+        early = {
+            n: {p: c for p, c in projects[n].items() if p not in run.LATE_LABELED}
+            for n in (OURS, THEIRS)
+        }
         out[split] = {
             "policies": {n: run._metrics(projects[n]) for n in (OURS, THEIRS, "fixed 30")},
             "Claude's labels minus the maintainer's": run._paired(
                 projects[OURS], projects[THEIRS], adaptive_run.COST
+            ),
+            "the same, without the four labeled late": run._paired(
+                early[OURS], early[THEIRS], adaptive_run.COST
             ),
             "Claude's labels minus fixed 30": run._paired(
                 projects[OURS], projects["fixed 30"], adaptive_run.COST
@@ -148,7 +165,8 @@ def score(folder: Path, data: Path, now: datetime) -> dict:
     found = answers(folder, [p.name for p in projects], cfg["repeats"])
     labels = agreement(found, theirs)
     replay = run.config(data, now)
-    keep = ("git sha", "uncommitted changes", "dataset sha256", "seeds", "resamples")
+    keep = ("git sha", "uncommitted changes", "dataset sha256", "python", "packaging")
+    keep += ("seeds", "resamples")
     return {
         "scored": {k: replay[k] for k in keep}
         | {"at": replay["ran at"], "rate": adaptive_run.RATE},
@@ -176,7 +194,8 @@ def table(metrics: dict, cfg: dict, run_id: str) -> str:
         ]
         lines += [f"- {key.capitalize()}, {shares['n']}: " + ", ".join(parts) + "."]
     agree, none = found["projects whose answers all agree"], found["projects with no valid answer"]
-    lines += [f"- Projects whose answers all agree: {agree}."]
+    two = found["projects decided between two different answers"]
+    lines += [f"- Projects whose answers all agree: {agree}; decided between two: {two}."]
     lines += [f"- No valid answer, so {MISSING}: {', '.join(none) or 'none'}.", ""]
     for split in ("test", "dev"):
         part = metrics[split]
@@ -213,8 +232,8 @@ def main(
         )
     try:
         metrics = score(folder, args.data, now())
-    except ValueError as error:
-        print(f"{folder}: {error}; run again to finish it", file=sys.stderr)
+    except Unfinished as error:
+        print(f"{folder}: {error}; run again to ask them", file=sys.stderr)
         return 1
     cfg = json.loads((folder / "config.json").read_text("utf-8"))
     (folder / "metrics.json").write_text(json.dumps(metrics, indent=1) + "\n", "utf-8")

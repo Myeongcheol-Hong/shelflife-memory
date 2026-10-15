@@ -7,8 +7,9 @@ from pathlib import Path
 import pytest
 
 from eval import runner
-from eval.replay import llm_labels, run, score
-from eval.replay.timelines import LABELS, Project
+from eval.replay import adaptive_run, llm_labels, run, score
+from eval.replay.replay import POLICIES
+from eval.replay.timelines import LABELS, Project, load_all
 
 SMOKE = Path(__file__).parents[2] / "eval" / "data" / "smoke" / "timelines"
 NOW = datetime(2026, 10, 15, 12, 0, tzinfo=UTC)
@@ -23,7 +24,6 @@ NOW = datetime(2026, 10, 15, 12, 0, tzinfo=UTC)
         ("fast or medium", None),
         ("none", None),
         ("", None),
-        (None, None),  # a failed call
     ],
 )
 def test_an_answer_counts_only_if_it_is_a_label(text, label):
@@ -54,7 +54,8 @@ def test_the_question_names_the_project_and_nothing_else():
         assert not any(label in prompt for label in LABELS) and "^v" not in prompt
 
 
-THEIRS = {"a": "fast", "b": "medium", "c": "slow", "d": "fast", "e": "fast"}
+THEIRS = {"a": "fast", "b": "medium", "c": "slow", "d": "fast", "e": "fast", "f": "medium"}
+THEIRS["g"] = "medium"
 THEIRS["zed-industries/zed"] = "slow"
 FOUND = {
     "a": ["fast", "fast", "fast"],
@@ -62,6 +63,8 @@ FOUND = {
     "c": ["medium", "fast", "slow"],  # medium: faster, more checks
     "d": [None, None, None],
     "e": ["medium", "medium", "medium"],  # slower
+    "f": ["slow", None, "fast"],  # two that differ: fast, faster
+    "g": ["medium", "medium", None],  # two that agree
     "zed-industries/zed": ["slow", "medium", "slow"],  # labeled late (D11)
 }
 
@@ -70,29 +73,33 @@ def test_agreement_counts_each_direction_per_project_and_per_answer():
     found = llm_labels.agreement(FOUND, THEIRS)
     assert found["labels"] == {"a": "fast", "b": "slow", "c": "medium", "d": None} | {
         "e": "medium",
+        "f": "fast",
+        "g": "medium",
         "zed-industries/zed": "slow",
     }
     assert found["maintainer by Claude"]["fast"] == {"fast": 1, "medium": 1, "slow": 0, "none": 1}
+    assert found["maintainer by Claude"]["medium"] == {"fast": 1, "medium": 1, "slow": 1, "none": 0}
     assert found["maintainer by Claude"]["slow"] == {"fast": 0, "medium": 1, "slow": 1, "none": 0}
 
     def counts(key):
         return {k: v["count"] for k, v in found[key].items() if k != "n"}
 
     assert counts("projects") == {
-        "same": 2,
-        "Claude faster (more checks)": 1,
+        "same": 3,
+        "Claude faster (more checks)": 2,
         "Claude slower (staler)": 2,
         "invalid": 1,
     }
-    assert found["projects"]["same"]["share"] == 2 / 6
-    assert counts("projects without the four labeled late")["same"] == 1
+    assert found["projects"]["same"]["share"] == 3 / 8
+    assert counts("projects without the four labeled late")["same"] == 2
     assert counts("answers") == {
-        "same": 3 + 1 + 2,  # a; c's slow; zed's two slow
-        "Claude faster (more checks)": 2 + 1,  # c's medium and fast; zed's medium
-        "Claude slower (staler)": 3 + 3,  # b and e
-        "invalid": 3,  # d
+        "same": 3 + 1 + 2 + 2,  # a; c's slow; zed's two slow; g's two
+        "Claude faster (more checks)": 2 + 1 + 1,  # c's medium and fast; zed's medium; f's fast
+        "Claude slower (staler)": 3 + 3 + 1,  # b and e; f's slow
+        "invalid": 3 + 1 + 1,  # d; f's; g's
     }
     assert found["projects whose answers all agree"] == 3  # a, b and e; not d's invalid ones
+    assert found["projects decided between two different answers"] == 1  # f, not g
     assert found["projects with no valid answer"] == ["d"]
 
 
@@ -137,7 +144,20 @@ REPLIES = {
 }
 
 
+MEDIANS = {
+    "smoke-backport": "fast",
+    "smoke-prerelease-only": "slow",
+    "smoke-quiet": "medium",
+    "smoke-org/moved-tag": "medium",  # no valid answer
+    "smoke-org/out-of-order": "medium",
+    "smoke-org/two-products": "slow",
+}
+THEIRS_SMOKE = dict(zip(MEDIANS, itertools.cycle(LABELS), strict=False))  # as smoke() writes
+per_class = POLICIES["per-class"]
+
+
 def test_the_smoke_run_asks_scores_and_rescores_without_the_model(tmp_path, monkeypatch):
+    monkeypatch.setattr(run, "LATE_LABELED", {"smoke-quiet"})  # as if labeled late (D11)
     monkeypatch.setattr(run, "SEEDS", [0])
     monkeypatch.setattr(score, "RESAMPLES", 20)
     data, out = smoke(tmp_path), tmp_path / "out"
@@ -164,6 +184,18 @@ def test_the_smoke_run_asks_scores_and_rescores_without_the_model(tmp_path, monk
         assert set(part["policies"]) == {ours, theirs, "fixed 30"}
         cost = "checks per claim-month"  # three projects' labels differ, so the costs do
         assert part["policies"][ours][cost]["value"] != part["policies"][theirs][cost]["value"]
+        for key in ("claims", "projects"):  # the same claims under both label sets
+            assert part["policies"][ours][key] == part["policies"][theirs][key]
+        # Claude's replay is per-class with the medians, and medium where none is valid.
+        mine = adaptive_run._projects(load_all(data), MEDIANS, split, [0], {"x": per_class})
+        for m in ("stale-answer rate", "stale claim-days", cost):
+            assert part["policies"][ours][m]["value"] == score.value(m, score.total(mine["x"]))
+        early = {}
+        for who, labels in (("ours", MEDIANS), ("theirs", THEIRS_SMOKE)):
+            found_p = adaptive_run._projects(load_all(data), labels, split, [0], {"x": per_class})
+            early[who] = {p: c for p, c in found_p["x"].items() if p != "smoke-quiet"}
+        expected = run._paired(early["ours"], early["theirs"], adaptive_run.COST)
+        assert part["the same, without the four labeled late"] == json.loads(json.dumps(expected))
         pairs = {
             "Claude's labels minus the maintainer's": theirs,
             "Claude's labels minus fixed 30": "fixed 30",
@@ -199,3 +231,21 @@ def test_a_run_cut_short_is_not_scored(tmp_path, monkeypatch):
     assert len(stub.asked) == runner.STOP_AFTER
     [folder] = out.iterdir()
     assert not (folder / "metrics.json").exists()
+
+
+def test_a_failed_call_anywhere_is_asked_again_before_scoring(tmp_path, monkeypatch):
+    # One failure late in the run: the runner does not stop, but nothing is scored until
+    # running again has asked that pair again, so the scores never depend on the reruns.
+    monkeypatch.setattr(run, "SEEDS", [0])
+    monkeypatch.setattr(score, "RESAMPLES", 20)
+    data, out = smoke(tmp_path), tmp_path / "out"
+    stub = Stub(REPLIES | {"smoke-org/two-products": ["slow", "slow", None, "slow"]})
+    argv = ["--data", str(data), "--out", str(out)]
+    assert llm_labels.main(argv, model=stub, now=lambda: NOW) == 1
+    [folder] = out.iterdir()
+    assert not (folder / "metrics.json").exists()
+    asked = len(stub.asked)
+    assert llm_labels.main(argv, model=stub, now=lambda: NOW) == 0
+    assert len(stub.asked) == asked + 1
+    metrics = json.loads((folder / "metrics.json").read_text())
+    assert metrics["answers"]["smoke-org/two-products"] == ["slow"] * 3
