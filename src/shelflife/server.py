@@ -17,7 +17,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import CallToolResult, TextContent
 
 from shelflife.models import CheckMethod, CheckResult, Claim, Kind, Volatility
-from shelflife.store import Clock, Store, system_clock
+from shelflife.store import Clock, StaleCheck, Store, system_clock
 from shelflife.verifiers import Fetch, FetchError, http_get, judgment, verifier_for
 from shelflife.verifiers.section import Section, select_section
 from shelflife.verifiers.web_page import Page, extract, fetch_page, normalize, page_text
@@ -229,7 +229,9 @@ def build_server(
 
         For a pypi or github_release claim, the check is recorded and returned as check.
         check.result is same (the source still gives the claim's value), changed (the
-        source gives new_value), cannot_tell, or error (evidence says why).
+        source gives new_value), cannot_tell, or error (evidence says why). If another
+        check of the claim fetched its source no earlier than this one (to the second),
+        this one is not recorded, and check is that newer check.
 
         For a web_page claim, check is null and judge holds a prompt with the relevant
         section of the page: follow it, then store your judgment with record_check within
@@ -249,10 +251,13 @@ def build_server(
             verifier = verifier_for(claim.check_method)  # pypi or github_release here
             if verifier is None or claim.value is None:
                 raise ValueError(f"claim {claim_id!r} has no value to compare with the source")
+            fetched_at = now()  # before the fetch, as judge() takes it
             outcome = verifier(claim.check_target or "", claim.value, fetch)
             claim, check = store.add_check(
-                claim.id, outcome.result, outcome.new_value, outcome.evidence
+                claim.id, outcome.result, outcome.new_value, outcome.evidence, fetched_at=fetched_at
             )
+        except StaleCheck:  # another check fetched after this one: return the claim as stored
+            claim, check = store.get(claim_id), store.last_check(claim_id)
         except ValueError as e:
             raise ToolError(str(e)) from e
         return {"claim": claim.to_dict(), "check": check.to_dict()}
@@ -277,7 +282,9 @@ def build_server(
             core = normalize(" ".join(blocks[i].text for i in section.core))
             section_sha256 = hashlib.sha256(core.encode()).hexdigest()
         except (FetchError, UnicodeError) as e:
-            claim, check = store.add_check(claim.id, CheckResult.ERROR, evidence=str(e))
+            claim, check = store.add_check(
+                claim.id, CheckResult.ERROR, evidence=str(e), fetched_at=fetched_at
+            )
             return {"claim": claim.to_dict(), "check": check.to_dict()}
         fetched = _Fetched(
             at=fetched_at,

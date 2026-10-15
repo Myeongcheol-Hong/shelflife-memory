@@ -150,7 +150,7 @@ class Check:
     section_sha256: str | None = None
     reason: str | None = None
     selector_version: str | None = None  # the section selector's version (M4 compares)
-    fetched_at: datetime | None = None  # when verify fetched the page judged
+    fetched_at: datetime | None = None  # when verify fetched the source, before the fetch
 
     @classmethod
     def from_row(cls, row: Mapping[str, Any]) -> Check:

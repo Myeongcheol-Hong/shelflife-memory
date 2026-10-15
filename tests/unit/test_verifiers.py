@@ -201,6 +201,24 @@ def test_evidence_must_appear_verbatim_in_the_fetched_body():
         ("v1.0.0-1", "1.0.0-1"),  # "v1.0.0" is not a tag prefix
         ("v1.2.3-beta-1", "1.2.3-beta-1"),
         ("vnext", " VNext "),  # not versions: exact, ignoring case and spaces
+        # PEP 440's other spellings
+        ("1.0c1", "1.0rc1"),
+        ("1.0pre1", "1.0rc1"),
+        ("1.0preview1", "1.0rc1"),
+        ("1.0alpha1", "1.0a1"),
+        ("1.0beta2", "1.0b2"),
+        ("1.0-1", "1.0.post1"),  # an implicit post-release
+        ("1.0rev1", "1.0.post1"),
+        ("1.0r1", "1.0.post1"),
+        ("1.0-post-1", "1.0.post1"),
+        ("1.0rc", "1.0rc0"),  # a missing number is 0
+        ("1.0.post", "1.0.post0"),
+        ("1.0dev", "1.0.dev0"),
+        ("1.0RC01", "1.0rc1"),  # leading zeros
+        ("v1.0.0-beta.1", "1.0b1"),  # a semver tag
+        ("1.0a1.post2.dev3", "1.0alpha-1-2_dev_3"),
+        ("1.0+ubuntu-1", "1.0+Ubuntu_1"),  # a local version's separators and case
+        ("1.0+01", "1.0+1"),  # a local version's numbers
     ],
 )
 def test_same_version(a, b):
@@ -219,6 +237,13 @@ def test_same_version(a, b):
         ("v1.0.0-1", "1"),
         ("v0.30.2 - FalkorDB updates", "v0.30.2"),  # not a version: exact
         ("vnext", "next"),
+        ("1.0a1", "1.0b1"),
+        ("1.0b1", "1.0b2"),
+        ("1.0-1", "1.0rc1"),
+        ("1.0.post1", "1.0.dev1"),
+        ("1.0c1", "1.0.post1"),
+        ("1.0+local", "1.0"),
+        ("1.0_1", "1.0-1"),  # only "-" makes an implicit post-release (PEP 440)
     ],
 )
 def test_different_versions(a, b):

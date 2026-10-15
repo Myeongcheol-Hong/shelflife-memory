@@ -12,7 +12,7 @@
 
 ## 1. Problem
 
-Today's memory systems (Mem0, Zep/Graphiti, Hindsight and others) update a memory **when new information arrives and conflicts with the old**. When the world changes and nobody tells the system, the stale memory keeps being served.
+Today's memory systems (Zep/Graphiti, Hindsight and others) update a memory **when new information arrives and conflicts with the old**; Mem0's pipeline only adds memories, so they accumulate, and a memory can carry an optional expiration date, after which search no longer returns it by default. When the world changes and nobody tells the system, the stale memory keeps being served.
 
 - Hindsight's own docs say that when a fact stops being true with nothing to replace it, nothing in the pipeline knows the world changed, so the user has to invalidate it by hand.
 - On evolving knowledge, RAG serves superseded values 15 to 40% of the time when forced to answer (MemStrata, arXiv 2606.26511).
@@ -29,7 +29,7 @@ The README names these projects openly.
 |---|---|---|
 | Zep / Graphiti | Bi-temporal knowledge graph. Invalidates an old fact when a contradicting new fact arrives | Misses changes when no new information arrives |
 | Hindsight | Separates world facts from experiences. Its curation API can invalidate and restore memories | Invalidation is manual |
-| Mem0 | Decay, eviction, supersession on contradiction | Says itself that staleness in high-relevance memories is an open problem |
+| Mem0 | An ADD-only pipeline, in the managed platform and the open-source library alike: memories accumulate. An optional `expiration_date` (YYYY-MM-DD) hides a memory from search and `get_all` after that date unless `show_expired` is passed; fetching it by id still returns it ([Mem0 docs](https://docs.mem0.ai/core-concepts/memory-operations/add), checked 2026-10-14 (via the maintainer)) | Nothing re-checks a memory against its source: an expiration date is a guess at when the fact goes stale |
 | MemStrata (arXiv 2606.26511) | Deterministic (subject, relation, object) supersession retires replaced values. Shows RAG serves 15-40% stale values | Also needs the new value to arrive |
 | [MemGuard](https://github.com/ac12644/MemGuard) | **Closest match.** Sidecar for Mem0/Zep/Letta/LangMem: re-fetches source URLs, trust scores, quarantine, 4 MCP tools | No published eval or benchmark. Heavy stack (Postgres, Redis, Celery, React). Decision dependencies ("causal chain") only on the roadmap. 3 stars, no commits since 2026-06 |
 | [agent-memory-staleness-audit](https://github.com/a-bhimava/agent-memory-staleness-audit) | Scores staleness from provenance, per-type half-lives and same-subject supersession | Deliberately no network re-validation. STALE eval planned, not yet run |
@@ -126,7 +126,7 @@ A `decision` claim points to its supporting claims through `depends_on`. If any 
 
 Every check is recorded in the `checks` table: when, which method, result (same / changed / cannot_tell / error), old value, new value, evidence quote and cost. This is the audit trail for "why did it answer this way", which matters in regulated domains.
 
-A `web_page` check also records which judgment template was used and what it judged: `prompt_version`, `page_sha256` and `section_sha256`, the `selector_version` and the page's `fetched_at`, so M4 can tell a selector change from a page change, plus the `reason` Claude may give for `cannot_tell` (schema v2, D10). The section hash covers the section's core, the best segment before it grows into its neighbours; it is the baseline M4's daily run compares with to mark a claim "possibly changed" (D4). `cost_usd` stays empty under the subscription: a judgment made in the conversation (D4 (b)) has no per-call price the server could know.
+A `web_page` check also records which judgment template was used and what it judged: `prompt_version`, `page_sha256` and `section_sha256`, the `selector_version` and the page's `fetched_at`, so M4 can tell a selector change from a page change (a pypi or github_release check stores `fetched_at` too, D10 follow-up 20), plus the `reason` Claude may give for `cannot_tell` (schema v2, D10). The section hash covers the section's core, the best segment before it grows into its neighbours; it is the baseline M4's daily run compares with to mark a claim "possibly changed" (D4). `cost_usd` stays empty under the subscription: a judgment made in the conversation (D4 (b)) has no per-call price the server could know.
 
 ## 5. Architecture
 
@@ -173,7 +173,7 @@ CREATE TABLE checks (
   old_value TEXT, new_value TEXT, evidence TEXT, cost_usd REAL,
   prompt_version TEXT, page_sha256 TEXT, section_sha256 TEXT,  -- web_page (schema v2, D10)
   reason TEXT,                                                  -- cannot_tell (schema v2, D10)
-  selector_version TEXT, fetched_at TEXT                        -- web_page (schema v2, D10)
+  selector_version TEXT, fetched_at TEXT    -- web_page (schema v2, D10); fetched_at: every fetch (D10 follow-up 20)
 );
 CREATE VIRTUAL TABLE claims_fts USING fts5(text, subject, content='claims', tokenize='trigram');
 ```
@@ -264,9 +264,9 @@ The user decides what to remember and gives the claim sentence (D2, D3). When Cl
 - **Data**: release histories of about 50 PyPI packages and 20 GitHub repos (exact dates). A mix of fast- and slow-changing projects. `eval/replay/timelines.py` says which version each source showed as latest on any day, by the rules the verifiers read (D11). A GitHub repository that also releases other products has a tag pattern, and its other releases never count; the github_release verifier does not read the pattern (yet), so on those repositories its latest can differ. `eval/data/README.md` describes the files.
 - **Simulation**: replay 2024-01 to 2026-09 day by day. Claims like "the latest version of X is ..." appear at random times (never before X's first release), and questions arrive at random times. Each policy decides when to check, and the answer at question time is compared with ground truth.
 - **Policies** (each mapped to who uses it today, so the comparison is against real prior-art behavior)
-  - Never check: the default in Mem0, Zep and Hindsight, which react only to new input
+  - Never check: the default in Mem0 (without an `expiration_date`), Zep and Hindsight, which react only to new input
   - Check on every read
-  - Fixed interval (7 and 30 days, and a curve from 3 to 180 in D12, with jitter variants and an oracle lower bound): a plain TTL
+  - Fixed interval (7 and 30 days, and a curve from 3 to 180 in D12, with jitter variants and an oracle lower bound): a plain TTL. It is the re-check analogue of Mem0's `expiration_date`: where Mem0 hides a memory from search after a date the caller sets, fixed N checks it again N days on
   - Per-class interval (table 4.2): closest to memwatch and agent-memory-staleness-audit (per-type half-lives)
   - LLM-judged class interval
   - **Adaptive**: per-claim next check date from the observed change rate
@@ -283,9 +283,14 @@ The user decides what to remember and gives the claim sentence (D2, D3). When Cl
 ### 6.2 Whether the check is right (web_page verifier accuracy)
 
 - **Data**: 30 to 40 Wayback Machine snapshot pairs (pricing, feature and policy pages), hand-labeled changed/unchanged plus the new value.
-- **Metrics**: accuracy, cannot_tell rate, cost per check. False alarms (unchanged labeled as changed) and missed changes are reported separately.
+- **Metrics**: accuracy, always with the cannot_tell rate next to it (a verifier can look more accurate by answering cannot_tell more often), and cost per check. False alarms (unchanged labeled as changed) and missed changes are reported separately, and so is each trap type, with its own accuracy and cannot_tell rate.
 - **Comparisons**: Haiku vs Sonnet, full page vs relevant section only
-- **Trap pairs**: the page layout changed but the value did not (false-alarm trap), and pages that show two similar values such as monthly vs annual price (wrong-value trap).
+- **Trap pairs**: the code's quote check passes on all of them, so only the judgment can catch them:
+  - the page layout changed but the value did not (false-alarm trap);
+  - two similar values such as monthly vs annual price (wrong-value trap);
+  - the claim's value quoted for another plan or product, such as Basic and Pro at the same price (wrong-subject trap);
+  - the value holds only in one region or before or after tax ("$10 a month, excl. VAT", "US only") while the claim states no condition (condition trap);
+  - the value in a negation ("no longer $19", "not included in Pro") (negation trap).
 - **Failure attribution**: for every miss, record whether the selected section contained the evidence. "Extraction miss" and "judgment miss" need opposite fixes, so they are counted separately.
 - **Hidden-text rules**: extraction drops text with an inline `opacity:0` or `font-size:0`, which also hides text a reader sees: content a page fades in with JavaScript, or a `font-size:0` parent whose children set their own size. A correct quote from such text gives a wrong `cannot_tell`, the safe side. Measure how often: count the `cannot_tell` results whose evidence on the page sits inside such an element.
 

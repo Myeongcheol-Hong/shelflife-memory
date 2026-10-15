@@ -102,12 +102,23 @@ VERSION = re.compile(
 )
 
 
+# PEP 440's pre-, post- and dev-release and local parts, in every spelling it accepts.
+PEP440_SUFFIX = re.compile(
+    r"(?:[-_.]?(?P<pre>alpha|a|beta|b|preview|pre|c|rc)[-_.]?(?P<pre_n>\d+)?)?"
+    r"(?:-(?P<implicit_post>\d+)|[-_.]?(?P<post>post|rev|r)[-_.]?(?P<post_n>\d+)?)?"
+    r"(?:[-_.]?(?P<dev>dev)[-_.]?(?P<dev_n>\d+)?)?"
+    r"(?:\+(?P<local>[a-z0-9]+(?:[-_.][a-z0-9]+)*))?"
+)
+PRE_RELEASE = {"alpha": "a", "beta": "b", "c": "rc", "pre": "rc", "preview": "rc"}
+
+
 def parse_version(text: str) -> tuple[str | None, str, str] | None:
     """(tag prefix, release, suffix) of a version string; None if it is not one.
 
     As in PEP 440, the release drops leading zeros in each segment and trailing ".0"
-    segments ("1.0" and "1.0.0" give the same release), and the suffix drops a leading
-    "-", "_" or "." ("1.0-rc1" and "1.0rc1" give the same suffix).
+    segments ("1.0" and "1.0.0" give the same release). A suffix PEP 440 accepts takes
+    its normal form: "1.0c1" and "1.0rc1", "1.0-1" and "1.0.post1", "1.0-beta.1" and
+    "1.0b1" give the same suffix. Any other suffix drops a leading "-", "_" or ".".
     """
     m = VERSION.fullmatch(text.strip())
     if m is None:
@@ -116,17 +127,37 @@ def parse_version(text: str) -> tuple[str | None, str, str] | None:
     while len(segments) > 1 and segments[-1] == "0":
         segments.pop()
     prefix = m["prefix"].lower() if m["prefix"] else None
-    suffix = (m["suffix"] or "").lower()
-    return prefix, ".".join(segments), suffix[1:] if suffix[:1] in "-_." else suffix
+    return prefix, ".".join(segments), _normal_suffix((m["suffix"] or "").lower())
+
+
+def _normal_suffix(suffix: str) -> str:
+    """PEP 440's normal form of a pre-, post-, dev-release and local suffix: other
+    spellings mapped (alpha, beta, c, pre, preview, rev, r, an implicit "-1"), separators
+    dropped or made ".", a missing number read as 0 and leading zeros removed."""
+    m = PEP440_SUFFIX.fullmatch(suffix)
+    if m is None:
+        return suffix[1:] if suffix[:1] in "-_." else suffix
+    out = ""
+    if m["pre"]:
+        out += PRE_RELEASE.get(m["pre"], m["pre"]) + str(int(m["pre_n"] or 0))
+    if m["post"] or m["implicit_post"]:
+        out += ".post" + str(int(m["implicit_post"] or m["post_n"] or 0))
+    if m["dev"]:
+        out += ".dev" + str(int(m["dev_n"] or 0))
+    if m["local"]:
+        parts = re.split(r"[-_.]", m["local"])
+        out += "+" + ".".join(p.lstrip("0") or "0" if p.isdigit() else p for p in parts)
+    return out
 
 
 def same_version(a: str, b: str) -> bool:
     """Whether two version strings name the same version.
 
     Equivalent forms are equal: "v0.10.3" and "0.10.3", "1.0" and "1.0.0", "release-1.0"
-    and "1.0". Two different tag prefixes are not ("pkg-a-v1.0" and "pkg-b-v1.0" name
-    releases of different packages in one repository). Anything that is not a version
-    string is compared exactly, ignoring case and surrounding spaces.
+    and "1.0", and PEP 440's other spellings ("1.0c1" and "1.0rc1"). Two different tag
+    prefixes are not ("pkg-a-v1.0" and "pkg-b-v1.0" name releases of different packages
+    in one repository). Anything that is not a version string is compared exactly,
+    ignoring case and surrounding spaces.
     """
     pa, pb = parse_version(a), parse_version(b)
     if pa is None or pb is None:

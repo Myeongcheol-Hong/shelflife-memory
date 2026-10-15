@@ -4,7 +4,7 @@
 
 ## The problem
 
-Memory systems for AI assistants update a memory when new information arrives that contradicts it. When the world changes and nobody mentions it, the old fact keeps being served: last month's price, last year's latest version, a policy that has since been rewritten. Nothing in the pipeline notices, so you get a confident answer that is no longer true.
+Memory systems for AI assistants change a memory when new information arrives that contradicts it, or hide it after an expiration date. When the world changes and nobody mentions it, the old fact keeps being served: last month's price, last year's latest version, a policy that has since been rewritten. Nothing in the pipeline notices, so you get a confident answer that is no longer true.
 
 ## What Shelf Life does
 
@@ -26,7 +26,24 @@ uv sync
 claude mcp add -s user shelflife -- uv run --directory "$PWD" shelflife-memory
 ```
 
-The last line registers the server with Claude Code for all your projects; replace `"$PWD"` with the clone's path if you run it from elsewhere. The database lives at `~/.shelflife/shelflife.db`, or wherever `SHELFLIFE_DB` points.
+The last line registers the server with Claude Code for all your projects; replace `"$PWD"` with the clone's path if you run it from elsewhere.
+
+For Claude Desktop, add the server to `claude_desktop_config.json` (Settings, Developer, Edit Config; on macOS it is in `~/Library/Application Support/Claude/`, on Windows in `%APPDATA%\Claude\`) and restart the app:
+
+```json
+{
+  "mcpServers": {
+    "shelflife": {
+      "command": "uv",
+      "args": ["run", "--directory", "/path/to/shelflife-memory", "shelflife-memory"]
+    }
+  }
+}
+```
+
+Use the clone's full path. If Claude Desktop cannot find `uv`, put the full path that `which uv` prints in `command`. Both apps can use the server at once and share one database. Claude Desktop does not read your shell's environment, so if you set `SHELFLIFE_DB`, also set it in this entry (`"env": {"SHELFLIFE_DB": "/path/to/shelflife.db"}`), or the two apps use different files.
+
+The database lives at `~/.shelflife/shelflife.db`, or wherever `SHELFLIFE_DB` points. On macOS and Linux, a database file Shelf Life creates can be read only by your user (mode 0600), and so can its folder if Shelf Life creates that too (0700); a file or folder that already exists keeps its mode.
 
 ## Tools
 
@@ -45,7 +62,7 @@ Early and in active development. The store, the six tools, the PyPI, GitHub and 
 
 ## Prior art
 
-Memory systems such as [Hindsight](https://github.com/vectorize-io/hindsight), Zep ([Graphiti](https://github.com/getzep/graphiti)) and [Mem0](https://github.com/mem0ai/mem0) update a memory when contradicting information arrives, or leave invalidation to you. A few tools are built on top of them to catch the changes nobody mentions:
+Memory systems such as [Hindsight](https://github.com/vectorize-io/hindsight) and Zep ([Graphiti](https://github.com/getzep/graphiti)) update a memory when contradicting information arrives, or leave invalidation to you. [Mem0](https://github.com/mem0ai/mem0)'s pipeline only adds memories, so they accumulate; a memory can carry an optional expiration date, after which search no longer returns it by default ([Mem0 docs](https://docs.mem0.ai/core-concepts/memory-operations/add), checked 2026-10-14 (via the maintainer)). A few tools are built on top of them to catch the changes nobody mentions:
 
 - [MemGuard](https://github.com/ac12644/MemGuard) re-fetches source URLs for Mem0, Zep and other memory stores, with trust scores and quarantine. It is the closest match to Shelf Life.
 - [agent-memory-staleness-audit](https://github.com/a-bhimava/agent-memory-staleness-audit) scores staleness from provenance and per-type half-lives, without going back to the source.
