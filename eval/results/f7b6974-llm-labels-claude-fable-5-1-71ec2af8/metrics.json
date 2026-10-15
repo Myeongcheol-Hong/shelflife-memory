@@ -1,6 +1,6 @@
 {
  "scored": {
-  "git sha": "f7b6974e8441de2d1ff4e3e7432927cec1cd3795",
+  "git sha": "f960a5403829bac209e37946e8f261bfc4792ae6",
   "uncommitted changes": false,
   "dataset sha256": "ae19668a67597c1581c0a22d438cb2be7a6ed1b4a1f7e6da3c2236dd0b96714a",
   "python": "3.13.16",
@@ -13,14 +13,15 @@
    4
   ],
   "resamples": 2000,
-  "at": "2026-10-15T15:58:35+00:00",
-  "rate": "1 a week"
+  "at": "2026-10-15T19:08:47+00:00",
+  "rate": "1 a week",
+  "parser": "v2"
  },
  "answers": {
   "aiohttp": [
    "medium",
-   null,
-   null
+   "medium",
+   "medium"
   ],
   "anthropic": [
    "fast",
@@ -28,9 +29,9 @@
    "fast"
   ],
   "attrs": [
-   null,
-   null,
-   null
+   "slow",
+   "slow",
+   "slow"
   ],
   "boto3": [
    "fast",
@@ -38,13 +39,13 @@
    "fast"
   ],
   "certifi": [
-   null,
-   null,
-   null
+   "slow",
+   "medium",
+   "slow"
   ],
   "charset-normalizer": [
    "slow",
-   null,
+   "slow",
    "slow"
   ],
   "chromadb": [
@@ -58,24 +59,24 @@
    "medium"
   ],
   "click": [
-   null,
+   "slow",
    "slow",
    "slow"
   ],
   "datasets": [
-   null,
    "medium",
-   null
+   "medium",
+   "medium"
   ],
   "django": [
    "medium",
-   null,
-   null
+   "medium",
+   "medium"
   ],
   "duckdb": [
-   null,
-   null,
-   null
+   "medium",
+   "medium",
+   "medium"
   ],
   "fastapi": [
    "fast",
@@ -83,23 +84,23 @@
    "fast"
   ],
   "flask": [
-   null,
    "slow",
-   null
+   "slow",
+   "slow"
   ],
   "grpcio": [
    "medium",
-   null,
-   null
+   "medium",
+   "medium"
   ],
   "httpx": [
-   null,
-   null,
-   null
+   "slow",
+   "slow",
+   "slow"
   ],
   "huggingface-hub": [
    "fast",
-   null,
+   "fast",
    "fast"
   ],
   "instructor": [
@@ -123,22 +124,22 @@
    "fast"
   ],
   "matplotlib": [
-   null,
-   null,
-   null
+   "slow",
+   "slow",
+   "slow"
   ],
   "mcp": [
-   null,
-   null,
+   "fast",
+   "fast",
    "fast"
   ],
   "mypy": [
-   null,
-   null,
-   null
+   "medium",
+   "medium",
+   "slow"
   ],
   "numpy": [
-   null,
+   "medium",
    "medium",
    "medium"
   ],
@@ -149,16 +150,16 @@
   ],
   "pandas": [
    "slow",
-   null,
-   null
+   "medium",
+   "slow"
   ],
   "pip": [
-   null,
-   null,
-   null
+   "slow",
+   "slow",
+   "slow"
   ],
   "poetry": [
-   null,
+   "medium",
    null,
    "medium"
   ],
@@ -168,22 +169,22 @@
    "fast"
   ],
   "pre-commit": [
-   null,
+   "medium",
    "medium",
    "medium"
   ],
   "pyarrow": [
-   null,
-   null,
-   null
+   "slow",
+   "slow",
+   "medium"
   ],
   "pydantic": [
    "fast",
    "medium",
-   null
+   "fast"
   ],
   "pytest": [
-   null,
+   "medium",
    "medium",
    "medium"
   ],
@@ -193,9 +194,9 @@
    "slow"
   ],
   "pytz": [
-   null,
-   null,
-   null
+   "slow",
+   "slow",
+   "slow"
   ],
   "pyyaml": [
    "slow",
@@ -203,14 +204,14 @@
    "slow"
   ],
   "qdrant-client": [
-   null,
    "medium",
-   null
+   "medium",
+   "medium"
   ],
   "redis": [
-   null,
-   null,
-   null
+   "medium",
+   "medium",
+   "medium"
   ],
   "requests": [
    "slow",
@@ -224,13 +225,13 @@
   ],
   "scikit-learn": [
    "slow",
-   null,
+   "medium",
    "slow"
   ],
   "scipy": [
-   null,
    "slow",
-   null
+   "slow",
+   "slow"
   ],
   "sentence-transformers": [
    "medium",
@@ -248,18 +249,18 @@
    "slow"
   ],
   "sqlalchemy": [
-   null,
    "medium",
-   null
+   "medium",
+   "medium"
   ],
   "starlette": [
-   null,
-   null,
-   null
+   "medium",
+   "medium",
+   "medium"
   ],
   "tiktoken": [
    "slow",
-   null,
+   "slow",
    "slow"
   ],
   "tokenizers": [
@@ -268,64 +269,64 @@
    "medium"
   ],
   "transformers": [
-   null,
    "fast",
-   null
+   "fast",
+   "fast"
   ],
   "uvicorn": [
-   null,
-   null,
-   null
+   "medium",
+   "medium",
+   "medium"
   ],
   "BurntSushi/ripgrep": [
-   null,
+   "slow",
    "slow",
    "slow"
   ],
   "caddyserver/caddy": [
-   null,
-   null,
-   null
+   "medium",
+   "medium",
+   "medium"
   ],
   "cli/cli": [
-   null,
-   null,
-   null
+   "medium",
+   "medium",
+   "medium"
   ],
   "denoland/deno": [
-   null,
    "fast",
-   null
+   "fast",
+   "fast"
   ],
   "docker/compose": [
-   null,
-   null,
-   null
+   "medium",
+   "medium",
+   "medium"
   ],
   "getzep/graphiti": [
    "fast",
    "fast",
-   null
+   "fast"
   ],
   "gohugoio/hugo": [
-   null,
-   null,
-   null
+   "fast",
+   "medium",
+   "medium"
   ],
   "hashicorp/terraform": [
-   null,
+   "medium",
    "fast",
    "medium"
   ],
   "home-assistant/core": [
-   null,
-   null,
+   "fast",
+   "fast",
    "fast"
   ],
   "jesseduffield/lazygit": [
    "medium",
    "medium",
-   null
+   "medium"
   ],
   "jqlang/jq": [
    "slow",
@@ -338,9 +339,9 @@
    "medium"
   ],
   "prettier/prettier": [
-   null,
-   null,
-   null
+   "medium",
+   "medium",
+   "medium"
   ],
   "rust-lang/rust": [
    "medium",
@@ -349,13 +350,13 @@
   ],
   "sharkdp/bat": [
    "slow",
-   null,
-   null
+   "slow",
+   "slow"
   ],
   "starship/starship": [
-   null,
-   null,
-   null
+   "medium",
+   "medium",
+   "medium"
   ],
   "vectorize-io/hindsight": [
    "fast",
@@ -363,7 +364,7 @@
    "fast"
   ],
   "zed-industries/zed": [
-   null,
+   "fast",
    "fast",
    "fast"
   ]
@@ -372,43 +373,43 @@
   "labels": {
    "aiohttp": "medium",
    "anthropic": "fast",
-   "attrs": null,
+   "attrs": "slow",
    "boto3": "fast",
-   "certifi": null,
+   "certifi": "slow",
    "charset-normalizer": "slow",
    "chromadb": "fast",
    "claude-agent-sdk": "fast",
    "click": "slow",
    "datasets": "medium",
    "django": "medium",
-   "duckdb": null,
+   "duckdb": "medium",
    "fastapi": "fast",
    "flask": "slow",
    "grpcio": "medium",
-   "httpx": null,
+   "httpx": "slow",
    "huggingface-hub": "fast",
    "instructor": "fast",
    "jinja2": "slow",
    "litellm": "fast",
    "llama-index": "fast",
-   "matplotlib": null,
+   "matplotlib": "slow",
    "mcp": "fast",
-   "mypy": null,
+   "mypy": "medium",
    "numpy": "medium",
    "openai": "fast",
    "pandas": "slow",
-   "pip": null,
+   "pip": "slow",
    "poetry": "medium",
    "polars": "fast",
    "pre-commit": "medium",
-   "pyarrow": null,
+   "pyarrow": "slow",
    "pydantic": "fast",
    "pytest": "medium",
    "python-dateutil": "slow",
-   "pytz": null,
+   "pytz": "slow",
    "pyyaml": "slow",
    "qdrant-client": "medium",
-   "redis": null,
+   "redis": "medium",
    "requests": "slow",
    "ruff": "fast",
    "scikit-learn": "slow",
@@ -417,129 +418,110 @@
    "setuptools": "fast",
    "six": "slow",
    "sqlalchemy": "medium",
-   "starlette": null,
+   "starlette": "medium",
    "tiktoken": "slow",
    "tokenizers": "medium",
    "transformers": "fast",
-   "uvicorn": null,
+   "uvicorn": "medium",
    "BurntSushi/ripgrep": "slow",
-   "caddyserver/caddy": null,
-   "cli/cli": null,
+   "caddyserver/caddy": "medium",
+   "cli/cli": "medium",
    "denoland/deno": "fast",
-   "docker/compose": null,
+   "docker/compose": "medium",
    "getzep/graphiti": "fast",
-   "gohugoio/hugo": null,
-   "hashicorp/terraform": "fast",
+   "gohugoio/hugo": "medium",
+   "hashicorp/terraform": "medium",
    "home-assistant/core": "fast",
    "jesseduffield/lazygit": "medium",
    "jqlang/jq": "slow",
    "microsoft/TypeScript": "medium",
-   "prettier/prettier": null,
+   "prettier/prettier": "medium",
    "rust-lang/rust": "medium",
    "sharkdp/bat": "slow",
-   "starship/starship": null,
+   "starship/starship": "medium",
    "vectorize-io/hindsight": "fast",
    "zed-industries/zed": "fast"
   },
   "maintainer by Claude": {
    "fast": {
-    "fast": 8,
-    "medium": 0,
-    "slow": 1,
-    "none": 2
+    "fast": 7,
+    "medium": 2,
+    "slow": 2,
+    "none": 0
    },
    "medium": {
     "fast": 9,
-    "medium": 9,
-    "slow": 5,
-    "none": 8
+    "medium": 16,
+    "slow": 6,
+    "none": 0
    },
    "slow": {
     "fast": 5,
-    "medium": 6,
-    "slow": 9,
-    "none": 8
+    "medium": 9,
+    "slow": 14,
+    "none": 0
    }
   },
   "projects": {
    "n": 70,
    "same": {
-    "count": 26,
-    "share": 0.37142857142857144
+    "count": 37,
+    "share": 0.5285714285714286
    },
    "Claude faster (more checks)": {
-    "count": 20,
-    "share": 0.2857142857142857
+    "count": 23,
+    "share": 0.32857142857142857
    },
    "Claude slower (staler)": {
-    "count": 6,
-    "share": 0.08571428571428572
+    "count": 10,
+    "share": 0.14285714285714285
    },
    "invalid": {
-    "count": 18,
-    "share": 0.2571428571428571
+    "count": 0,
+    "share": 0.0
    }
   },
   "projects without the four labeled late": {
    "n": 66,
    "same": {
-    "count": 25,
-    "share": 0.3787878787878788
+    "count": 35,
+    "share": 0.5303030303030303
    },
    "Claude faster (more checks)": {
-    "count": 19,
-    "share": 0.2878787878787879
+    "count": 22,
+    "share": 0.3333333333333333
    },
    "Claude slower (staler)": {
-    "count": 6,
-    "share": 0.09090909090909091
+    "count": 9,
+    "share": 0.13636363636363635
    },
    "invalid": {
-    "count": 16,
-    "share": 0.24242424242424243
+    "count": 0,
+    "share": 0.0
    }
   },
   "answers": {
    "n": 210,
    "same": {
-    "count": 59,
-    "share": 0.28095238095238095
+    "count": 112,
+    "share": 0.5333333333333333
    },
    "Claude faster (more checks)": {
-    "count": 43,
-    "share": 0.20476190476190476
+    "count": 70,
+    "share": 0.3333333333333333
    },
    "Claude slower (staler)": {
-    "count": 10,
-    "share": 0.047619047619047616
+    "count": 27,
+    "share": 0.12857142857142856
    },
    "invalid": {
-    "count": 98,
-    "share": 0.4666666666666667
+    "count": 1,
+    "share": 0.004761904761904762
    }
   },
-  "projects whose answers all agree": 22,
-  "projects decided between two different answers": 2,
-  "projects with no valid answer": [
-   "attrs",
-   "caddyserver/caddy",
-   "certifi",
-   "cli/cli",
-   "docker/compose",
-   "duckdb",
-   "gohugoio/hugo",
-   "httpx",
-   "matplotlib",
-   "mypy",
-   "pip",
-   "prettier/prettier",
-   "pyarrow",
-   "pytz",
-   "redis",
-   "starlette",
-   "starship/starship",
-   "uvicorn"
-  ]
+  "projects whose answers all agree": 60,
+  "projects decided between two different answers": 0,
+  "projects with no valid answer": []
  },
  "test": {
   "policies": {
@@ -547,38 +529,38 @@
     "projects": 70,
     "claims": 1400.0,
     "stale-answer rate": {
-     "value": 0.33474308200372,
+     "value": 0.379430111472423,
      "ci": [
-      0.28826060615475435,
-      0.3811488908876699
+      0.32781309929808317,
+      0.43017616816801585
      ]
     },
     "stale claim-days": {
-     "value": 0.3338679937087793,
+     "value": 0.378670575259924,
      "ci": [
-      0.28751747336707795,
-      0.38055824487795603
+      0.327084178298775,
+      0.42950883547312063
      ]
     },
     "checks per claim-month": {
-     "value": 1.8069321805151985,
+     "value": 1.6774163523842607,
      "ci": [
-      1.4164132630398563,
-      2.2051490629900714
+      1.2858196990615647,
+      2.0775036081517144
      ]
     },
     "mean days to detect": {
-     "value": 7.20075574622837,
+     "value": 8.36975222199994,
      "ci": [
-      5.443290871213415,
-      10.069329849180056
+      6.134777179261956,
+      11.986413445875908
      ]
     },
     "undetected share": {
-     "value": 0.027310851797348375,
+     "value": 0.033003779164162195,
      "ci": [
-      0.018691704857359315,
-      0.04073251741940142
+      0.022481469882033613,
+      0.04927054005630919
      ]
     }
    },
@@ -663,82 +645,82 @@
   },
   "Claude's labels minus the maintainer's": {
    "stale-answer rate": {
-    "value": -0.13035061303506124,
+    "value": -0.08566358356635823,
     "ci": [
-     -0.1941159357964103,
-     -0.06604428282980535
+     -0.15448190789473687,
+     -0.016330922120714353
     ]
    },
    "stale claim-days": {
-    "value": -0.13105881279190762,
+    "value": -0.08625623124076293,
     "ci": [
-     -0.1945035121715452,
-     -0.06678090858477403
+     -0.15444075133338492,
+     -0.017469200323358025
     ]
    },
    "checks per claim-month": {
-    "value": 0.685234291941734,
+    "value": 0.5557184638107961,
     "ci": [
-     0.30022195984968536,
-     1.072731130352577
+     0.14533371897078262,
+     0.9888857745769792
     ]
    }
   },
   "the same, without the four labeled late": {
    "stale-answer rate": {
-    "value": -0.13510788465416412,
+    "value": -0.08762855414398063,
     "ci": [
-     -0.20206128189739858,
-     -0.06683294748223867
+     -0.16018932159760857,
+     -0.013273116138925511
     ]
    },
    "stale claim-days": {
-    "value": -0.13571546230747683,
+    "value": -0.08809513404277897,
     "ci": [
-     -0.20283929929404487,
-     -0.06758905952085387
+     -0.16060855475169022,
+     -0.014281099319207013
     ]
    },
    "checks per claim-month": {
-    "value": 0.7235039617573593,
+    "value": 0.5858425583842344,
     "ci": [
-     0.3321059278781553,
-     1.1426754384699913
+     0.16582150756480796,
+     1.0476950737214037
     ]
    }
   },
   "Claude's labels minus fixed 30": {
    "stale-answer rate": {
-    "value": -0.044316930902281226,
+    "value": 0.00037009856642178374,
     "ci": [
-     -0.10244718919542883,
-     0.017035566801809898
+     -0.06818889661399269,
+     0.06915954281544662
     ]
    },
    "stale claim-days": {
-    "value": -0.0457970498494743,
+    "value": -0.0009944682983296094,
     "ci": [
-     -0.10438342576062681,
-     0.01545732881469003
+     -0.06964193773603727,
+     0.06822468389839992
     ]
    },
    "checks per claim-month": {
-    "value": 0.8528932430826617,
+    "value": 0.7233774149517238,
     "ci": [
-     0.46182227405652243,
-     1.25103318605042
+     0.33194432226014414,
+     1.1247431926667357
     ]
    }
   },
   "on the fixed-N curve": {
-   "value": 0.056363196991086606,
+   "value": 0.08565226723360214,
    "between": [
     "fixed 30",
     "fixed 14"
    ],
    "ci": [
-    0.02808758079504181,
-    0.08560286512347348
+    0.05052285662470557,
+    0.12311638619386384
    ],
    "resamples outside": 0
   }
@@ -749,38 +731,38 @@
     "projects": 68,
     "claims": 1360.0,
     "stale-answer rate": {
-     "value": 0.33420866637169655,
+     "value": 0.3834993018404978,
      "ci": [
-      0.2896982725708211,
-      0.3787355391732844
+      0.3353086113476057,
+      0.4298508824972333
      ]
     },
     "stale claim-days": {
-     "value": 0.33345002037240923,
+     "value": 0.38223230777176664,
      "ci": [
-      0.28947433543348394,
-      0.3779293255799654
+      0.33388836533284616,
+      0.42851435013627903
      ]
     },
     "checks per claim-month": {
-     "value": 1.6363676609112907,
+     "value": 1.4996716639872374,
      "ci": [
-      1.2536509533021982,
-      2.0156061936354175
+      1.119339546049343,
+      1.8837631814689433
      ]
     },
     "mean days to detect": {
-     "value": 7.252183272251662,
+     "value": 8.348259598411293,
      "ci": [
-      5.562113028586484,
-      9.88205895783652
+      6.257924198250729,
+      11.6484808527004
      ]
     },
     "undetected share": {
-     "value": 0.038184843997746125,
+     "value": 0.04980802746583151,
      "ci": [
-      0.02354520200181037,
-      0.06093604607298242
+      0.03101336744049169,
+      0.07958134929989158
      ]
     }
    },
@@ -865,84 +847,1015 @@
   },
   "Claude's labels minus the maintainer's": {
    "stale-answer rate": {
-    "value": -0.15368702917329885,
+    "value": -0.1043963937044976,
     "ci": [
-     -0.22191354342428943,
-     -0.08526761842884495
+     -0.17777560538013437,
+     -0.03391167643275689
     ]
    },
    "stale claim-days": {
-    "value": -0.15214541555205963,
+    "value": -0.10336312815270221,
     "ci": [
-     -0.21961722369147962,
-     -0.08437141381330127
+     -0.1760717046725533,
+     -0.03301686818204941
     ]
    },
    "checks per claim-month": {
-    "value": 0.6660917028956697,
+    "value": 0.5293957059716163,
     "ci": [
-     0.2649763714814053,
-     1.0573157188300164
+     0.12630399559008332,
+     0.9430581052638402
     ]
    }
   },
   "the same, without the four labeled late": {
    "stale-answer rate": {
-    "value": -0.16026963986957654,
+    "value": -0.10789258368239169,
     "ci": [
-     -0.23044092303289343,
-     -0.0874346186595305
+     -0.18444387842744692,
+     -0.025751654935220247
     ]
    },
    "stale claim-days": {
-    "value": -0.15858250411956376,
+    "value": -0.10673046507716738,
     "ci": [
-     -0.22781132723305497,
-     -0.08572185668255705
+     -0.18248683742424937,
+     -0.02526799854615308
     ]
    },
    "checks per claim-month": {
-    "value": 0.7090267895811418,
+    "value": 0.5637288433938407,
     "ci": [
-     0.2898212559519384,
-     1.1436216197524034
+     0.12631684233338292,
+     1.0278955370254101
     ]
    }
   },
   "Claude's labels minus fixed 30": {
    "stale-answer rate": {
-    "value": -0.048405725482534634,
+    "value": 0.0008849099862666132,
     "ci": [
-     -0.10304866077688957,
-     0.013423054417788183
+     -0.06288178635978864,
+     0.06769655512970874
     ]
    },
    "stale claim-days": {
-    "value": -0.0470344412590068,
+    "value": 0.0017478461403506174,
     "ci": [
-     -0.10160482077516925,
-     0.015305149115789785
+     -0.06209849370953785,
+     0.06842527371752943
     ]
    },
    "checks per claim-month": {
-    "value": 0.7163135858965543,
+    "value": 0.5796175889725009,
     "ci": [
-     0.3329472837562678,
-     1.097251306399885
+     0.19740549592947176,
+     0.9658498042281355
     ]
    }
   },
   "on the fixed-N curve": {
-   "value": 0.038445072959653714,
+   "value": 0.07091508087309473,
    "between": [
     "fixed 30",
     "fixed 14"
    ],
    "ci": [
-    0.014425810133660233,
-    0.06667090812914878
+    0.04123488756499277,
+    0.10429431227079655
    ],
    "resamples outside": 0
+  }
+ },
+ "parser v1": {
+  "answers": {
+   "aiohttp": [
+    "medium",
+    null,
+    null
+   ],
+   "anthropic": [
+    "fast",
+    "fast",
+    "fast"
+   ],
+   "attrs": [
+    null,
+    null,
+    null
+   ],
+   "boto3": [
+    "fast",
+    "fast",
+    "fast"
+   ],
+   "certifi": [
+    null,
+    null,
+    null
+   ],
+   "charset-normalizer": [
+    "slow",
+    null,
+    "slow"
+   ],
+   "chromadb": [
+    "fast",
+    "fast",
+    "fast"
+   ],
+   "claude-agent-sdk": [
+    "fast",
+    "fast",
+    "medium"
+   ],
+   "click": [
+    null,
+    "slow",
+    "slow"
+   ],
+   "datasets": [
+    null,
+    "medium",
+    null
+   ],
+   "django": [
+    "medium",
+    null,
+    null
+   ],
+   "duckdb": [
+    null,
+    null,
+    null
+   ],
+   "fastapi": [
+    "fast",
+    "fast",
+    "fast"
+   ],
+   "flask": [
+    null,
+    "slow",
+    null
+   ],
+   "grpcio": [
+    "medium",
+    null,
+    null
+   ],
+   "httpx": [
+    null,
+    null,
+    null
+   ],
+   "huggingface-hub": [
+    "fast",
+    null,
+    "fast"
+   ],
+   "instructor": [
+    "fast",
+    "fast",
+    "fast"
+   ],
+   "jinja2": [
+    "slow",
+    "slow",
+    "slow"
+   ],
+   "litellm": [
+    "fast",
+    "fast",
+    "fast"
+   ],
+   "llama-index": [
+    "fast",
+    "fast",
+    "fast"
+   ],
+   "matplotlib": [
+    null,
+    null,
+    null
+   ],
+   "mcp": [
+    null,
+    null,
+    "fast"
+   ],
+   "mypy": [
+    null,
+    null,
+    null
+   ],
+   "numpy": [
+    null,
+    "medium",
+    "medium"
+   ],
+   "openai": [
+    "fast",
+    "fast",
+    "fast"
+   ],
+   "pandas": [
+    "slow",
+    null,
+    null
+   ],
+   "pip": [
+    null,
+    null,
+    null
+   ],
+   "poetry": [
+    null,
+    null,
+    "medium"
+   ],
+   "polars": [
+    "fast",
+    "fast",
+    "fast"
+   ],
+   "pre-commit": [
+    null,
+    "medium",
+    "medium"
+   ],
+   "pyarrow": [
+    null,
+    null,
+    null
+   ],
+   "pydantic": [
+    "fast",
+    "medium",
+    null
+   ],
+   "pytest": [
+    null,
+    "medium",
+    "medium"
+   ],
+   "python-dateutil": [
+    "slow",
+    "slow",
+    "slow"
+   ],
+   "pytz": [
+    null,
+    null,
+    null
+   ],
+   "pyyaml": [
+    "slow",
+    "slow",
+    "slow"
+   ],
+   "qdrant-client": [
+    null,
+    "medium",
+    null
+   ],
+   "redis": [
+    null,
+    null,
+    null
+   ],
+   "requests": [
+    "slow",
+    "slow",
+    "slow"
+   ],
+   "ruff": [
+    "fast",
+    "fast",
+    "fast"
+   ],
+   "scikit-learn": [
+    "slow",
+    null,
+    "slow"
+   ],
+   "scipy": [
+    null,
+    "slow",
+    null
+   ],
+   "sentence-transformers": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "setuptools": [
+    "fast",
+    "fast",
+    "fast"
+   ],
+   "six": [
+    "slow",
+    "slow",
+    "slow"
+   ],
+   "sqlalchemy": [
+    null,
+    "medium",
+    null
+   ],
+   "starlette": [
+    null,
+    null,
+    null
+   ],
+   "tiktoken": [
+    "slow",
+    null,
+    "slow"
+   ],
+   "tokenizers": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "transformers": [
+    null,
+    "fast",
+    null
+   ],
+   "uvicorn": [
+    null,
+    null,
+    null
+   ],
+   "BurntSushi/ripgrep": [
+    null,
+    "slow",
+    "slow"
+   ],
+   "caddyserver/caddy": [
+    null,
+    null,
+    null
+   ],
+   "cli/cli": [
+    null,
+    null,
+    null
+   ],
+   "denoland/deno": [
+    null,
+    "fast",
+    null
+   ],
+   "docker/compose": [
+    null,
+    null,
+    null
+   ],
+   "getzep/graphiti": [
+    "fast",
+    "fast",
+    null
+   ],
+   "gohugoio/hugo": [
+    null,
+    null,
+    null
+   ],
+   "hashicorp/terraform": [
+    null,
+    "fast",
+    "medium"
+   ],
+   "home-assistant/core": [
+    null,
+    null,
+    "fast"
+   ],
+   "jesseduffield/lazygit": [
+    "medium",
+    "medium",
+    null
+   ],
+   "jqlang/jq": [
+    "slow",
+    "slow",
+    "slow"
+   ],
+   "microsoft/TypeScript": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "prettier/prettier": [
+    null,
+    null,
+    null
+   ],
+   "rust-lang/rust": [
+    "medium",
+    "medium",
+    "medium"
+   ],
+   "sharkdp/bat": [
+    "slow",
+    null,
+    null
+   ],
+   "starship/starship": [
+    null,
+    null,
+    null
+   ],
+   "vectorize-io/hindsight": [
+    "fast",
+    "fast",
+    "fast"
+   ],
+   "zed-industries/zed": [
+    null,
+    "fast",
+    "fast"
+   ]
+  },
+  "agreement": {
+   "labels": {
+    "aiohttp": "medium",
+    "anthropic": "fast",
+    "attrs": null,
+    "boto3": "fast",
+    "certifi": null,
+    "charset-normalizer": "slow",
+    "chromadb": "fast",
+    "claude-agent-sdk": "fast",
+    "click": "slow",
+    "datasets": "medium",
+    "django": "medium",
+    "duckdb": null,
+    "fastapi": "fast",
+    "flask": "slow",
+    "grpcio": "medium",
+    "httpx": null,
+    "huggingface-hub": "fast",
+    "instructor": "fast",
+    "jinja2": "slow",
+    "litellm": "fast",
+    "llama-index": "fast",
+    "matplotlib": null,
+    "mcp": "fast",
+    "mypy": null,
+    "numpy": "medium",
+    "openai": "fast",
+    "pandas": "slow",
+    "pip": null,
+    "poetry": "medium",
+    "polars": "fast",
+    "pre-commit": "medium",
+    "pyarrow": null,
+    "pydantic": "fast",
+    "pytest": "medium",
+    "python-dateutil": "slow",
+    "pytz": null,
+    "pyyaml": "slow",
+    "qdrant-client": "medium",
+    "redis": null,
+    "requests": "slow",
+    "ruff": "fast",
+    "scikit-learn": "slow",
+    "scipy": "slow",
+    "sentence-transformers": "medium",
+    "setuptools": "fast",
+    "six": "slow",
+    "sqlalchemy": "medium",
+    "starlette": null,
+    "tiktoken": "slow",
+    "tokenizers": "medium",
+    "transformers": "fast",
+    "uvicorn": null,
+    "BurntSushi/ripgrep": "slow",
+    "caddyserver/caddy": null,
+    "cli/cli": null,
+    "denoland/deno": "fast",
+    "docker/compose": null,
+    "getzep/graphiti": "fast",
+    "gohugoio/hugo": null,
+    "hashicorp/terraform": "fast",
+    "home-assistant/core": "fast",
+    "jesseduffield/lazygit": "medium",
+    "jqlang/jq": "slow",
+    "microsoft/TypeScript": "medium",
+    "prettier/prettier": null,
+    "rust-lang/rust": "medium",
+    "sharkdp/bat": "slow",
+    "starship/starship": null,
+    "vectorize-io/hindsight": "fast",
+    "zed-industries/zed": "fast"
+   },
+   "maintainer by Claude": {
+    "fast": {
+     "fast": 8,
+     "medium": 0,
+     "slow": 1,
+     "none": 2
+    },
+    "medium": {
+     "fast": 9,
+     "medium": 9,
+     "slow": 5,
+     "none": 8
+    },
+    "slow": {
+     "fast": 5,
+     "medium": 6,
+     "slow": 9,
+     "none": 8
+    }
+   },
+   "projects": {
+    "n": 70,
+    "same": {
+     "count": 26,
+     "share": 0.37142857142857144
+    },
+    "Claude faster (more checks)": {
+     "count": 20,
+     "share": 0.2857142857142857
+    },
+    "Claude slower (staler)": {
+     "count": 6,
+     "share": 0.08571428571428572
+    },
+    "invalid": {
+     "count": 18,
+     "share": 0.2571428571428571
+    }
+   },
+   "projects without the four labeled late": {
+    "n": 66,
+    "same": {
+     "count": 25,
+     "share": 0.3787878787878788
+    },
+    "Claude faster (more checks)": {
+     "count": 19,
+     "share": 0.2878787878787879
+    },
+    "Claude slower (staler)": {
+     "count": 6,
+     "share": 0.09090909090909091
+    },
+    "invalid": {
+     "count": 16,
+     "share": 0.24242424242424243
+    }
+   },
+   "answers": {
+    "n": 210,
+    "same": {
+     "count": 59,
+     "share": 0.28095238095238095
+    },
+    "Claude faster (more checks)": {
+     "count": 43,
+     "share": 0.20476190476190476
+    },
+    "Claude slower (staler)": {
+     "count": 10,
+     "share": 0.047619047619047616
+    },
+    "invalid": {
+     "count": 98,
+     "share": 0.4666666666666667
+    }
+   },
+   "projects whose answers all agree": 22,
+   "projects decided between two different answers": 2,
+   "projects with no valid answer": [
+    "attrs",
+    "caddyserver/caddy",
+    "certifi",
+    "cli/cli",
+    "docker/compose",
+    "duckdb",
+    "gohugoio/hugo",
+    "httpx",
+    "matplotlib",
+    "mypy",
+    "pip",
+    "prettier/prettier",
+    "pyarrow",
+    "pytz",
+    "redis",
+    "starlette",
+    "starship/starship",
+    "uvicorn"
+   ]
+  },
+  "test": {
+   "policies": {
+    "per-class, Claude's labels": {
+     "projects": 70,
+     "claims": 1400.0,
+     "stale-answer rate": {
+      "value": 0.33474308200372,
+      "ci": [
+       0.28826060615475435,
+       0.3811488908876699
+      ]
+     },
+     "stale claim-days": {
+      "value": 0.3338679937087793,
+      "ci": [
+       0.28751747336707795,
+       0.38055824487795603
+      ]
+     },
+     "checks per claim-month": {
+      "value": 1.8069321805151985,
+      "ci": [
+       1.4164132630398563,
+       2.2051490629900714
+      ]
+     },
+     "mean days to detect": {
+      "value": 7.20075574622837,
+      "ci": [
+       5.443290871213415,
+       10.069329849180056
+      ]
+     },
+     "undetected share": {
+      "value": 0.027310851797348375,
+      "ci": [
+       0.018691704857359315,
+       0.04073251741940142
+      ]
+     }
+    },
+    "per-class, the maintainer's labels": {
+     "projects": 70,
+     "claims": 1400.0,
+     "stale-answer rate": {
+      "value": 0.46509369503878123,
+      "ci": [
+       0.3986233901115028,
+       0.5286628250497144
+      ]
+     },
+     "stale claim-days": {
+      "value": 0.4649268065006869,
+      "ci": [
+       0.39907305853023145,
+       0.5273635429901915
+      ]
+     },
+     "checks per claim-month": {
+      "value": 1.1216978885734645,
+      "ci": [
+       0.8245149688523933,
+       1.4525869770757815
+      ]
+     },
+     "mean days to detect": {
+      "value": 28.867479394287905,
+      "ci": [
+       15.484765042755157,
+       45.12645060004101
+      ]
+     },
+     "undetected share": {
+      "value": 0.09890770410595473,
+      "ci": [
+       0.050950063723786354,
+       0.15155879411344478
+      ]
+     }
+    },
+    "fixed 30": {
+     "projects": 70,
+     "claims": 1400.0,
+     "stale-answer rate": {
+      "value": 0.3790600129060012,
+      "ci": [
+       0.3197342354888884,
+       0.4406118337855786
+      ]
+     },
+     "stale claim-days": {
+      "value": 0.3796650435582536,
+      "ci": [
+       0.3196033697828458,
+       0.44151992686343755
+      ]
+     },
+     "checks per claim-month": {
+      "value": 0.9540389374325369,
+      "ci": [
+       0.9528460639007414,
+       0.9550594251495517
+      ]
+     },
+     "mean days to detect": {
+      "value": 14.506942987184956,
+      "ci": [
+       14.452099050116175,
+       14.565881194489672
+      ]
+     },
+     "undetected share": {
+      "value": 0.04521179209760883,
+      "ci": [
+       0.0358162382774741,
+       0.05477780669037499
+      ]
+     }
+    }
+   },
+   "Claude's labels minus the maintainer's": {
+    "stale-answer rate": {
+     "value": -0.13035061303506124,
+     "ci": [
+      -0.1941159357964103,
+      -0.06604428282980535
+     ]
+    },
+    "stale claim-days": {
+     "value": -0.13105881279190762,
+     "ci": [
+      -0.1945035121715452,
+      -0.06678090858477403
+     ]
+    },
+    "checks per claim-month": {
+     "value": 0.685234291941734,
+     "ci": [
+      0.30022195984968536,
+      1.072731130352577
+     ]
+    }
+   },
+   "the same, without the four labeled late": {
+    "stale-answer rate": {
+     "value": -0.13510788465416412,
+     "ci": [
+      -0.20206128189739858,
+      -0.06683294748223867
+     ]
+    },
+    "stale claim-days": {
+     "value": -0.13571546230747683,
+     "ci": [
+      -0.20283929929404487,
+      -0.06758905952085387
+     ]
+    },
+    "checks per claim-month": {
+     "value": 0.7235039617573593,
+     "ci": [
+      0.3321059278781553,
+      1.1426754384699913
+     ]
+    }
+   },
+   "Claude's labels minus fixed 30": {
+    "stale-answer rate": {
+     "value": -0.044316930902281226,
+     "ci": [
+      -0.10244718919542883,
+      0.017035566801809898
+     ]
+    },
+    "stale claim-days": {
+     "value": -0.0457970498494743,
+     "ci": [
+      -0.10438342576062681,
+      0.01545732881469003
+     ]
+    },
+    "checks per claim-month": {
+     "value": 0.8528932430826617,
+     "ci": [
+      0.46182227405652243,
+      1.25103318605042
+     ]
+    }
+   },
+   "on the fixed-N curve": {
+    "value": 0.056363196991086606,
+    "between": [
+     "fixed 30",
+     "fixed 14"
+    ],
+    "ci": [
+     0.02808758079504181,
+     0.08560286512347348
+    ],
+    "resamples outside": 0
+   }
+  },
+  "dev": {
+   "policies": {
+    "per-class, Claude's labels": {
+     "projects": 68,
+     "claims": 1360.0,
+     "stale-answer rate": {
+      "value": 0.33420866637169655,
+      "ci": [
+       0.2896982725708211,
+       0.3787355391732844
+      ]
+     },
+     "stale claim-days": {
+      "value": 0.33345002037240923,
+      "ci": [
+       0.28947433543348394,
+       0.3779293255799654
+      ]
+     },
+     "checks per claim-month": {
+      "value": 1.6363676609112907,
+      "ci": [
+       1.2536509533021982,
+       2.0156061936354175
+      ]
+     },
+     "mean days to detect": {
+      "value": 7.252183272251662,
+      "ci": [
+       5.562113028586484,
+       9.88205895783652
+      ]
+     },
+     "undetected share": {
+      "value": 0.038184843997746125,
+      "ci": [
+       0.02354520200181037,
+       0.06093604607298242
+      ]
+     }
+    },
+    "per-class, the maintainer's labels": {
+     "projects": 68,
+     "claims": 1360.0,
+     "stale-answer rate": {
+      "value": 0.4878956955449954,
+      "ci": [
+       0.41959015965318525,
+       0.5555019277614687
+      ]
+     },
+     "stale claim-days": {
+      "value": 0.48559543592446885,
+      "ci": [
+       0.417264014758255,
+       0.5525062247846291
+      ]
+     },
+     "checks per claim-month": {
+      "value": 0.970275958015621,
+      "ci": [
+       0.6929822931719544,
+       1.2722570525134895
+      ]
+     },
+     "mean days to detect": {
+      "value": 27.642318111455126,
+      "ci": [
+       16.810264174052087,
+       42.61041311754684
+      ]
+     },
+     "undetected share": {
+      "value": 0.18734684785030079,
+      "ci": [
+       0.10104547172187933,
+       0.2844134547442239
+      ]
+     }
+    },
+    "fixed 30": {
+     "projects": 68,
+     "claims": 1360.0,
+     "stale-answer rate": {
+      "value": 0.3826143918542312,
+      "ci": [
+       0.315614636805524,
+       0.44319868286800856
+      ]
+     },
+     "stale claim-days": {
+      "value": 0.380484461631416,
+      "ci": [
+       0.3131284985535375,
+       0.4410222298867565
+      ]
+     },
+     "checks per claim-month": {
+      "value": 0.9200540750147365,
+      "ci": [
+       0.9171244628701931,
+       0.9223849807301745
+      ]
+     },
+     "mean days to detect": {
+      "value": 14.590422535211268,
+      "ci": [
+       14.439068733902326,
+       14.713656901812362
+      ]
+     },
+     "undetected share": {
+      "value": 0.06962116546328934,
+      "ci": [
+       0.04941114431358762,
+       0.09847521158771351
+      ]
+     }
+    }
+   },
+   "Claude's labels minus the maintainer's": {
+    "stale-answer rate": {
+     "value": -0.15368702917329885,
+     "ci": [
+      -0.22191354342428943,
+      -0.08526761842884495
+     ]
+    },
+    "stale claim-days": {
+     "value": -0.15214541555205963,
+     "ci": [
+      -0.21961722369147962,
+      -0.08437141381330127
+     ]
+    },
+    "checks per claim-month": {
+     "value": 0.6660917028956697,
+     "ci": [
+      0.2649763714814053,
+      1.0573157188300164
+     ]
+    }
+   },
+   "the same, without the four labeled late": {
+    "stale-answer rate": {
+     "value": -0.16026963986957654,
+     "ci": [
+      -0.23044092303289343,
+      -0.0874346186595305
+     ]
+    },
+    "stale claim-days": {
+     "value": -0.15858250411956376,
+     "ci": [
+      -0.22781132723305497,
+      -0.08572185668255705
+     ]
+    },
+    "checks per claim-month": {
+     "value": 0.7090267895811418,
+     "ci": [
+      0.2898212559519384,
+      1.1436216197524034
+     ]
+    }
+   },
+   "Claude's labels minus fixed 30": {
+    "stale-answer rate": {
+     "value": -0.048405725482534634,
+     "ci": [
+      -0.10304866077688957,
+      0.013423054417788183
+     ]
+    },
+    "stale claim-days": {
+     "value": -0.0470344412590068,
+     "ci": [
+      -0.10160482077516925,
+      0.015305149115789785
+     ]
+    },
+    "checks per claim-month": {
+     "value": 0.7163135858965543,
+     "ci": [
+      0.3329472837562678,
+      1.097251306399885
+     ]
+    }
+   },
+   "on the fixed-N curve": {
+    "value": 0.038445072959653714,
+    "between": [
+     "fixed 30",
+     "fixed 14"
+    ],
+    "ci": [
+     0.014425810133660233,
+     0.06667090812914878
+    ],
+    "resamples outside": 0
+   }
   }
  }
 }
