@@ -15,6 +15,7 @@ from __future__ import annotations
 import math
 import random
 from collections import Counter
+from collections.abc import Callable
 from datetime import date, timedelta
 
 from eval.replay.replay import Claim, Policy, Truth
@@ -73,6 +74,12 @@ def wait(p: float, lam: float, cap: int) -> int:
 def policy(p: float, alpha: float, cap: int, label_free: bool = False) -> Policy:
     """The checks of one grid point. With label_free, every claim's prior is centred on
     LABEL_FREE_DAYS instead of its label's class interval (exploratory, D12)."""
+    return learning(alpha, lambda lam: wait(p, lam, cap), label_free)
+
+
+def learning(alpha: float, wait_for: Callable[[float], int], label_free: bool = False) -> Policy:
+    """A claim's checks when each wait, in days, comes from its rate so far: the M7
+    policies (D12) differ only in `wait_for`."""
 
     def checks(claim: Claim, truth: Truth, rng: random.Random) -> list[date]:
         days = LABEL_FREE_DAYS if label_free else DEFAULT_INTERVAL_DAYS[Volatility(claim.label)]
@@ -80,7 +87,7 @@ def policy(p: float, alpha: float, cap: int, label_free: bool = False) -> Policy
         changed: Counter[int] = Counter()
         unchanged, out, last = 0, [], claim.created
         while True:
-            nxt = last + timedelta(wait(p, rate(alpha, beta, changed, unchanged), cap))
+            nxt = last + timedelta(wait_for(rate(alpha, beta, changed, unchanged)))
             if nxt > claim.end:
                 return out
             # What the check sees: whether the latest changed since the last read.
