@@ -38,7 +38,7 @@ def test_each_call_runs_in_a_new_folder_outside_the_repository_with_no_customiza
 
 
 def test_variables_that_change_the_login_or_the_thinking_never_reach_claude(monkeypatch):
-    for name in ("ANTHROPIC_API_KEY", "CLAUDE_EFFORT", "MAX_THINKING_TOKENS", "KEEP_ME"):
+    for name in (*runner.DROPPED_ENV, "KEEP_ME"):
         monkeypatch.setenv(name, "1")
     assert json.loads(fake()("s", "p").text)["env"] == ["KEEP_ME"]
 
@@ -84,29 +84,32 @@ def test_a_call_with_no_reply_in_time_is_an_error(monkeypatch):
 
 
 class Stub:
-    """Answers each prompt in upper case; the calls numbered in `fail` fail."""
+    """Answers each prompt in upper case; the calls numbered in `fail` fail, and so does
+    every call with a prompt in `always`."""
 
-    def __init__(self, fail=()):
-        self.calls, self.fail = [], fail
+    def __init__(self, fail=(), always=()):
+        self.calls, self.fail, self.always = [], fail, always
 
     def describe(self):
         return {"model": "stub-1", "effort": None, "claude": "stub"}
 
     def __call__(self, system, prompt):
         self.calls.append(prompt)
-        if len(self.calls) in self.fail:
+        if len(self.calls) in self.fail or prompt in self.always:
             return Reply(None, "rate limited")
-        return Reply(prompt.upper(), served=("stub-1",), cost_usd=0.01, duration_ms=7)
+        return Reply(
+            prompt.replace("x", "\u2028").upper(), served=("stub-1",), cost_usd=0.01, duration_ms=7
+        )
 
 
 ITEMS = [Item("a", "first"), Item("b", "second")]
 
 
-def ask(tmp_path, model, version="v1", day=15):
+def ask(tmp_path, model, version="v1", day=15, items=ITEMS):
     data = tmp_path / "labels.toml"
     data.write_text("x")
     now = lambda: datetime(2026, 10, day, 9, 0, tzinfo=UTC)  # noqa: E731
-    return runner.run("demo", ITEMS, "Be brief.", version, model, [data], tmp_path / "out", now=now)
+    return runner.run("demo", items, "Be brief.", version, model, [data], tmp_path / "out", now=now)
 
 
 def test_a_run_asks_each_item_three_times_and_keeps_every_reply(tmp_path):
@@ -177,6 +180,21 @@ def test_a_run_stops_after_three_failed_calls_in_a_row(tmp_path):
     rest = Stub()
     ask(tmp_path, rest)
     assert len(rest.calls) == 6 and all(a["error"] is None for a in runner.answers(folder))
+
+
+def test_a_pair_that_always_fails_never_stops_a_resumed_run(tmp_path):
+    items = [*ITEMS, Item("c", "third")]
+    # The run stops at its 3 failed calls in a row: a #2, then b #2 and c #2 at a limit.
+    ask(tmp_path, Stub(fail=(8, 9), always=("first",)), items=items)
+    again = Stub(always=("first",))
+    folder = ask(tmp_path, again, items=items)
+    assert again.calls == ["first", "first", "first", "second", "third"]
+    assert sum(a["error"] is None for a in runner.answers(folder)) == 6
+
+
+def test_a_reply_with_a_line_separator_stays_one_row(tmp_path):
+    folder = ask(tmp_path, Stub(), items=[Item("x", "a x b")])
+    assert [a["text"] for a in runner.answers(folder)] == ["A \u2028 B"] * 3
 
 
 def test_a_line_cut_off_mid_write_is_asked_again(tmp_path):

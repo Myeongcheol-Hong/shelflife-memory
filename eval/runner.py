@@ -144,7 +144,7 @@ def run(
     asked again, one that failed is. Returns the folder."""
     if len({i.id for i in items}) != len(items):
         raise ValueError("item ids must be unique")
-    diff = _git("diff", "HEAD")
+    diff = _git("diff", "HEAD", "--", "eval", "src", "pyproject.toml", "uv.lock")  # the code
     cfg = {
         "eval": eval_name,
         **model.describe(),
@@ -165,10 +165,13 @@ def run(
         cfg_out = cfg | {"started at": now().isoformat(timespec="seconds")}
         (folder / "config.json").write_text(json.dumps(cfg_out, indent=1) + "\n", "utf-8")
     raw = folder / "raw.jsonl"
-    text = raw.read_text("utf-8") if raw.exists() else ""
-    if not text.endswith("\n"):  # empty, or the last line was cut off mid-write
-        raw.write_text(text[: text.rfind("\n") + 1], "utf-8")
+    data = raw.read_bytes() if raw.exists() else b""
+    if (cut := data.rfind(b"\n") + 1) < len(data):  # the last line was cut off mid-write
+        os.truncate(raw, cut)
     last = {(r["item"], r["repeat"]): r for r in rows(folder)}
+    done = sum(r["error"] is None for r in last.values())
+    state = f"resuming, {done} of" if last else "new run,"
+    print(f"{folder}: {state} {len(items) * repeats} answers", file=sys.stderr)
     failed = 0
     with raw.open("a", encoding="utf-8") as lines:
         for repeat in range(repeats):
@@ -189,10 +192,12 @@ def run(
                     "duration ms": reply.duration_ms,
                     "at": now().isoformat(timespec="seconds"),
                 }
-                lines.write(json.dumps(row, ensure_ascii=False) + "\n")
+                lines.write(json.dumps(row) + "\n")  # ASCII: no U+2028 to split a line
                 lines.flush()
                 print(f"{folder.name}: {item.id} #{repeat}: {reply.error or 'ok'}", file=sys.stderr)
-                failed = failed + 1 if reply.error else 0
+                # Only a pair asked for the first time counts: one that fails every time
+                # must not stop each resumed run before its new pairs.
+                failed = 0 if reply.error is None else failed + (before is None)
                 if failed == STOP_AFTER:
                     print(f"stopped after {failed} failed calls in a row", file=sys.stderr)
                     return folder

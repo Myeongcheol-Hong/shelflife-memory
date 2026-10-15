@@ -15,7 +15,8 @@ if args == ["--version"]:
 mode = os.environ.get("FAKE_CLAUDE", "ok")
 model = args[args.index("--model") + 1]
 stdin = sys.stdin.read()
-watched = ("ANTHROPIC_API_KEY", "CLAUDE_EFFORT", "MAX_THINKING_TOKENS", "KEEP_ME")
+watched = ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_EFFORT", "MAX_THINKING_TOKENS")
+watched += ("CLAUDE_CODE_MAX_OUTPUT_TOKENS", "KEEP_ME")
 env = sorted(k for k in watched if k in os.environ)
 if mode == "sleep":
     time.sleep(10)
