@@ -35,8 +35,9 @@ def rate(alpha: float, beta: float, changed: Counter[int], unchanged: int) -> fl
     """The posterior mode of λ, in changes a day, after checks that found a change after
     t days (`changed`, a count per t) and checks that found none (`unchanged`, their days
     summed). It is 0 while α - 1 plus the changes seen is at most 0. Otherwise it is the
-    one root of the score (α - 1) / λ - β - unchanged + Σ t / (e^(λt) - 1), which falls
-    from +∞ while positive, so a bisection finds it."""
+    root of the score (α - 1) / λ - β - unchanged + Σ k t / (e^(λt) - 1): λ times the
+    score falls from α - 1 plus the changes seen toward -∞, since x / (e^x - 1) falls, so
+    the score changes sign once and a bisection finds it."""
     if alpha - 1 + sum(changed.values()) <= 0:
         return 0.0
 
