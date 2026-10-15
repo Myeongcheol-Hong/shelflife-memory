@@ -199,11 +199,12 @@ One entry per decision: the options, the option chosen, why, and when to revisit
 
 ## D13: The shared model runner (M7)
 
-Every model eval (6.0's write eval, 6.1's LLM-judged policy, 6.2's verifier, M5b) asks Claude through one runner, `eval/runner.py`, on the maintainer's subscription with `claude -p` (design 6.3). The roadmap fixed the outline: repeats, run artifacts, and `claude -p` started outside the repository so the project's Stop hook and CLAUDE.md stay out of eval runs. Proposed by Claude in M7a, for the maintainer to confirm:
+Every model eval (6.0's write eval, 6.1's LLM-judged policy, 6.2's verifier, M5b) asks Claude through one runner, `eval/runner.py`, on the maintainer's subscription with `claude -p` (design 6.3). The roadmap fixed the outline: repeats, run artifacts, and `claude -p` started outside the repository so the project's Stop hook and CLAUDE.md stay out of eval runs. Proposed by Claude in M7a and confirmed by the maintainer at #32's review, who also accepted that the date stays and added `--strict-mcp-config` and the 6.1 limit below:
 
 - Isolation. Each call runs in a new empty folder under the system's temporary folder, removed after the call, with:
   - `--safe-mode`: no CLAUDE.md, hook, plugin, skill or MCP server of the repository or the machine, while the subscription login still works. `--bare` would skip the same things but needs an API key.
   - `--setting-sources ""`: no settings file, so no settings `env` block or permission rule either.
+  - `--strict-mcp-config` with no `--mcp-config` (the maintainer's addition): no MCP server from any configuration reaches the model, even if what `--safe-mode` leaves out changes. The maintainer's Mac has Shelf Life registered at user scope.
   - `--tools ""`: no tools. `--system-prompt`: the eval's own prompt replaces Claude Code's, which carries the folder and git status.
   - `--no-session-persistence`, `--output-format json`, and the prompt on stdin: one argument stops at 128 KiB on Linux, and a 6.2 page can be longer.
   - No `--fallback-model`. `--effort` only when an eval sets it; the CLI's default otherwise, recorded with the CLI's version.
@@ -218,4 +219,5 @@ Every model eval (6.0's write eval, 6.1's LLM-judged policy, 6.2's verifier, M5b
   - `metrics.json`: from the eval's own scorer, which reads `raw.jsonl` only, so it scores again without the model.
 - Resuming. The folder name comes from the config, so the same config always reaches the same folder, on any day, and a different one (a prompt version, effort, a CLI update, an uncommitted edit) gets its own. Each run prints whether it is new or resuming, and how many answers it has. Running again continues the folder: a pair (item, repeat) whose last attempt has no error is not asked again, and one that failed is asked again. Every attempt stays in `raw.jsonl`; a scorer reads each pair's last attempt and counts the failed ones. A last line cut off mid-write is dropped and its pair asked again. Item ids must be unique.
 - Tests run the runner against a fake `claude` that prints what it was sent; no test calls a model. A few real calls with Haiku and Sonnet checked the output shape the parser relies on, a failed call included.
+- A limit for 6.1's LLM-judged policy (the maintainer's addition): the model may have learned the 2025 and 2026 release patterns of the projects, and the maintainer labeled them in 2026, so both label sets use present-day knowledge. The comparison of Claude's labels with the maintainer's in the replay measures label quality, not foresight. Every results table and write-up that reports it says so.
 - Revisit if: a real run shows replies whose `modelUsage` names a helper model next to the requested one, or `claude -p` changes its output or what `--safe-mode` leaves out.

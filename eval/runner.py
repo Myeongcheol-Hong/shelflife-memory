@@ -3,11 +3,12 @@ on the maintainer's subscription (design 6.3), asks each item REPEATS times, and
 every reply in eval/results/<run-id>/raw.jsonl, so a scorer works from the saved
 replies alone and can score them again without the model.
 
-Each call runs in a new empty folder outside the repository, with --safe-mode and no
-settings files, so no CLAUDE.md, hook, plugin, skill, MCP server or settings of the
-repository or the machine reaches the model; environment variables that would change
-the login or the model's thinking are dropped; and the eval's own versioned system
-prompt replaces Claude Code's. Claude Code still tells the model the date.
+Each call runs in a new empty folder outside the repository, with --safe-mode, no
+settings files and --strict-mcp-config, so no CLAUDE.md, hook, plugin, skill, MCP server
+or settings of the repository or the machine reaches the model; environment variables
+that would change the login or the model's thinking are dropped; and the eval's own
+versioned system prompt replaces Claude Code's. Claude Code still tells the model the
+date.
 """
 
 from __future__ import annotations
@@ -81,7 +82,8 @@ class Claude:
 
     def __call__(self, system: str, prompt: str) -> Reply:
         args = [*self.command, "-p", "--model", self.model, "--safe-mode", "--setting-sources", ""]
-        args += ["--tools", "", "--no-session-persistence", "--output-format", "json"]
+        args += ["--strict-mcp-config", "--tools", "", "--no-session-persistence"]
+        args += ["--output-format", "json"]
         args += ["--system-prompt", system, *(["--effort", self.effort] if self.effort else [])]
         env = {k: v for k, v in os.environ.items() if k not in DROPPED_ENV}
         # The prompt goes on stdin: one argument stops at 128 KiB on Linux, and a page

@@ -253,7 +253,7 @@ The user decides what to remember and gives the claim sentence (D2, D3). When Cl
      - two similar values (monthly vs annual price)
    - A filled-in trap is a fabrication and is reported on its own line
 3. **Downstream impact (reuses the 6.1 replayer, almost free)**
-   - Swap the maintainer's volatility labels for Claude's in the 6.1 replay and measure how much the stale-answer rate rises
+   - Swap the maintainer's volatility labels for Claude's in the 6.1 replay and measure how much the stale-answer rate rises. Both label sets were made in 2026, after the test split's releases, so this measures label quality, not foresight (D13)
    - Example finding: "When Claude assigns volatility, stale answers rise by X points compared with human labels"
 4. **(Stretch) 10 to 15 behavior scenarios**
    - Run scripted conversations with headless Claude Code (`claude -p`) connected to shelflife. The outside world is frozen with recorded responses (fake PyPI, fixed pages) so every run gives the same result
@@ -268,7 +268,7 @@ The user decides what to remember and gives the claim sentence (D2, D3). When Cl
   - Check on every read
   - Fixed interval (7 and 30 days, and a curve from 3 to 180 in D12, with jitter variants and an oracle lower bound): a plain TTL. It is the re-check analogue of Mem0's `expiration_date`: where Mem0 hides a memory from search after a date the caller sets, fixed N checks it again N days on
   - Per-class interval (table 4.2): closest to memwatch and agent-memory-staleness-audit (per-type half-lives)
-  - LLM-judged class interval
+  - LLM-judged class interval. Claude's labels and the maintainer's both use present-day knowledge of 2025-2026 releases, so the comparison is of label quality, not foresight; the results say so (D13)
   - **Adaptive**: per-claim next check date from the observed change rate
 - **Fairness**: the adaptive policy has parameters, so tune them on a dev split (2024 timelines) and report on a held-out test split (2025-01 to 2026-09). Run 5 random seeds for claim and question times and report the mean with a 95% bootstrap interval.
 - **Metrics**: stale-answer rate, checks per claim-month (cost), mean days to detect a change. D12 adds the share of claim-days stale (a headline next to the rate), the share of changes left undetected (days to detect is right-censored), peak checks per day, a fixed-interval curve (3 to 180 days) and an oracle lower bound
@@ -298,7 +298,7 @@ The user decides what to remember and gives the claim sentence (D2, D3). When Cl
 
 - **Tests and evals are separate.** Tests stub the model, are deterministic and run in CI. Evals use a real model, do not run in CI, and are reported as rates: each LLM item runs 3 times. A single bad run is a reason to re-run, not proof of a regression. (Same split as `hindsight-system-tests` vs `hindsight-system-evals`.)
 - **Same model per comparison.** When conditions are compared, everything except the variable under test stays fixed, including model and prompt version.
-- **Model runner on the subscription**: Claude Code print mode (`claude -p --model ...`), no API key. Basic Memory's benchmark suite uses the same approach. `eval/runner.py` runs each call in a temporary folder outside the repository, with no CLAUDE.md, hooks, plugins, skills, MCP servers, settings files or tools (D13, proposed).
+- **Model runner on the subscription**: Claude Code print mode (`claude -p --model ...`), no API key. Basic Memory's benchmark suite uses the same approach. `eval/runner.py` runs each call in a temporary folder outside the repository, with no CLAUDE.md, hooks, plugins, skills, MCP servers, settings files or tools (D13).
 - **Run artifacts**: each run writes `eval/results/<run-id>/` with the config, git SHA, dataset hash and metrics. A model eval also records the model and prompt version and writes the raw per-item outputs, from which metrics can be recomputed without calling the model again, since a model's outputs do not repeat. The 6.1 replay calls no model and is seeded, so it keeps no per-item rows and reruns instead (D12).
 - **Smoke corpus**: a tiny synthetic dataset that runs every eval end to end in seconds with no network, used in CI to catch broken pipelines.
 - **Label quality**: `eval/data/README.md` is a data card (sources, dates, licenses, labeling rules). After at least a week, re-label a blind 20% sample and report self-agreement. Public benchmark answer keys have had roughly 10% errors, so hand labels get the same scrutiny.

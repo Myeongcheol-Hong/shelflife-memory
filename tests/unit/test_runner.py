@@ -27,6 +27,7 @@ def test_each_call_runs_in_a_new_folder_outside_the_repository_with_no_customiza
     assert args[:3] == ["-p", "--model", "claude-test-1"]
     assert "--safe-mode" in args and "--no-session-persistence" in args
     assert args[args.index("--setting-sources") + 1] == ""  # no settings file
+    assert "--strict-mcp-config" in args and "--mcp-config" not in args  # no MCP server
     assert args[args.index("--tools") + 1] == ""  # no tools
     assert args[args.index("--output-format") + 1] == "json"
     assert args[args.index("--system-prompt") + 1] == "Answer in one word."
