@@ -1,0 +1,16 @@
+{
+ "eval": "llm-labels",
+ "model": "claude-fable-5",
+ "effort": null,
+ "claude": "2.1.300 (Claude Code)",
+ "prompt version": "v2",
+ "system prompt sha256": "da6ecb997c4ff07f241d0dcce71a8dae9705693a3b2296e4e4081c2580362242",
+ "items": 70,
+ "items sha256": "a99a7dd6b1f0d85988bdb86fd1f2e26d1084ef899c4775496592bfcc9f20e8c8",
+ "repeats": 3,
+ "git sha": "f7b6974e8441de2d1ff4e3e7432927cec1cd3795",
+ "uncommitted changes sha256": null,
+ "dataset sha256": "c2606752c163b9fa11642e1eb5cfe44e7480b11b513c543e476e8a79efc0e680",
+ "python": "3.13.16",
+ "started at": "2026-10-15T15:14:33+00:00"
+}
