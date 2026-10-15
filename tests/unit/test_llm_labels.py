@@ -24,6 +24,7 @@ NOW = datetime(2026, 10, 15, 12, 0, tzinfo=UTC)
         ("attrs releases a few times a year.\n\nslow", "slow", None),  # the common format
         ("**fast**", "fast", None),
         ("A reason.\n\n_Medium._", "medium", None),
+        ("A reason.\n\nslow\n\n", "slow", None),  # blank lines after the label
         ("boto3 releases nearly every weekday. fast", None, None),  # a label inside a line
         ("not fast but slow", None, None),
         ("fast\n\nbecause it ships weekly", None, None),  # the last line is not a label
@@ -147,7 +148,8 @@ REPLIES = {
     "smoke-prerelease-only": ["Slow."] * 3,  # medium
     "smoke-quiet": ["medium", "fast", "slow"],  # slow
     "smoke-org/moved-tag": ["I think fast"] * 3,  # fast
-    "smoke-org/out-of-order": ["medium", "Ships about monthly.\n\nslow", "medium"],  # medium
+    # v2 reads all three (slow); v1 cannot read the second, so the faster of two (medium).
+    "smoke-org/out-of-order": ["slow", "Ships about monthly.\n\nslow", "medium"],
     "smoke-org/two-products": ["slow"] * 3,  # slow
 }
 
@@ -157,9 +159,10 @@ MEDIANS = {
     "smoke-prerelease-only": "slow",
     "smoke-quiet": "medium",
     "smoke-org/moved-tag": "medium",  # no valid answer
-    "smoke-org/out-of-order": "medium",
+    "smoke-org/out-of-order": "slow",
     "smoke-org/two-products": "slow",
 }
+MEDIANS_V1 = MEDIANS | {"smoke-org/out-of-order": "medium"}
 THEIRS_SMOKE = dict(zip(MEDIANS, itertools.cycle(LABELS), strict=False))  # as smoke() writes
 per_class = POLICIES["per-class"]
 
@@ -180,9 +183,9 @@ def test_the_smoke_run_asks_scores_and_rescores_without_the_model(tmp_path, monk
     assert found["labels"]["smoke-org/moved-tag"] is None
     assert found["projects with no valid answer"] == ["smoke-org/moved-tag"]
     assert {k: v["count"] for k, v in found["projects"].items() if k != "n"} == {
-        "same": 3,
+        "same": 2,
         "Claude faster (more checks)": 1,
-        "Claude slower (staler)": 1,
+        "Claude slower (staler)": 2,
         "invalid": 1,
     }
     assert found["answers"]["n"] == 6 * runner.REPEATS
@@ -192,18 +195,26 @@ def test_the_smoke_run_asks_scores_and_rescores_without_the_model(tmp_path, monk
     invalid = found["answers"]["invalid"]["count"]
     assert v1["agreement"]["answers"]["invalid"]["count"] == invalid + 1
     assert set(v1) == {"answers", "agreement", "test", "dev"}
+    assert v1["agreement"]["labels"] == {n: MEDIANS_V1[n] for n in found["labels"]} | {
+        "smoke-org/moved-tag": None
+    }
+    assert v1["agreement"]["projects decided between two different answers"] == 1
     ours, theirs = llm_labels.OURS, llm_labels.THEIRS
     for split in ("test", "dev"):
         part = metrics[split]
         assert set(part["policies"]) == {ours, theirs, "fixed 30"}
-        cost = "checks per claim-month"  # three projects' labels differ, so the costs do
+        cost = "checks per claim-month"  # four projects' labels differ, so the costs do
         assert part["policies"][ours][cost]["value"] != part["policies"][theirs][cost]["value"]
         for key in ("claims", "projects"):  # the same claims under both label sets
             assert part["policies"][ours][key] == part["policies"][theirs][key]
-        # Claude's replay is per-class with the medians, and medium where none is valid.
-        mine = adaptive_run._projects(load_all(data), MEDIANS, split, [0], {"x": per_class})
-        for m in ("stale-answer rate", "stale claim-days", cost):
-            assert part["policies"][ours][m]["value"] == score.value(m, score.total(mine["x"]))
+        # Claude's replay is per-class with the medians, and medium where none is valid,
+        # under each parser.
+        for medians, policies in ((MEDIANS, part), (MEDIANS_V1, v1[split])):
+            mine = adaptive_run._projects(load_all(data), medians, split, [0], {"x": per_class})
+            for m in ("stale-answer rate", "stale claim-days", cost):
+                value = score.value(m, score.total(mine["x"]))
+                assert policies["policies"][ours][m]["value"] == value
+        assert v1[split]["policies"][ours] != part["policies"][ours]
         early = {}
         for who, labels in (("ours", MEDIANS), ("theirs", THEIRS_SMOKE)):
             found_p = adaptive_run._projects(load_all(data), labels, split, [0], {"x": per_class})
@@ -223,7 +234,17 @@ def test_the_smoke_run_asks_scores_and_rescores_without_the_model(tmp_path, monk
     assert table.startswith(f"# 6.1 LLM-judged volatility policy (M7), run {folder.name}")
     assert llm_labels.LIMIT in table and llm_labels.PARSING in table
     assert "| No valid answer, so medium | smoke-org/moved-tag | smoke-org/moved-tag |" in table
-    assert "(parser v1) | " in table and "(parser v2) | " in table
+    for split in ("test", "dev"):  # each parser's own numbers in its rows
+        for version, part in (("v2", metrics[split]), ("v1", v1[split])):
+            row = {f"{ours} (parser {version})": part["policies"][ours]}
+            assert adaptive_run._policies(row)[-1] in table
+            for key in llm_labels.PAIRED:
+                row = [f"{key} (parser {version})", *adaptive_run._differences(part[key])]
+                assert run._table(["x"] * 4, [row])[-1] in table
+    # The maintainer's medium projects: prerelease-only (slow) and out-of-order (D14).
+    for version, medium in (("v2", "| 0 | 0 | 2 | 0 |"), ("v1", "| 0 | 1 | 1 | 0 |")):
+        block = table.split(f"| Maintainer \\ Claude (parser {version}) |")[1]
+        assert f"| medium {medium}" in block.split("\n\n")[0]
     for block in table.split("\n\n"):
         rows = [line for line in block.splitlines() if line.startswith("|")]
         assert len({row.count("|") for row in rows}) <= 1, block

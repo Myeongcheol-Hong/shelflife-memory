@@ -47,6 +47,11 @@ SYSTEM = (
 )
 MISSING = "medium"  # a project with no valid answer: 30 days, as the label-free prior (D12)
 OURS, THEIRS = "per-class, Claude's labels", "per-class, the maintainer's labels"
+PAIRED = (
+    "Claude's labels minus the maintainer's",
+    "the same, without the four labeled late",
+    "Claude's labels minus fixed 30",
+)
 PARSING = (
     "Answers are read with parser v2 (D14), set after the runs from the answers' format"
     " alone: the last non-empty line, without * and _ and a final period, must be exactly a"
@@ -224,9 +229,10 @@ def table(metrics: dict, cfg: dict, run_id: str) -> str:
     how += " from its source and name alone. A project's label is the median of its valid"
     how += " answers, and per-class checks it every 7, 30 or 180 days (D14)."
     lines += [f"{how} {LIMIT}", "", PARSING, "", "## Labels", ""]
-    header = ["Maintainer \\ Claude (parser v2)", *LABELS, "no valid answer"]
-    rows = [[m, *map(str, found["maintainer by Claude"][m].values())] for m in LABELS]
-    lines += [*run._table(header, rows), ""]
+    for version, part in (("parser v2", found), ("parser v1", v1["agreement"])):
+        header = [f"Maintainer \\ Claude ({version})", *LABELS, "no valid answer"]
+        rows = [[m, *map(str, part["maintainer by Claude"][m].values())] for m in LABELS]
+        lines += [*run._table(header, rows), ""]
     rows = []
     for key in ("projects", "projects without the four labeled late", "answers"):
         title = f"{key.capitalize()} ({found[key]['n']}): same / faster / slower / invalid"
@@ -250,8 +256,7 @@ def table(metrics: dict, cfg: dict, run_id: str) -> str:
         lines += [*adaptive_run._policies(policies), ""]
         rows = [
             [f"{k} ({version})", *adaptive_run._differences(part[k])]
-            for k in now
-            if " minus " in k
+            for k in PAIRED
             for version, part in (("parser v2", now), ("parser v1", then))
         ]
         header = ["Paired, on the same claims", "Stale-answer rate", "Stale claim-days"]
@@ -265,7 +270,7 @@ def table(metrics: dict, cfg: dict, run_id: str) -> str:
 
 def _counts(shares: dict) -> str:
     keys = ("same", "Claude faster (more checks)", "Claude slower (staler)", "invalid")
-    return " / ".join(str(shares[k]["count"]) for k in keys)
+    return " / ".join(f"{shares[k]['count']} ({100 * shares[k]['share']:.0f}%)" for k in keys)
 
 
 def main(
