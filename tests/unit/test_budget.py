@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from eval.replay import adaptive, budget, run, score
+from eval.replay import adaptive, budget, replay, run, score
 from eval.replay.replay import POLICIES, Claim, Truth
 
 SMOKE = Path(__file__).parents[2] / "eval" / "data" / "smoke" / "timelines"
@@ -27,10 +27,12 @@ def solve(c):
     return (lo + hi) / 2
 
 
-@pytest.mark.parametrize(("interval", "days"), [(7, 35), (30, 44), (180, 92)])
-def test_the_first_wait_follows_the_label_through_the_prior(interval, days):
+@pytest.mark.parametrize(("label", "days"), [("fast", 35), ("medium", 44), ("slow", 92)])
+def test_the_first_wait_follows_the_label_through_the_prior(label, days):
     # D12's example: μ = 10 days, and the prior's λ is 1 / (2 × the class interval).
-    assert budget.wait(10, 1 / (2 * interval)) == days
+    claim = Claim("x", label, date(2024, 1, 1), date(2024, 12, 31), ())
+    checks = budget.policy(10)(claim, Truth((), (), "1"), random.Random(0))
+    assert checks[0] == claim.created + timedelta(days)
 
 
 def test_the_wait_is_x_over_lambda_rounded_half_up_and_capped():
@@ -114,12 +116,18 @@ def test_the_smoke_corpus_sets_mu_from_costs_and_then_runs(tmp_path, monkeypatch
     monkeypatch.setattr(run, "SEEDS", [0])
     monkeypatch.setattr(score, "RESAMPLES", 20)
     data, out = smoke(tmp_path), tmp_path / "out"
-    found = budget.dev_costs(data)
+
+    def no_outcome(*args):
+        raise AssertionError("the cost pass must not compute staleness")
+
+    with monkeypatch.context() as patch:  # μ is set from costs alone (D12)
+        patch.setattr(replay, "outcome", no_outcome)
+        found = budget.dev_costs(data)
+        argv = ["--data", str(data), "--out", str(out)]
+        assert budget.main([*argv, "--dev-costs"]) == 0 and not out.exists()
     assert found["grid"][budget.GRID[-1]] == found["fixed 180"]
     assert found["halvings"][found["μ"]] <= found["fixed 30"]
-    argv = ["--data", str(data), "--out", str(out)]
-    assert budget.main([*argv, "--dev-costs"]) == 0 and not out.exists()
-    assert f"μ = {found['μ']!r} days" in capsys.readouterr().out
+    assert f"μ = {found['μ']!r} days, costing" in capsys.readouterr().out
     monkeypatch.setattr(budget, "MU", None)
     assert budget.main(argv) == 1  # MU not set: no run before μ is recorded
     monkeypatch.setattr(budget, "MU", found["μ"])
@@ -140,7 +148,7 @@ def test_the_smoke_corpus_sets_mu_from_costs_and_then_runs(tmp_path, monkeypatch
     dev_cost = metrics["dev"]["policies"][ours]["checks per claim-month"]["value"]
     assert dev_cost == pytest.approx(found["halvings"][found["μ"]], rel=1e-12)
     table = (folder / "table.md").read_text()
-    assert "so not pre-registered" in table
+    assert "so not pre-registered" in table and "## Dev, where μ was set" in table
     for block in table.split("\n\n"):
         rows = [line for line in block.splitlines() if line.startswith("|")]
         assert len({row.count("|") for row in rows}) <= 1, block

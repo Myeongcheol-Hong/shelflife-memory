@@ -24,7 +24,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from eval.replay import adaptive, adaptive_run, run
-from eval.replay.replay import POLICIES, Policy
+from eval.replay.replay import POLICIES, QUESTION_RATES, Policy
 from eval.replay.timelines import load_all, load_projects
 
 ALPHA, CAP = 2, 180  # M7b's selected point's prior strength and longest wait (D12)
@@ -82,9 +82,9 @@ def dev_costs(data: Path) -> dict:
         return adaptive_run.dev_costs(timelines, labels, run.SEEDS, policies)
 
     base = costs({n: POLICIES[n] for n in ("fixed 30", "fixed 180")})
-    if costs({name(GRID[-1]): policy(GRID[-1])})[name(GRID[-1])] != base["fixed 180"]:
-        raise ValueError(f"μ = {GRID[-1]} should be fixed 180")  # every wait at the cap
     mu, found = search(lambda m: costs({name(m): policy(m)})[name(m)], base["fixed 30"])
+    if found["grid"][GRID[-1]] != base["fixed 180"]:  # every wait at the cap there
+        raise ValueError(f"μ = {GRID[-1]} should cost what fixed 180 does")
     return {"fixed 30": base["fixed 30"], "fixed 180": base["fixed 180"], "μ": mu} | found
 
 
@@ -95,7 +95,8 @@ def cost_table(found: dict) -> str:
     rows = [[f"{mu:g}", f"{c:.4f}"] for mu, c in found["grid"].items()]
     rows += [[f"{mu:.6g} (halving)", f"{c:.4f}"] for mu, c in found["halvings"].items()]
     lines += [*run._table(["μ (days)", "Checks per claim-month"], rows), ""]
-    lines += [f"μ = {found['μ']!r} days: the bracket's end at most fixed 30's cost."]
+    cost = found["halvings"][found["μ"]]
+    lines += [f"μ = {found['μ']!r} days, costing {cost:.4f}: the bracket's end at most fixed 30's."]
     return "\n".join(lines) + "\n"
 
 
@@ -128,7 +129,8 @@ def table(metrics: dict, cfg: dict) -> str:
     for split in ("test", "dev"):
         part = metrics[split]
         where = f"uniform, {adaptive_run.RATE}, seeds: {len(cfg['seeds'])}"
-        lines += [f"## {split.capitalize()} ({where}, 95% intervals over projects)", ""]
+        title = "Test" if split == "test" else "Dev, where μ was set"
+        lines += [f"## {title} ({where}, 95% intervals over projects)", ""]
         lines += [*adaptive_run._policies(part["policies"]), ""]
         row = [f"{ours} minus fixed 30", *adaptive_run._differences(part["minus fixed 30"])]
         header = ["Paired, on the same claims", "Stale-answer rate", "Stale claim-days"]
@@ -160,7 +162,8 @@ def main(
     cfg = run.config(args.data, now())
     del cfg["question rates per claim-day"], cfg["session size"]  # M6's other scenarios
     cfg |= {"run": cfg["run"] + "-budget", "decision": "D12 (M7, after M7b's results)"}
-    cfg |= {"scenario": "uniform", "question rate": adaptive_run.RATE, "μ": MU}
+    rate = {adaptive_run.RATE: QUESTION_RATES[adaptive_run.RATE]}
+    cfg |= {"scenario": "uniform", "question rate per claim-day": rate, "μ": MU}
     cfg |= {"α": ALPHA, "max": CAP, "policies": [name(MU), *adaptive_run.CURVE]}
     folder = args.out / cfg["run"]
     if folder.exists():
