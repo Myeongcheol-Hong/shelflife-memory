@@ -1,0 +1,227 @@
+"""M7's LLM-judged volatility policy (D14; design 6.1 and 6.0-3).
+
+    uv run python -m eval.replay.llm_labels [--model claude-sonnet-5-5] [--out eval/results]
+    uv run python -m eval.replay.llm_labels --rescore eval/results/<run-id>
+
+Claude labels every project in projects.toml fast, medium or slow through the shared
+runner (D13), REPEATS times each, seeing only the project's source and name. A project's
+label is the median of its valid answers. The replay then runs per-class with Claude's
+labels next to per-class with the maintainer's and fixed 30, in the uniform scenario at
+1 question a week, 5 seeds, test and dev; nothing is tuned. Running again resumes the
+run; once every answer is in, it scores from raw.jsonl alone, and --rescore scores a
+finished run again without the model.
+
+Both label sets use present-day knowledge of the projects' 2025-2026 releases, so the
+comparison is of label quality, not foresight (D13).
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from collections.abc import Callable
+from datetime import UTC, datetime
+from pathlib import Path
+
+from eval import runner
+from eval.replay import adaptive_run, run
+from eval.replay.replay import POLICIES, Counts
+from eval.replay.timelines import LABELS, Project, Timeline, load_all, load_projects
+
+MODEL = "claude-sonnet-5-5"
+PROMPT_VERSION = "v1"
+SYSTEM = (
+    "You decide how often a memory should check a claim about a software project again."
+    " The classes:\n- fast: check every 7 days\n- medium: check every 30 days\n"
+    "- slow: check every 180 days\nAnswer with one word: fast, medium or slow."
+)
+MISSING = "medium"  # a project with no valid answer: 30 days, as the label-free prior (D12)
+OURS, THEIRS = "per-class, Claude's labels", "per-class, the maintainer's labels"
+LIMIT = (
+    "Both label sets use present-day knowledge of the projects' 2025-2026 releases, so this"
+    " compares label quality, not foresight (D13)."
+)
+
+
+def item(project: Project) -> runner.Item:
+    """The question about one project: its source and name, nothing from its timeline."""
+    what = "PyPI project" if project.source == "pypi" else "GitHub repository"
+    claim = f'"The latest release of the {what} {project.name} is <version>."'
+    return runner.Item(project.name, f"Claim: {claim}\nWhich class fits this claim?")
+
+
+def parse(text: str | None) -> str | None:
+    """A label, if the answer is one after lowercasing and dropping surrounding space and
+    a final period; otherwise None, as for a failed call."""
+    word = (text or "").strip().lower().removesuffix(".").strip()
+    return word if word in LABELS else None
+
+
+def median(answers: list[str | None]) -> str | None:
+    """The median of the valid answers on fast < medium < slow: with three, the majority
+    when two agree and medium when all differ; of two, the faster (labeling fast as slow
+    is the costlier error, design 6.0-2). None with no valid answer."""
+    valid = sorted((a for a in answers if a), key=LABELS.index)
+    return valid[(len(valid) - 1) // 2] if valid else None
+
+
+def answers(folder: Path, names: list[str], repeats: int) -> dict[str, list[str | None]]:
+    """Each project's parsed answers by repeat, from raw.jsonl. ValueError while a pair
+    has never been asked: a run cut short is resumed first (D13)."""
+    last = {(r["item"], r["repeat"]): r for r in runner.answers(folder)}
+    if missing := [(n, k) for n in names for k in range(repeats) if (n, k) not in last]:
+        raise ValueError(f"{len(missing)} answers never asked, the first {missing[0]}")
+    return {n: [parse(last[n, k]["text"]) for k in range(repeats)] for n in names}
+
+
+def agreement(found: dict[str, list[str | None]], theirs: dict[str, str]) -> dict:
+    """Claude's labels against the maintainer's, per project and per answer."""
+    ours = {n: median(a) for n, a in found.items()}
+    table = {m: {c: 0 for c in (*LABELS, "none")} for m in LABELS}
+    for n, label in ours.items():
+        table[theirs[n]][label or "none"] += 1
+    late = [(theirs[n], ours[n]) for n in ours if n not in run.LATE_LABELED]
+    return {
+        "labels": ours,
+        "maintainer by Claude": table,
+        "projects": _shares([(theirs[n], label) for n, label in ours.items()]),
+        "projects without the four labeled late": _shares(late),
+        "answers": _shares([(theirs[n], a) for n, ans in found.items() for a in ans]),
+        "projects whose answers all agree": sum(
+            len(set(a)) == 1 and a[0] is not None for a in found.values()
+        ),
+        "projects with no valid answer": sorted(n for n, label in ours.items() if not label),
+    }
+
+
+def _shares(pairs: list[tuple[str, str | None]]) -> dict:
+    def rank(label: str) -> int:
+        return LABELS.index(label)
+
+    counts = {
+        "same": sum(c == m for m, c in pairs),
+        "Claude faster (more checks)": sum(c is not None and rank(c) < rank(m) for m, c in pairs),
+        "Claude slower (staler)": sum(c is not None and rank(c) > rank(m) for m, c in pairs),
+        "invalid": sum(c is None for _, c in pairs),
+    }
+    return {
+        "n": len(pairs),
+        **{k: {"count": v, "share": v / len(pairs)} for k, v in counts.items()},
+    }
+
+
+def evaluate(timelines: list[Timeline], theirs: dict, ours: dict, seeds: list[int]) -> dict:
+    """Per split: the three policies, Claude's labels minus the maintainer's and minus
+    fixed 30, paired, and Claude's place on the fixed-N curve. The claims do not depend
+    on the labels, so the two replays share them."""
+    base = {n: POLICIES[n] for n in ("per-class", *adaptive_run.CURVE)}
+    out = {}
+    for split in ("test", "dev"):
+        projects: dict[str, dict[str, Counts]] = adaptive_run._projects(
+            timelines, theirs, split, seeds, base
+        )
+        projects[THEIRS] = projects.pop("per-class")
+        filled = {n: label or MISSING for n, label in ours.items()}
+        mine = adaptive_run._projects(
+            timelines, filled, split, seeds, {OURS: POLICIES["per-class"]}
+        )
+        projects |= mine
+        out[split] = {
+            "policies": {n: run._metrics(projects[n]) for n in (OURS, THEIRS, "fixed 30")},
+            "Claude's labels minus the maintainer's": run._paired(
+                projects[OURS], projects[THEIRS], adaptive_run.COST
+            ),
+            "Claude's labels minus fixed 30": run._paired(
+                projects[OURS], projects["fixed 30"], adaptive_run.COST
+            ),
+            "on the fixed-N curve": adaptive_run.place(projects, OURS),
+        }
+    return out
+
+
+def score(folder: Path, data: Path, now: datetime) -> dict:
+    """metrics.json of a finished run, from its raw.jsonl and the timelines alone."""
+    cfg = json.loads((folder / "config.json").read_text("utf-8"))
+    projects = load_projects(data / "projects.toml")
+    theirs = {p.name: p.volatility for p in projects}
+    found = answers(folder, [p.name for p in projects], cfg["repeats"])
+    labels = agreement(found, theirs)
+    replay = run.config(data, now)
+    keep = ("git sha", "uncommitted changes", "dataset sha256", "seeds", "resamples")
+    return {
+        "scored": {k: replay[k] for k in keep}
+        | {"at": replay["ran at"], "rate": adaptive_run.RATE},
+        "answers": found,
+        "agreement": labels,
+        **evaluate(load_all(data), theirs, labels["labels"], replay["seeds"]),
+    }
+
+
+def table(metrics: dict, cfg: dict, run_id: str) -> str:
+    """table.md: the labels against the maintainer's, then the replay in test and dev."""
+    found = metrics["agreement"]
+    lines = [f"# 6.1 LLM-judged volatility policy (M7), run {run_id}", ""]
+    who = f"Claude ({cfg['model']}, prompt {cfg['prompt version']})"
+    how = f"{who} labeled each project {cfg['repeats']} times from its source and name alone;"
+    lines += [f"{how} a project's label is the median of its valid answers (D14). {LIMIT}"]
+    lines += ["", "## Labels", ""]
+    header = ["Maintainer \\ Claude", *LABELS, "no valid answer"]
+    rows = [[m, *map(str, found["maintainer by Claude"][m].values())] for m in LABELS]
+    lines += [*run._table(header, rows), ""]
+    for key in ("projects", "projects without the four labeled late", "answers"):
+        shares = found[key]
+        parts = [
+            f"{k} {v['count']} ({100 * v['share']:.0f}%)" for k, v in shares.items() if k != "n"
+        ]
+        lines += [f"- {key.capitalize()}, {shares['n']}: " + ", ".join(parts) + "."]
+    agree, none = found["projects whose answers all agree"], found["projects with no valid answer"]
+    lines += [f"- Projects whose answers all agree: {agree}."]
+    lines += [f"- No valid answer, so {MISSING}: {', '.join(none) or 'none'}.", ""]
+    for split in ("test", "dev"):
+        part = metrics[split]
+        seeds = len(metrics["scored"]["seeds"])
+        where = f"uniform, {adaptive_run.RATE}, seeds: {seeds}, 95% intervals over projects"
+        lines += [f"## {split.capitalize()} ({where})", ""]
+        lines += [*adaptive_run._policies(part["policies"]), ""]
+        rows = [[k, *adaptive_run._differences(part[k])] for k in part if " minus " in k]
+        header = ["Paired, on the same claims", "Stale-answer rate", "Stale claim-days"]
+        lines += [*run._table([*header, "Checks per claim-month"], rows), ""]
+        lines += [adaptive_run._curve_line(OURS, part["on the fixed-N curve"]), ""]
+    return "\n".join(lines[:-1]) + "\n"
+
+
+def main(
+    argv: list[str] | None = None,
+    model: runner.Model | None = None,
+    now: Callable[[], datetime] = lambda: datetime.now(UTC),
+) -> int:
+    parser = argparse.ArgumentParser(prog="llm_labels", description=__doc__)
+    parser.add_argument("--data", type=Path, default=Path("eval/data/timelines"))
+    parser.add_argument("--out", type=Path, default=Path("eval/results"))
+    parser.add_argument("--model", default=MODEL)
+    parser.add_argument("--rescore", type=Path, help="score a finished run again; no model")
+    args = parser.parse_args(argv)
+    folder = args.rescore
+    if folder is None:
+        projects = load_projects(args.data / "projects.toml")
+        items = [item(p) for p in projects]
+        model = model or runner.Claude(args.model)
+        dataset = [args.data / "projects.toml"]
+        folder = runner.run(
+            "llm-labels", items, SYSTEM, PROMPT_VERSION, model, dataset, args.out, now=now
+        )
+    try:
+        metrics = score(folder, args.data, now())
+    except ValueError as error:
+        print(f"{folder}: {error}; run again to finish it", file=sys.stderr)
+        return 1
+    cfg = json.loads((folder / "config.json").read_text("utf-8"))
+    (folder / "metrics.json").write_text(json.dumps(metrics, indent=1) + "\n", "utf-8")
+    (folder / "table.md").write_text(table(metrics, cfg, folder.name), "utf-8")
+    print(f"wrote {folder}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
