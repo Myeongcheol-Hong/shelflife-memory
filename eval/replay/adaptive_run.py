@@ -125,7 +125,7 @@ def _mark(cost: float, cap: float) -> str:
 
 
 def place(projects: dict[str, dict[str, Counts]], name: str) -> dict:
-    """Where a policy sits against the fixed-N curve (proposed, D12): the curve's stale
+    """Where a policy sits against the fixed-N curve (D12): the curve's stale
     claim-days at the policy's checks per claim-month, linear between the two fixed N
     whose costs bracket it, and the policy minus that, with its 95% interval over the
     same project resamples as every other interval. Below 0 is below the curve. If the
@@ -164,7 +164,7 @@ def table(metrics: dict, run_id: str, seeds: int) -> str:
     lines = [f"# 6.1 adaptive policy (M7), run {run_id}", ""]
     lines += [f"Selected on dev (D12): {chosen}, the lowest stale claim-days among the grid"]
     lines += [f"points costing at most per-class's {cap:.2f} checks per claim-month on dev."]
-    lines += [f"Uniform scenario, {RATE}, {seeds} seed(s), 95% intervals over projects.", ""]
+    lines += [f"Uniform scenario, {RATE}, seeds: {seeds}, 95% intervals over projects.", ""]
     for split in ("test", "dev"):
         found = metrics[split]
         lines += [f"## {split.capitalize()}", "", *_policies(found["policies"]), ""]
@@ -197,7 +197,7 @@ def _curve_line(name: str, found: dict) -> str:
     else:
         ci = f"{100 * found['ci'][0]:.1f} to {100 * found['ci'][1]:.1f}"
     return (
-        f"On the fixed-N curve (proposed, D12): between {a} and {b}, its stale claim-days"
+        f"On the fixed-N curve (D12): between {a} and {b}, its stale claim-days"
         f" minus the curve's at the same cost is {100 * found['value']:.1f} points ({ci});"
         " below 0 is below the curve."
     )
