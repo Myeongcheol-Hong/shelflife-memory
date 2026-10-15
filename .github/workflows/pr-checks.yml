@@ -69,13 +69,13 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 2
-      - name: Changed lines, excluding tests, fixtures, eval data, uv.lock and deleted files (limit 600)
+      - name: Changed lines, excluding tests, fixtures, eval data and results, uv.lock and deleted files (limit 600)
         shell: python3 {0}
         run: |
           import os, re, subprocess, sys
 
           LIMIT = 600
-          EXCLUDED = re.compile(r"^(tests/|eval/data/|uv\.lock$)|(^|/)fixtures/")
+          EXCLUDED = re.compile(r"^(tests/|eval/data/|eval/results/|uv\.lock$)|(^|/)fixtures/")
           # A file the PR deletes entirely needs no line-by-line review, so it is not counted.
           removed_files = set(subprocess.run(
               ["git", "diff", "--name-only", "--diff-filter=D", "-M", "-z", "HEAD^1", "HEAD"],
@@ -100,7 +100,7 @@ jobs:
                   continue
               rows.append((int(added) + int(deleted), path))
           total = sum(n for n, _ in rows)
-          report = [f"Changed lines (excluding tests, fixtures, eval data, uv.lock and deleted files): {total} (limit {LIMIT})", ""]
+          report = [f"Changed lines (excluding tests, fixtures, eval data and results, uv.lock and deleted files): {total} (limit {LIMIT})", ""]
           report += [f"{n:6} {path}" for n, path in sorted(rows, reverse=True)]
           report += [f"deleted, not counted: {n} lines {path}" for n, path in sorted(gone, reverse=True)]
           print("\n".join(report))
