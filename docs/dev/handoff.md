@@ -11,7 +11,7 @@ Where the work stands. Each session's last PR overwrites this file (CLAUDE.md); 
 
 ## Waiting on the maintainer
 
-1. The M7b proposals in D12, before any run: whole-day waits rounded half up; how the selected point is placed on the fixed-N curve; the comparison with per-class next to fixed 30; the label-free run on test only; an error if no grid point fits. D12 also notes that with α at most 1 a claim waits `max` days until its first change, whatever its label.
+1. The M7b proposals in D12, before any run: whole-day waits rounded half up; how the selected point is placed on the fixed-N curve; the comparison with per-class next to fixed 30; the label-free run on test only; an error if no grid point fits. D12 also notes that with α at most 1 a claim waits `max` days until its first change, whatever its label. From M6's dev costs, the α = 2 points probably all cost more than per-class. D12 lists the options (keep the grid, add larger p, or list dev costs first); the maintainer chooses before any run.
 2. The M5b proposal (`docs/dev/m5b-page-timelines.md`): the pages, the tracked values, and the D12 amendment for values that revert.
 3. Open, no rush: whether the github_release verifier should read a project's tag pattern too (D11).
 

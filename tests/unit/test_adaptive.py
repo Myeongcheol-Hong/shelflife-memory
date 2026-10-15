@@ -84,11 +84,11 @@ def test_with_alpha_at_most_one_the_first_check_waits_the_cap():
 
 
 def counts(cost, stale):
-    # 30 claim-days a claim, so checks per claim-month is `cost` and the share is `stale`.
+    # 300 claim-days, so checks per claim-month is `cost` and the stale share is `stale`.
     return Counts(claims=1, days=300, checks=10 * cost, stale_days=300 * stale)
 
 
-def test_selection_takes_the_stalest_point_within_per_class_cost_ties_to_the_cheaper():
+def test_selection_takes_the_freshest_point_within_per_class_cost_ties_to_the_cheaper():
     dev = {
         "per-class": {"p": counts(1.0, 0.4)},
         "a": {"p": counts(0.9, 0.2)},
@@ -108,15 +108,31 @@ CURVE |= {90: (0.3, 0.5), 180: (0.2, 0.6)}
 
 
 def test_the_curve_gives_the_fixed_n_stale_share_at_the_same_cost():
-    projects = {f"fixed {n}": dict.fromkeys("pq", counts(*CURVE[n])) for n in FIXED}
-    projects["x"] = dict.fromkeys("pq", counts(1.5, 0.15))
+    # Two projects: q's curve and q's point are both 0.2 and 0.3 staler than p's.
+    projects = {
+        f"fixed {n}": {"p": counts(*CURVE[n]), "q": counts(CURVE[n][0], CURVE[n][1] + 0.2)}
+        for n in FIXED
+    }
+    projects["x"] = {"p": counts(1.5, 0.15), "q": counts(1.5, 0.45)}
     found = adaptive_run.place(projects, "x")
-    # Halfway between fixed 30 (1, 0.3) and fixed 14 (2, 0.2) the curve is at 0.25.
-    assert found["value"] == pytest.approx(-0.1)
+    # Halfway between fixed 30 and fixed 14 in cost, the curve is at 0.25 for p and 0.45
+    # for q, so the point is 0.1 below it for p, on it for q, and 0.05 below for both.
+    assert found["value"] == pytest.approx(-0.05)
     assert found["between"] == ["fixed 30", "fixed 14"]
-    assert found["ci"] == pytest.approx((-0.1, -0.1))  # the same for every resample
-    projects["x"] = dict.fromkeys("pq", counts(0.1, 0.9))  # cheaper than fixed 180
-    assert adaptive_run.place(projects, "x") == {"value": None, "between": None, "ci": None}
+    # p twice and q twice are each a quarter of the resamples. The curve and the point
+    # come from the same resample; unpaired, q's point against p's curve would give +0.2.
+    assert found["ci"] == pytest.approx((-0.1, 0.0))
+    assert found["resamples outside"] == 0
+
+
+def test_a_point_outside_the_curve_in_any_resample_gets_no_interval():
+    projects = {f"fixed {n}": dict.fromkeys("pq", counts(*CURVE[n])) for n in FIXED}
+    projects["x"] = {"p": counts(1.5, 0.15), "q": counts(0.1, 0.9)}  # q: cheaper than 180
+    found = adaptive_run.place(projects, "x")
+    assert found["value"] is not None and found["ci"] is None
+    assert 0 < found["resamples outside"] < score.RESAMPLES  # the resamples of q twice
+    projects["x"] = dict.fromkeys("pq", counts(0.1, 0.9))
+    assert adaptive_run.place(projects, "x") == dict.fromkeys(found, None)
 
 
 def test_the_smoke_run_writes_config_metrics_and_table(tmp_path, monkeypatch):
@@ -149,11 +165,19 @@ def test_the_smoke_run_writes_config_metrics_and_table(tmp_path, monkeypatch):
         chosen + " label-free",
     }
     for split in ("test", "dev"):
-        found, cost = metrics[split], "checks per claim-month"
-        policies = found["policies"]
-        for other in ("per-class", "fixed 30"):
-            difference = found[f"selected minus {other}"][cost]["value"]
-            assert difference == policies[chosen][cost]["value"] - policies[other][cost]["value"]
+        found = metrics[split]
+        pairs = {
+            "selected minus per-class": (chosen, "per-class"),
+            "selected minus fixed 30": (chosen, "fixed 30"),
+        }
+        if split == "test":
+            pairs["label-free minus selected"] = (chosen + " label-free", chosen)
+        assert {key for key in found if " minus " in key} == set(pairs)
+        for key, (a, b) in pairs.items():
+            for m in adaptive_run.COST:
+                value = found["policies"][a][m]["value"] - found["policies"][b][m]["value"]
+                assert found[key][m]["value"] == value
+        assert set(found["on the fixed-N curve"]) == {"value", "between", "ci", "resamples outside"}
     table = (folder / "table.md").read_text()
     assert table.startswith(f"# 6.1 adaptive policy (M7), run {folder.name}")
     for block in table.split("\n\n"):

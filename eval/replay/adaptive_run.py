@@ -79,25 +79,27 @@ def place(projects: dict[str, dict[str, Counts]], name: str) -> dict:
     """Where a policy sits against the fixed-N curve (proposed, D12): the curve's stale
     claim-days at the policy's checks per claim-month, linear between the two fixed N
     whose costs bracket it, and the policy minus that, with its 95% interval over the
-    same project resamples as every other interval. Below 0 is below the curve."""
+    same project resamples as every other interval. Below 0 is below the curve. If the
+    policy falls outside the curve in any resample, no interval is given and "resamples
+    outside" counts them."""
     units = sorted(projects[name])
-    pairs = {
-        n: [(30 * c.checks, c.stale_days, c.days) for c in (projects[n][u] for u in units)]
-        for n in (name, *CURVE)
-    }
-    found = _gap(pairs, name, range(len(units)))
-    gaps = [g[0] for pick in score._resamples(len(units)) if (g := _gap(pairs, name, pick))]
+    rows = {n: [projects[n][u] for u in units] for n in (name, *CURVE)}
+    found = _gap(rows, name, range(len(units)))
     if found is None:
-        return {"value": None, "between": None, "ci": None}
-    return {"value": found[0], "between": found[1], "ci": score.percentiles(gaps)}
+        return {"value": None, "between": None, "ci": None, "resamples outside": None}
+    picks = score._resamples(len(units))
+    gaps = [g[0] for pick in picks if (g := _gap(rows, name, pick))]
+    outside = len(picks) - len(gaps)
+    ci = None if outside else score.percentiles(gaps)
+    return {"value": found[0], "between": found[1], "ci": ci, "resamples outside": outside}
 
 
-def _gap(pairs: dict[str, list[tuple]], name: str, pick) -> tuple[float, list[str]] | None:
+def _gap(rows: dict[str, list[Counts]], name: str, pick) -> tuple[float, list[str]] | None:
     """The policy's stale claim-days minus the curve's at its cost, over the projects in
     `pick`, with the two fixed N around it; None outside the curve."""
-    sums = {n: [sum(rows[i][k] for i in pick) for k in range(3)] for n, rows in pairs.items()}
-    cost = {n: s[0] / s[2] for n, s in sums.items()}
-    stale = {n: s[1] / s[2] for n, s in sums.items()}
+    sums = {n: sum((counts[i] for i in pick), Counts()) for n, counts in rows.items()}
+    cost = {n: score.value("checks per claim-month", s) for n, s in sums.items()}
+    stale = {n: score.value("stale claim-days", s) for n, s in sums.items()}
     curve = sorted((cost[n], stale[n], n) for n in CURVE)
     for (x0, y0, n0), (x1, y1, n1) in zip(curve, curve[1:], strict=False):
         if x0 <= cost[name] <= x1 and x1 > x0:
@@ -106,14 +108,14 @@ def _gap(pairs: dict[str, list[tuple]], name: str, pick) -> tuple[float, list[st
     return None  # cheaper than the longest fixed N or dearer than the shortest
 
 
-def table(metrics: dict, run_id: str) -> str:
+def table(metrics: dict, run_id: str, seeds: int) -> str:
     """table.md: the selected point on test, its comparisons in both splits, the grid."""
     chosen = metrics["selected"]
     cap = metrics["per-class dev cost"]
     lines = [f"# 6.1 adaptive policy (M7), run {run_id}", ""]
     lines += [f"Selected on dev (D12): {chosen}, the lowest stale claim-days among the grid"]
     lines += [f"points costing at most per-class's {cap:.2f} checks per claim-month on dev."]
-    lines += ["Uniform scenario, 1 question a week, 5 seeds, 95% intervals over projects.", ""]
+    lines += [f"Uniform scenario, {RATE}, {seeds} seed(s), 95% intervals over projects.", ""]
     for split in ("test", "dev"):
         found = metrics[split]
         lines += [f"## {split.capitalize()}", "", *_policies(found["policies"]), ""]
@@ -140,11 +142,15 @@ def _differences(found: dict) -> list[str]:
 def _curve_line(name: str, found: dict) -> str:
     if found["value"] is None:
         return f"On the fixed-N curve: {name} costs less than fixed 180 or more than fixed 3."
-    (lo, hi), (a, b) = found["ci"], found["between"]
+    a, b = found["between"]
+    if found["ci"] is None:
+        ci = f"no interval: outside the curve in {found['resamples outside']} resamples"
+    else:
+        ci = f"{100 * found['ci'][0]:.1f} to {100 * found['ci'][1]:.1f}"
     return (
         f"On the fixed-N curve (proposed, D12): between {a} and {b}, its stale claim-days"
-        f" minus the curve's at the same cost is {100 * found['value']:.1f} points"
-        f" ({100 * lo:.1f} to {100 * hi:.1f}); below 0 is below the curve."
+        f" minus the curve's at the same cost is {100 * found['value']:.1f} points ({ci});"
+        " below 0 is below the curve."
     )
 
 
@@ -167,9 +173,12 @@ def main(
     args = parser.parse_args(argv)
     labels = {p.name: p.volatility for p in load_projects(args.data / "projects.toml")}
     cfg = run.config(args.data, now())
-    cfg |= {"run": cfg["run"] + "-adaptive", "decision": "D12 (M7)", "question rate": RATE}
-    cfg |= {"grid": adaptive.GRID, "label-free days": adaptive.LABEL_FREE_DAYS}
-    cfg["policies"] = ["per-class", *CURVE, *(adaptive.name(*point) for point in adaptive.GRID)]
+    del cfg["question rates per claim-day"], cfg["session size"]  # M6's other scenarios
+    cfg |= {"run": cfg["run"] + "-adaptive", "decision": "D12 (M7)", "scenario": "uniform"}
+    cfg |= {"question rate per claim-day": {RATE: QUESTION_RATES[RATE]}, "grid": adaptive.GRID}
+    cfg["label-free days"] = adaptive.LABEL_FREE_DAYS
+    grid = [adaptive.name(*point) for point in adaptive.GRID]
+    cfg["policies"] = ["per-class", *CURVE, *grid, "the selected point, label-free (test only)"]
     folder = args.out / cfg["run"]
     if folder.exists():
         print(f"error: {folder} exists; a run never overwrites another", file=sys.stderr)
@@ -178,7 +187,7 @@ def main(
     folder.mkdir(parents=True)
     (folder / "config.json").write_text(json.dumps(cfg, indent=1) + "\n")
     (folder / "metrics.json").write_text(json.dumps(metrics, indent=1) + "\n")
-    (folder / "table.md").write_text(table(metrics, cfg["run"]))
+    (folder / "table.md").write_text(table(metrics, cfg["run"], len(cfg["seeds"])))
     print(f"wrote {folder}")
     return 0
 
