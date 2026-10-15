@@ -12,11 +12,17 @@ Answers are read with parser v2 (D14), set after the runs from the answers' form
 | medium | 10 | 19 | 2 | 0 |
 | slow | 5 | 14 | 9 | 0 |
 
+| Maintainer \ Claude (parser v1) | fast | medium | slow | no valid answer |
+|---|---|---|---|---|
+| fast | 6 | 4 | 1 | 0 |
+| medium | 10 | 19 | 2 | 0 |
+| slow | 5 | 14 | 9 | 0 |
+
 |  | Parser v2 | Parser v1 |
 |---|---|---|
-| Projects (70): same / faster / slower / invalid | 34 / 29 / 7 / 0 | 34 / 29 / 7 / 0 |
-| Projects without the four labeled late (66): same / faster / slower / invalid | 32 / 28 / 6 / 0 | 32 / 28 / 6 / 0 |
-| Answers (210): same / faster / slower / invalid | 97 / 89 / 24 / 0 | 97 / 89 / 24 / 0 |
+| Projects (70): same / faster / slower / invalid | 34 (49%) / 29 (41%) / 7 (10%) / 0 (0%) | 34 (49%) / 29 (41%) / 7 (10%) / 0 (0%) |
+| Projects without the four labeled late (66): same / faster / slower / invalid | 32 (48%) / 28 (42%) / 6 (9%) / 0 (0%) | 32 (48%) / 28 (42%) / 6 (9%) / 0 (0%) |
+| Answers (210): same / faster / slower / invalid | 97 (46%) / 89 (42%) / 24 (11%) / 0 (0%) | 97 (46%) / 89 (42%) / 24 (11%) / 0 (0%) |
 | Projects whose answers all agree | 59 | 59 |
 | Projects decided between two different answers | 0 | 0 |
 | No valid answer, so medium | none | none |
@@ -34,6 +40,8 @@ Answers are read with parser v2 (D14), set after the runs from the answers' form
 |---|---|---|---|
 | Claude's labels minus the maintainer's (parser v2) | -15.4% (-21.5 to -9.4) | -15.5% (-21.6 to -9.4) | 0.67 (0.25 to 1.08) |
 | Claude's labels minus the maintainer's (parser v1) | -15.4% (-21.5 to -9.4) | -15.5% (-21.6 to -9.4) | 0.67 (0.25 to 1.08) |
+| the same, without the four labeled late (parser v2) | -16.1% (-22.8 to -9.2) | -16.1% (-22.9 to -9.2) | 0.70 (0.29 to 1.15) |
+| the same, without the four labeled late (parser v1) | -16.1% (-22.8 to -9.2) | -16.1% (-22.9 to -9.2) | 0.70 (0.29 to 1.15) |
 | Claude's labels minus fixed 30 (parser v2) | -6.8% (-11.8 to -2.0) | -7.0% (-11.9 to -2.1) | 0.83 (0.46 to 1.21) |
 | Claude's labels minus fixed 30 (parser v1) | -6.8% (-11.8 to -2.0) | -7.0% (-11.9 to -2.1) | 0.83 (0.46 to 1.21) |
 
@@ -53,6 +61,8 @@ Parser v1: On the fixed-N curve (D12): between fixed 30 and fixed 14, its stale 
 |---|---|---|---|
 | Claude's labels minus the maintainer's (parser v2) | -16.4% (-22.7 to -9.9) | -16.3% (-22.7 to -9.8) | 0.69 (0.28 to 1.11) |
 | Claude's labels minus the maintainer's (parser v1) | -16.4% (-22.7 to -9.9) | -16.3% (-22.7 to -9.8) | 0.69 (0.28 to 1.11) |
+| the same, without the four labeled late (parser v2) | -17.1% (-24.3 to -10.2) | -17.0% (-24.1 to -10.1) | 0.74 (0.28 to 1.19) |
+| the same, without the four labeled late (parser v1) | -17.1% (-24.3 to -10.2) | -17.0% (-24.1 to -10.1) | 0.74 (0.28 to 1.19) |
 | Claude's labels minus fixed 30 (parser v2) | -5.9% (-11.3 to -0.5) | -5.8% (-11.2 to -0.4) | 0.74 (0.37 to 1.12) |
 | Claude's labels minus fixed 30 (parser v1) | -5.9% (-11.3 to -0.5) | -5.8% (-11.2 to -0.4) | 0.74 (0.37 to 1.12) |
 

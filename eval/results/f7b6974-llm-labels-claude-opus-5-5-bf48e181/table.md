@@ -12,11 +12,17 @@ Answers are read with parser v2 (D14), set after the runs from the answers' form
 | medium | 11 | 16 | 4 | 0 |
 | slow | 4 | 11 | 13 | 0 |
 
+| Maintainer \ Claude (parser v1) | fast | medium | slow | no valid answer |
+|---|---|---|---|---|
+| fast | 5 | 2 | 2 | 2 |
+| medium | 9 | 16 | 3 | 3 |
+| slow | 3 | 11 | 9 | 5 |
+
 |  | Parser v2 | Parser v1 |
 |---|---|---|
-| Projects (70): same / faster / slower / invalid | 36 / 26 / 8 / 0 | 30 / 23 / 7 / 10 |
-| Projects without the four labeled late (66): same / faster / slower / invalid | 35 / 24 / 7 / 0 | 29 / 21 / 6 / 10 |
-| Answers (210): same / faster / slower / invalid | 109 / 75 / 25 / 1 | 74 / 47 / 15 / 74 |
+| Projects (70): same / faster / slower / invalid | 36 (51%) / 26 (37%) / 8 (11%) / 0 (0%) | 30 (43%) / 23 (33%) / 7 (10%) / 10 (14%) |
+| Projects without the four labeled late (66): same / faster / slower / invalid | 35 (53%) / 24 (36%) / 7 (11%) / 0 (0%) | 29 (44%) / 21 (32%) / 6 (9%) / 10 (15%) |
+| Answers (210): same / faster / slower / invalid | 109 (52%) / 75 (36%) / 25 (12%) / 1 (0%) | 74 (35%) / 47 (22%) / 15 (7%) / 74 (35%) |
 | Projects whose answers all agree | 59 | 25 |
 | Projects decided between two different answers | 0 | 2 |
 | No valid answer, so medium | none | BurntSushi/ripgrep, attrs, claude-agent-sdk, click, getzep/graphiti, home-assistant/core, instructor, jqlang/jq, pytz, requests |
@@ -34,6 +40,8 @@ Answers are read with parser v2 (D14), set after the runs from the answers' form
 |---|---|---|---|
 | Claude's labels minus the maintainer's (parser v2) | -11.6% (-18.1 to -4.9) | -11.7% (-18.2 to -5.0) | 0.63 (0.21 to 1.05) |
 | Claude's labels minus the maintainer's (parser v1) | -11.3% (-17.8 to -4.2) | -11.3% (-17.9 to -4.3) | 0.47 (0.05 to 0.90) |
+| the same, without the four labeled late (parser v2) | -12.1% (-18.7 to -5.5) | -12.2% (-18.8 to -5.6) | 0.63 (0.24 to 1.06) |
+| the same, without the four labeled late (parser v1) | -11.9% (-18.6 to -4.5) | -11.9% (-18.7 to -4.6) | 0.46 (0.04 to 0.90) |
 | Claude's labels minus fixed 30 (parser v2) | -2.9% (-9.5 to 3.5) | -3.1% (-9.8 to 3.3) | 0.80 (0.41 to 1.21) |
 | Claude's labels minus fixed 30 (parser v1) | -2.7% (-8.4 to 3.2) | -2.8% (-8.6 to 3.1) | 0.64 (0.29 to 1.02) |
 
@@ -53,6 +61,8 @@ Parser v1: On the fixed-N curve (D12): between fixed 30 and fixed 14, its stale 
 |---|---|---|---|
 | Claude's labels minus the maintainer's (parser v2) | -13.4% (-20.3 to -6.4) | -13.3% (-20.1 to -6.3) | 0.63 (0.20 to 1.06) |
 | Claude's labels minus the maintainer's (parser v1) | -12.1% (-19.1 to -5.1) | -12.0% (-19.1 to -5.0) | 0.53 (0.11 to 0.94) |
+| the same, without the four labeled late (parser v2) | -14.0% (-21.1 to -7.1) | -13.9% (-20.9 to -7.1) | 0.62 (0.18 to 1.08) |
+| the same, without the four labeled late (parser v1) | -12.6% (-19.7 to -5.4) | -12.5% (-19.6 to -5.4) | 0.52 (0.09 to 0.94) |
 | Claude's labels minus fixed 30 (parser v2) | -2.9% (-8.8 to 3.7) | -2.8% (-8.7 to 3.8) | 0.68 (0.29 to 1.05) |
 | Claude's labels minus fixed 30 (parser v1) | -1.5% (-7.3 to 4.3) | -1.5% (-7.2 to 4.4) | 0.58 (0.23 to 0.91) |
 
