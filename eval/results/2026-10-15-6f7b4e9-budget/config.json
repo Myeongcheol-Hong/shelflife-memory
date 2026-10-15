@@ -1,0 +1,46 @@
+{
+ "run": "2026-10-15-6f7b4e9-budget",
+ "ran at": "2026-10-15T15:13:18+00:00",
+ "git sha": "6f7b4e900a2aed218fc151478d921e284d233828",
+ "uncommitted changes": false,
+ "dataset sha256": "ae19668a67597c1581c0a22d438cb2be7a6ed1b4a1f7e6da3c2236dd0b96714a",
+ "python": "3.13.16",
+ "packaging": "26.3",
+ "decision": "D12 (M7, after M7b's results)",
+ "seeds": [
+  0,
+  1,
+  2,
+  3,
+  4
+ ],
+ "claims per project": 20,
+ "splits": {
+  "dev": [
+   "2024-01-01",
+   "2024-12-31"
+  ],
+  "test": [
+   "2025-01-01",
+   "2026-09-30"
+  ]
+ },
+ "policies": [
+  "budget-aware \u03bc=4.846",
+  "fixed 3",
+  "fixed 7",
+  "fixed 14",
+  "fixed 30",
+  "fixed 60",
+  "fixed 90",
+  "fixed 180"
+ ],
+ "resamples": 2000,
+ "scenario": "uniform",
+ "question rate per claim-day": {
+  "1 a week": 0.14285714285714285
+ },
+ "\u03bc": 4.845574065445341,
+ "\u03b1": 2,
+ "max": 180
+}
