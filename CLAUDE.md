@@ -18,6 +18,7 @@ The main contribution is the **eval**, not the feature list. Re-check tools alre
 - Move as fast as the work allows. `docs/roadmap.md` sets the **order** of milestones, not the pace. When a milestone is done and its tests pass, tick its boxes in the roadmap and continue to the next one.
 - At the start of a session, show a short plan for the milestones you intend to finish and wait for approval. After that, keep going without asking again unless the plan has to change.
 - One PR per milestone (roughly one plan week). Do not mix milestones in one PR. Keep each PR within the size limit in "Review rules" below; split larger work into stacked PRs.
+- Branch names: `<type>/<short-description>` with a conventional type: `feat/`, `fix/`, `docs/`, `chore/`, `ci/`, `refactor/` or `test/` (for example `feat/m7b-llm-labels`, `fix/stale-verify-results`). The milestone goes in the PR description when there is one. No `claude/` prefix and no session name. Commit messages and PR titles stay as they are.
 - In each PR description, explain the design choices and trade-offs so the maintainer understands and can explain every line. They go under "Details" (see "Review rules").
 - Never skip tests, the quote check or the eval rules below to go faster.
 - When the maintainer says a part is theirs to implement, leave a `TODO(mc)` stub with a skipped or `xfail(strict=True)` test that describes the expected behavior (a plain failing test would block the Stop hook).
