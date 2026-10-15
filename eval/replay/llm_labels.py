@@ -1,15 +1,16 @@
 """M7's LLM-judged volatility policy (D14; design 6.1 and 6.0-3).
 
-    uv run python -m eval.replay.llm_labels [--model claude-sonnet-5-5] [--out eval/results]
+    uv run python -m eval.replay.llm_labels [--model claude-opus-5-5] [--out eval/results]
     uv run python -m eval.replay.llm_labels --rescore eval/results/<run-id>
 
-Claude labels every project in projects.toml fast, medium or slow through the shared
-runner (D13), REPEATS times each, seeing only the project's source and name. A project's
-label is the median of its valid answers. The replay then runs per-class with Claude's
-labels next to per-class with the maintainer's and fixed 30, in the uniform scenario at
-1 question a week, 5 seeds, test and dev; nothing is tuned. Running again resumes the
-run; once every answer is in, it scores from raw.jsonl alone, and --rescore scores a
-finished run again without the model.
+Claude says how often each project's latest version changes, fast, medium or slow, the
+maintainer's own question (D11), through the shared runner (D13), REPEATS times each,
+seeing only the project's source and name. A project's label is the median of its valid
+answers. One run is one model; D14 sets four, Opus 5.5 the primary. The replay then runs
+per-class with Claude's labels next to per-class with the maintainer's and fixed 30, in
+the uniform scenario at 1 question a week, 5 seeds, test and dev; nothing is tuned.
+Running again resumes the run; once every answer is in, it scores from raw.jsonl alone,
+and --rescore scores a finished run again without the model.
 
 Both label sets use present-day knowledge of the projects' 2025-2026 releases, so the
 comparison is of label quality, not foresight (D13).
@@ -29,12 +30,19 @@ from eval.replay import adaptive_run, run
 from eval.replay.replay import POLICIES, Counts
 from eval.replay.timelines import LABELS, Project, Timeline, load_all, load_projects
 
-MODEL = "claude-sonnet-5-5"
-PROMPT_VERSION = "v1"
+# Four conditions that differ only in the model (D14); the first is the primary one, set
+# before any call, and none is picked afterwards for doing best.
+MODELS = ("claude-opus-5-5", "claude-sonnet-5-5", "claude-fable-5", "claude-fable-5-1")
+PROMPT_VERSION = "v2"
+# The maintainer's own question and definitions when labeling (D11); per-class maps the
+# classes to checks every 7, 30 or 180 days in code, not in the prompt.
 SYSTEM = (
-    "You decide how often a memory should check a claim about a software project again."
-    " The classes:\n- fast: check every 7 days\n- medium: check every 30 days\n"
-    "- slow: check every 180 days\nAnswer with one word: fast, medium or slow."
+    "You say how often the latest version of a software project changes, from your own"
+    " knowledge. The classes:\n"
+    "- fast: the latest version changes about weekly or more often\n"
+    "- medium: about monthly\n"
+    "- slow: a few times a year or less\n"
+    "Answer with one word: fast, medium or slow."
 )
 MISSING = "medium"  # a project with no valid answer: 30 days, as the label-free prior (D12)
 OURS, THEIRS = "per-class, Claude's labels", "per-class, the maintainer's labels"
@@ -47,8 +55,9 @@ LIMIT = (
 def item(project: Project) -> runner.Item:
     """The question about one project: its source and name, nothing from its timeline."""
     what = "PyPI project" if project.source == "pypi" else "GitHub repository"
-    claim = f'"The latest release of the {what} {project.name} is <version>."'
-    return runner.Item(project.name, f"Claim: {claim}\nWhich class fits this claim?")
+    return runner.Item(
+        project.name, f"How often does the latest version of the {what} {project.name} change?"
+    )
 
 
 def parse(text: str) -> str | None:
@@ -181,8 +190,10 @@ def table(metrics: dict, cfg: dict, run_id: str) -> str:
     found = metrics["agreement"]
     lines = [f"# 6.1 LLM-judged volatility policy (M7), run {run_id}", ""]
     who = f"Claude ({cfg['model']}, prompt {cfg['prompt version']})"
-    how = f"{who} labeled each project {cfg['repeats']} times from its source and name alone;"
-    lines += [f"{how} a project's label is the median of its valid answers (D14). {LIMIT}"]
+    how = f"{who} said {cfg['repeats']} times how often each project's latest version changes,"
+    how += " from its source and name alone. A project's label is the median of its valid"
+    how += " answers, and per-class checks it every 7, 30 or 180 days (D14)."
+    lines += [f"{how} {LIMIT}"]
     lines += ["", "## Labels", ""]
     header = ["Maintainer \\ Claude", *LABELS, "no valid answer"]
     rows = [[m, *map(str, found["maintainer by Claude"][m].values())] for m in LABELS]
@@ -218,7 +229,7 @@ def main(
     parser = argparse.ArgumentParser(prog="llm_labels", description=__doc__)
     parser.add_argument("--data", type=Path, default=Path("eval/data/timelines"))
     parser.add_argument("--out", type=Path, default=Path("eval/results"))
-    parser.add_argument("--model", default=MODEL)
+    parser.add_argument("--model", default=MODELS[0], help="the primary condition by default")
     parser.add_argument("--rescore", type=Path, help="score a finished run again; no model")
     args = parser.parse_args(argv)
     folder = args.rescore

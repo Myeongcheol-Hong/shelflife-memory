@@ -48,8 +48,9 @@ def test_a_project_label_is_the_median_of_its_valid_answers(answers, label):
 def test_the_question_names_the_project_and_nothing_else():
     pypi = llm_labels.item(Project("pypi", "attrs", "slow"))
     github = llm_labels.item(Project("github", "caddyserver/caddy", "fast", tag="^v"))
-    assert pypi.id == "attrs" and "the PyPI project attrs is <version>" in pypi.prompt
-    assert "the GitHub repository caddyserver/caddy is <version>" in github.prompt
+    assert pypi.id == "attrs"
+    assert pypi.prompt == "How often does the latest version of the PyPI project attrs change?"
+    assert "of the GitHub repository caddyserver/caddy change?" in github.prompt
     for prompt in (pypi.prompt, github.prompt):  # never the maintainer's label
         assert not any(label in prompt for label in LABELS) and "^v" not in prompt
 
@@ -128,7 +129,7 @@ class Stub:
 
     def __call__(self, system, prompt):
         self.asked.append((system, prompt))
-        name = re.search(r"(\S+) is <version>", prompt).group(1)
+        name = re.search(r"(\S+) change\?", prompt).group(1)
         repeat = sum(name in p for _, p in self.asked) - 1
         text = self.replies[name][repeat]
         return runner.Reply(text, error=None if text else "failed", served=("stub-1",))
