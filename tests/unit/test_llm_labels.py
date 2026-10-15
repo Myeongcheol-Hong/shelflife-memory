@@ -16,18 +16,25 @@ NOW = datetime(2026, 10, 15, 12, 0, tzinfo=UTC)
 
 
 @pytest.mark.parametrize(
-    ("text", "label"),
+    ("text", "v2", "v1"),
     [
-        ("fast", "fast"),
-        (" Medium.\n", "medium"),
-        ("SLOW", "slow"),
-        ("fast or medium", None),
-        ("none", None),
-        ("", None),
+        ("fast", "fast", "fast"),
+        (" Medium.\n", "medium", "medium"),
+        ("SLOW", "slow", "slow"),
+        ("attrs releases a few times a year.\n\nslow", "slow", None),  # the common format
+        ("**fast**", "fast", None),
+        ("A reason.\n\n_Medium._", "medium", None),
+        ("boto3 releases nearly every weekday. fast", None, None),  # a label inside a line
+        ("not fast but slow", None, None),
+        ("fast\n\nbecause it ships weekly", None, None),  # the last line is not a label
+        ("fast or medium", None, None),
+        ("none", None, None),
+        ("", None, None),
+        ("\n \n", None, None),
     ],
 )
-def test_an_answer_counts_only_if_it_is_a_label(text, label):
-    assert llm_labels.parse(text) == label
+def test_parser_v2_reads_the_last_line_and_v1_the_whole_answer(text, v2, v1):
+    assert llm_labels.parse(text) == v2 and llm_labels.parse_v1(text) == v1
 
 
 @pytest.mark.parametrize(
@@ -140,7 +147,7 @@ REPLIES = {
     "smoke-prerelease-only": ["Slow."] * 3,  # medium
     "smoke-quiet": ["medium", "fast", "slow"],  # slow
     "smoke-org/moved-tag": ["I think fast"] * 3,  # fast
-    "smoke-org/out-of-order": ["medium", "slow", "medium"],  # medium
+    "smoke-org/out-of-order": ["medium", "Ships about monthly.\n\nslow", "medium"],  # medium
     "smoke-org/two-products": ["slow"] * 3,  # slow
 }
 
@@ -179,6 +186,12 @@ def test_the_smoke_run_asks_scores_and_rescores_without_the_model(tmp_path, monk
         "invalid": 1,
     }
     assert found["answers"]["n"] == 6 * runner.REPEATS
+    # Parser v1 (D14) stands next to v2: it cannot read the reason-then-label answer.
+    v1 = metrics["parser v1"]
+    assert metrics["scored"]["parser"] == "v2"
+    invalid = found["answers"]["invalid"]["count"]
+    assert v1["agreement"]["answers"]["invalid"]["count"] == invalid + 1
+    assert set(v1) == {"answers", "agreement", "test", "dev"}
     ours, theirs = llm_labels.OURS, llm_labels.THEIRS
     for split in ("test", "dev"):
         part = metrics[split]
@@ -208,7 +221,9 @@ def test_the_smoke_run_asks_scores_and_rescores_without_the_model(tmp_path, monk
         assert set(part["on the fixed-N curve"]) == {"value", "between", "ci", "resamples outside"}
     table = (folder / "table.md").read_text()
     assert table.startswith(f"# 6.1 LLM-judged volatility policy (M7), run {folder.name}")
-    assert llm_labels.LIMIT in table and "No valid answer, so medium: smoke-org/moved-tag" in table
+    assert llm_labels.LIMIT in table and llm_labels.PARSING in table
+    assert "| No valid answer, so medium | smoke-org/moved-tag | smoke-org/moved-tag |" in table
+    assert "(parser v1) | " in table and "(parser v2) | " in table
     for block in table.split("\n\n"):
         rows = [line for line in block.splitlines() if line.startswith("|")]
         assert len({row.count("|") for row in rows}) <= 1, block

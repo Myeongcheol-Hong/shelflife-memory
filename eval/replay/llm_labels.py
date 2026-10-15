@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -46,6 +47,12 @@ SYSTEM = (
 )
 MISSING = "medium"  # a project with no valid answer: 30 days, as the label-free prior (D12)
 OURS, THEIRS = "per-class, Claude's labels", "per-class, the maintainer's labels"
+PARSING = (
+    "Answers are read with parser v2 (D14), set after the runs from the answers' format"
+    " alone: the last non-empty line, without * and _ and a final period, must be exactly a"
+    " label. Parser v1, the rule before the runs, read the whole answer; its numbers stand"
+    " next to v2's."
+)
 LIMIT = (
     "Both label sets use present-day knowledge of the projects' 2025-2026 releases, so this"
     " compares label quality, not foresight (D13)."
@@ -61,10 +68,26 @@ def item(project: Project) -> runner.Item:
 
 
 def parse(text: str) -> str | None:
-    """A label, if the answer is one after lowercasing and dropping surrounding space and
-    a final period; otherwise None."""
+    """Parser v2 (D14, set after the runs from the answers' format alone): a label if the
+    answer's last non-empty line, without markdown emphasis (* and _) and a final period,
+    lowercased and stripped, is exactly one; otherwise None. A label elsewhere in a
+    sentence never counts, so "not fast but slow" is not misread."""
+    lines = [line for line in text.splitlines() if line.strip()]
+    if not lines:
+        return None
+    word = re.sub(r"[*_]", "", lines[-1]).strip().lower().removesuffix(".").strip()
+    return word if word in LABELS else None
+
+
+def parse_v1(text: str) -> str | None:
+    """Parser v1, the rule before the runs: the whole answer, lowercased and without
+    surrounding space and a final period, must be exactly a label. Its numbers stay next
+    to v2's."""
     word = text.strip().lower().removesuffix(".").strip()
     return word if word in LABELS else None
+
+
+PARSERS = {"v2": parse, "v1": parse_v1}
 
 
 def median(answers: list[str | None]) -> str | None:
@@ -79,7 +102,9 @@ class Unfinished(Exception):
     """Some pair (project, repeat) was never asked, or its last call failed."""
 
 
-def answers(folder: Path, names: list[str], repeats: int) -> dict[str, list[str | None]]:
+def answers(
+    folder: Path, names: list[str], repeats: int, parser: Callable[[str], str | None] = parse
+) -> dict[str, list[str | None]]:
     """Each project's parsed answers by repeat, from raw.jsonl. A failed call is not an
     answer: until every pair's last attempt succeeded, Unfinished, and running again asks
     the missing and failed pairs (D13). So the scores never depend on how often it ran."""
@@ -87,7 +112,7 @@ def answers(folder: Path, names: list[str], repeats: int) -> dict[str, list[str 
     pairs = [(n, k) for n in names for k in range(repeats)]
     if todo := [pair for pair in pairs if pair not in last or last[pair]["error"]]:
         raise Unfinished(f"{len(todo)} answers missing or failed, the first {todo[0]}")
-    return {n: [parse(last[n, k]["text"]) for k in range(repeats)] for n in names}
+    return {n: [parser(last[n, k]["text"]) for k in range(repeats)] for n in names}
 
 
 def agreement(found: dict[str, list[str | None]], theirs: dict[str, str]) -> dict:
@@ -167,58 +192,80 @@ def evaluate(timelines: list[Timeline], theirs: dict, ours: dict, seeds: list[in
 
 
 def score(folder: Path, data: Path, now: datetime) -> dict:
-    """metrics.json of a finished run, from its raw.jsonl and the timelines alone."""
+    """metrics.json of a finished run, from its raw.jsonl and the timelines alone: read
+    with parser v2 at the top level, and with v1 under "parser v1" (D14)."""
     cfg = json.loads((folder / "config.json").read_text("utf-8"))
     projects = load_projects(data / "projects.toml")
     theirs = {p.name: p.volatility for p in projects}
-    found = answers(folder, [p.name for p in projects], cfg["repeats"])
-    labels = agreement(found, theirs)
-    replay = run.config(data, now)
+    replay, timelines = run.config(data, now), load_all(data)
     keep = ("git sha", "uncommitted changes", "dataset sha256", "python", "packaging")
     keep += ("seeds", "resamples")
-    return {
+    out: dict = {
         "scored": {k: replay[k] for k in keep}
-        | {"at": replay["ran at"], "rate": adaptive_run.RATE},
-        "answers": found,
-        "agreement": labels,
-        **evaluate(load_all(data), theirs, labels["labels"], replay["seeds"]),
+        | {"at": replay["ran at"], "rate": adaptive_run.RATE, "parser": "v2"}
     }
+    for version, parser in PARSERS.items():
+        found = answers(folder, [p.name for p in projects], cfg["repeats"], parser)
+        labels = agreement(found, theirs)
+        part = {"answers": found, "agreement": labels}
+        part |= evaluate(timelines, theirs, labels["labels"], replay["seeds"])
+        out |= part if version == "v2" else {f"parser {version}": part}
+    return out
 
 
 def table(metrics: dict, cfg: dict, run_id: str) -> str:
-    """table.md: the labels against the maintainer's, then the replay in test and dev."""
-    found = metrics["agreement"]
+    """table.md: the labels against the maintainer's, then the replay in test and dev,
+    each with parser v1's numbers next to v2's."""
+    v1, found = metrics["parser v1"], metrics["agreement"]
+    both = (found, v1["agreement"])
     lines = [f"# 6.1 LLM-judged volatility policy (M7), run {run_id}", ""]
     who = f"Claude ({cfg['model']}, prompt {cfg['prompt version']})"
     how = f"{who} said {cfg['repeats']} times how often each project's latest version changes,"
     how += " from its source and name alone. A project's label is the median of its valid"
     how += " answers, and per-class checks it every 7, 30 or 180 days (D14)."
-    lines += [f"{how} {LIMIT}"]
-    lines += ["", "## Labels", ""]
-    header = ["Maintainer \\ Claude", *LABELS, "no valid answer"]
+    lines += [f"{how} {LIMIT}", "", PARSING, "", "## Labels", ""]
+    header = ["Maintainer \\ Claude (parser v2)", *LABELS, "no valid answer"]
     rows = [[m, *map(str, found["maintainer by Claude"][m].values())] for m in LABELS]
     lines += [*run._table(header, rows), ""]
+    rows = []
     for key in ("projects", "projects without the four labeled late", "answers"):
-        shares = found[key]
-        parts = [
-            f"{k} {v['count']} ({100 * v['share']:.0f}%)" for k, v in shares.items() if k != "n"
-        ]
-        lines += [f"- {key.capitalize()}, {shares['n']}: " + ", ".join(parts) + "."]
-    agree, none = found["projects whose answers all agree"], found["projects with no valid answer"]
-    two = found["projects decided between two different answers"]
-    lines += [f"- Projects whose answers all agree: {agree}; decided between two: {two}."]
-    lines += [f"- No valid answer, so {MISSING}: {', '.join(none) or 'none'}.", ""]
+        title = f"{key.capitalize()} ({found[key]['n']}): same / faster / slower / invalid"
+        rows.append([title, *(_counts(part[key]) for part in both)])
+    for key in (
+        "projects whose answers all agree",
+        "projects decided between two different answers",
+    ):
+        rows.append([key.capitalize(), *(str(part[key]) for part in both)])
+    none = [", ".join(p["projects with no valid answer"]) or "none" for p in both]
+    rows.append([f"No valid answer, so {MISSING}", *none])
+    lines += [*run._table(["", "Parser v2", "Parser v1"], rows), ""]
     for split in ("test", "dev"):
-        part = metrics[split]
         seeds = len(metrics["scored"]["seeds"])
         where = f"uniform, {adaptive_run.RATE}, seeds: {seeds}, 95% intervals over projects"
         lines += [f"## {split.capitalize()} ({where})", ""]
-        lines += [*adaptive_run._policies(part["policies"]), ""]
-        rows = [[k, *adaptive_run._differences(part[k])] for k in part if " minus " in k]
+        now, then = metrics[split], v1[split]
+        policies = {f"{OURS} (parser v2)": now["policies"][OURS]}
+        policies |= {f"{OURS} (parser v1)": then["policies"][OURS]}
+        policies |= {n: now["policies"][n] for n in (THEIRS, "fixed 30")}
+        lines += [*adaptive_run._policies(policies), ""]
+        rows = [
+            [f"{k} ({version})", *adaptive_run._differences(part[k])]
+            for k in now
+            if " minus " in k
+            for version, part in (("parser v2", now), ("parser v1", then))
+        ]
         header = ["Paired, on the same claims", "Stale-answer rate", "Stale claim-days"]
         lines += [*run._table([*header, "Checks per claim-month"], rows), ""]
-        lines += [adaptive_run._curve_line(OURS, part["on the fixed-N curve"]), ""]
+        for version, part in (("parser v2", now), ("parser v1", then)):
+            line = adaptive_run._curve_line(OURS, part["on the fixed-N curve"])
+            lines += [f"{version.capitalize()}: {line}"]
+        lines += [""]
     return "\n".join(lines[:-1]) + "\n"
+
+
+def _counts(shares: dict) -> str:
+    keys = ("same", "Claude faster (more checks)", "Claude slower (staler)", "invalid")
+    return " / ".join(str(shares[k]["count"]) for k in keys)
 
 
 def main(
