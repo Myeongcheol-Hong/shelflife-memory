@@ -1,0 +1,263 @@
+{
+ "run": "2026-10-15-e2d0e3d-adaptive",
+ "ran at": "2026-10-15T12:10:42+00:00",
+ "git sha": "e2d0e3d88f1485d77b715869bb651fef1019d98f",
+ "uncommitted changes": false,
+ "dataset sha256": "ae19668a67597c1581c0a22d438cb2be7a6ed1b4a1f7e6da3c2236dd0b96714a",
+ "python": "3.13.16",
+ "packaging": "26.3",
+ "decision": "D12 (M7)",
+ "seeds": [
+  0,
+  1,
+  2,
+  3,
+  4
+ ],
+ "claims per project": 20,
+ "splits": {
+  "dev": [
+   "2024-01-01",
+   "2024-12-31"
+  ],
+  "test": [
+   "2025-01-01",
+   "2026-09-30"
+  ]
+ },
+ "policies": [
+  "per-class",
+  "fixed 3",
+  "fixed 7",
+  "fixed 14",
+  "fixed 30",
+  "fixed 60",
+  "fixed 90",
+  "fixed 180",
+  "adaptive p=0.05 a=0.5 max=180",
+  "adaptive p=0.05 a=0.5 max=365",
+  "adaptive p=0.05 a=1 max=180",
+  "adaptive p=0.05 a=1 max=365",
+  "adaptive p=0.05 a=2 max=180",
+  "adaptive p=0.05 a=2 max=365",
+  "adaptive p=0.1 a=0.5 max=180",
+  "adaptive p=0.1 a=0.5 max=365",
+  "adaptive p=0.1 a=1 max=180",
+  "adaptive p=0.1 a=1 max=365",
+  "adaptive p=0.1 a=2 max=180",
+  "adaptive p=0.1 a=2 max=365",
+  "adaptive p=0.2 a=0.5 max=180",
+  "adaptive p=0.2 a=0.5 max=365",
+  "adaptive p=0.2 a=1 max=180",
+  "adaptive p=0.2 a=1 max=365",
+  "adaptive p=0.2 a=2 max=180",
+  "adaptive p=0.2 a=2 max=365",
+  "adaptive p=0.3 a=0.5 max=180",
+  "adaptive p=0.3 a=0.5 max=365",
+  "adaptive p=0.3 a=1 max=180",
+  "adaptive p=0.3 a=1 max=365",
+  "adaptive p=0.3 a=2 max=180",
+  "adaptive p=0.3 a=2 max=365",
+  "adaptive p=0.5 a=0.5 max=180",
+  "adaptive p=0.5 a=0.5 max=365",
+  "adaptive p=0.5 a=1 max=180",
+  "adaptive p=0.5 a=1 max=365",
+  "adaptive p=0.5 a=2 max=180",
+  "adaptive p=0.5 a=2 max=365",
+  "adaptive p=0.7 a=0.5 max=180",
+  "adaptive p=0.7 a=0.5 max=365",
+  "adaptive p=0.7 a=1 max=180",
+  "adaptive p=0.7 a=1 max=365",
+  "adaptive p=0.7 a=2 max=180",
+  "adaptive p=0.7 a=2 max=365",
+  "the selected point, label-free (test only)"
+ ],
+ "resamples": 2000,
+ "scenario": "uniform",
+ "question rate per claim-day": {
+  "1 a week": 0.14285714285714285
+ },
+ "grid": [
+  [
+   0.05,
+   0.5,
+   180
+  ],
+  [
+   0.05,
+   0.5,
+   365
+  ],
+  [
+   0.05,
+   1,
+   180
+  ],
+  [
+   0.05,
+   1,
+   365
+  ],
+  [
+   0.05,
+   2,
+   180
+  ],
+  [
+   0.05,
+   2,
+   365
+  ],
+  [
+   0.1,
+   0.5,
+   180
+  ],
+  [
+   0.1,
+   0.5,
+   365
+  ],
+  [
+   0.1,
+   1,
+   180
+  ],
+  [
+   0.1,
+   1,
+   365
+  ],
+  [
+   0.1,
+   2,
+   180
+  ],
+  [
+   0.1,
+   2,
+   365
+  ],
+  [
+   0.2,
+   0.5,
+   180
+  ],
+  [
+   0.2,
+   0.5,
+   365
+  ],
+  [
+   0.2,
+   1,
+   180
+  ],
+  [
+   0.2,
+   1,
+   365
+  ],
+  [
+   0.2,
+   2,
+   180
+  ],
+  [
+   0.2,
+   2,
+   365
+  ],
+  [
+   0.3,
+   0.5,
+   180
+  ],
+  [
+   0.3,
+   0.5,
+   365
+  ],
+  [
+   0.3,
+   1,
+   180
+  ],
+  [
+   0.3,
+   1,
+   365
+  ],
+  [
+   0.3,
+   2,
+   180
+  ],
+  [
+   0.3,
+   2,
+   365
+  ],
+  [
+   0.5,
+   0.5,
+   180
+  ],
+  [
+   0.5,
+   0.5,
+   365
+  ],
+  [
+   0.5,
+   1,
+   180
+  ],
+  [
+   0.5,
+   1,
+   365
+  ],
+  [
+   0.5,
+   2,
+   180
+  ],
+  [
+   0.5,
+   2,
+   365
+  ],
+  [
+   0.7,
+   0.5,
+   180
+  ],
+  [
+   0.7,
+   0.5,
+   365
+  ],
+  [
+   0.7,
+   1,
+   180
+  ],
+  [
+   0.7,
+   1,
+   365
+  ],
+  [
+   0.7,
+   2,
+   180
+  ],
+  [
+   0.7,
+   2,
+   365
+  ]
+ ],
+ "label-free days": 30
+}

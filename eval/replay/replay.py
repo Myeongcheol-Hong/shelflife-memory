@@ -132,8 +132,9 @@ def sessions(truths: dict[str, Truth], split: str, seed: int) -> dict[str, list[
 
 
 # A policy gives the days it checks a claim, ascending, after its creation and up to its
-# end. No check depends on what an earlier one found: after same or changed the next is
-# the check day plus the interval (D9), and the replay's verifier is always right.
+# end. The replay's verifier is always right. In M6's policies no check depends on what
+# an earlier one found: after same or changed the next is the check day plus the interval
+# (D9). M7's adaptive policy learns from each check (adaptive.py).
 Policy = Callable[[Claim, Truth, random.Random], list[date]]
 
 

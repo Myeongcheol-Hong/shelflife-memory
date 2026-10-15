@@ -1,0 +1,646 @@
+{
+ "selected": "adaptive p=0.7 a=2 max=180",
+ "per-class dev cost": 0.970275958015621,
+ "test": {
+  "policies": {
+   "adaptive p=0.7 a=2 max=180": {
+    "projects": 70,
+    "claims": 1400.0,
+    "stale-answer rate": {
+     "value": 0.5410682879303583,
+     "ci": [
+      0.4871120496576438,
+      0.5956130858501074
+     ]
+    },
+    "stale claim-days": {
+     "value": 0.5405710082444629,
+     "ci": [
+      0.48672612702226736,
+      0.5949239685336918
+     ]
+    },
+    "checks per claim-month": {
+     "value": 0.7830455128515036,
+     "ci": [
+      0.533588317423357,
+      1.0962966939320535
+     ]
+    },
+    "mean days to detect": {
+     "value": 33.39405396646578,
+     "ci": [
+      20.00995660325214,
+      49.45036733054009
+     ]
+    },
+    "undetected share": {
+     "value": 0.10461444925763949,
+     "ci": [
+      0.05617450451506978,
+      0.15813145068807338
+     ]
+    }
+   },
+   "per-class": {
+    "projects": 70,
+    "claims": 1400.0,
+    "stale-answer rate": {
+     "value": 0.46509369503878123,
+     "ci": [
+      0.3986233901115028,
+      0.5286628250497144
+     ]
+    },
+    "stale claim-days": {
+     "value": 0.4649268065006869,
+     "ci": [
+      0.39907305853023145,
+      0.5273635429901915
+     ]
+    },
+    "checks per claim-month": {
+     "value": 1.1216978885734645,
+     "ci": [
+      0.8245149688523933,
+      1.4525869770757815
+     ]
+    },
+    "mean days to detect": {
+     "value": 28.867479394287905,
+     "ci": [
+      15.484765042755157,
+      45.12645060004101
+     ]
+    },
+    "undetected share": {
+     "value": 0.09890770410595473,
+     "ci": [
+      0.050950063723786354,
+      0.15155879411344478
+     ]
+    }
+   },
+   "fixed 30": {
+    "projects": 70,
+    "claims": 1400.0,
+    "stale-answer rate": {
+     "value": 0.3790600129060012,
+     "ci": [
+      0.3197342354888884,
+      0.4406118337855786
+     ]
+    },
+    "stale claim-days": {
+     "value": 0.3796650435582536,
+     "ci": [
+      0.3196033697828458,
+      0.44151992686343755
+     ]
+    },
+    "checks per claim-month": {
+     "value": 0.9540389374325369,
+     "ci": [
+      0.9528460639007414,
+      0.9550594251495517
+     ]
+    },
+    "mean days to detect": {
+     "value": 14.506942987184956,
+     "ci": [
+      14.452099050116175,
+      14.565881194489672
+     ]
+    },
+    "undetected share": {
+     "value": 0.04521179209760883,
+     "ci": [
+      0.0358162382774741,
+      0.05477780669037499
+     ]
+    }
+   },
+   "adaptive p=0.7 a=2 max=180 label-free": {
+    "projects": 70,
+    "claims": 1400.0,
+    "stale-answer rate": {
+     "value": 0.5114540761454077,
+     "ci": [
+      0.4600999268291917,
+      0.5598162432806801
+     ]
+    },
+    "stale claim-days": {
+     "value": 0.5107437366796146,
+     "ci": [
+      0.4602082522426243,
+      0.5592846175819467
+     ]
+    },
+    "checks per claim-month": {
+     "value": 0.5814183078857587,
+     "ci": [
+      0.5162488764424754,
+      0.6472061206812398
+     ]
+    },
+    "mean days to detect": {
+     "value": 22.84834792018541,
+     "ci": [
+      21.398666779253926,
+      25.25531210331696
+     ]
+    },
+    "undetected share": {
+     "value": 0.05509150828030758,
+     "ci": [
+      0.04396032364208619,
+      0.0691771884361618
+     ]
+    }
+   }
+  },
+  "selected minus per-class": {
+   "stale-answer rate": {
+    "value": 0.0759745928915771,
+    "ci": [
+     0.05290966811696857,
+     0.09951935854699628
+    ]
+   },
+   "stale claim-days": {
+    "value": 0.07564420174377601,
+    "ci": [
+     0.0524935929139877,
+     0.09945045725499224
+    ]
+   },
+   "checks per claim-month": {
+    "value": -0.33865237572196094,
+    "ci": [
+     -0.5609376815149951,
+     -0.12491164325092341
+    ]
+   }
+  },
+  "selected minus fixed 30": {
+   "stale-answer rate": {
+    "value": 0.1620082750243571,
+    "ci": [
+     0.106770420763245,
+     0.21447501964639676
+    ]
+   },
+   "stale claim-days": {
+    "value": 0.16090596468620932,
+    "ci": [
+     0.10513669447291218,
+     0.21259313129992496
+    ]
+   },
+   "checks per claim-month": {
+    "value": -0.17099342458103328,
+    "ci": [
+     -0.41997789733631063,
+     0.14218709110307393
+    ]
+   }
+  },
+  "on the fixed-N curve": {
+   "value": 0.11204069896801871,
+   "between": [
+    "fixed 60",
+    "fixed 30"
+   ],
+   "ci": [
+    0.06652881036602426,
+    0.1559656704186526
+   ],
+   "resamples outside": 0
+  },
+  "label-free minus selected": {
+   "stale-answer rate": {
+    "value": -0.029614211784950606,
+    "ci": [
+     -0.06892328457255692,
+     0.012071152220144099
+    ]
+   },
+   "stale claim-days": {
+    "value": -0.029827271564848323,
+    "ci": [
+     -0.06896032085907894,
+     0.01133124013459319
+    ]
+   },
+   "checks per claim-month": {
+    "value": -0.20162720496574493,
+    "ci": [
+     -0.48029182834758766,
+     0.01737239770304333
+    ]
+   }
+  }
+ },
+ "dev": {
+  "policies": {
+   "adaptive p=0.7 a=2 max=180": {
+    "projects": 68,
+    "claims": 1360.0,
+    "stale-answer rate": {
+     "value": 0.5657505358302352,
+     "ci": [
+      0.5045150560429136,
+      0.62638319176656
+     ]
+    },
+    "stale claim-days": {
+     "value": 0.5631401220049073,
+     "ci": [
+      0.501610400727623,
+      0.62383908491474
+     ]
+    },
+    "checks per claim-month": {
+     "value": 0.5235422249950198,
+     "ci": [
+      0.33585536872611277,
+      0.7603702501450901
+     ]
+    },
+    "mean days to detect": {
+     "value": 36.09695422029057,
+     "ci": [
+      24.863972145108928,
+      50.85225250375126
+     ]
+    },
+    "undetected share": {
+     "value": 0.22515167795788404,
+     "ci": [
+      0.1367978989304338,
+      0.318964772923502
+     ]
+    }
+   },
+   "per-class": {
+    "projects": 68,
+    "claims": 1360.0,
+    "stale-answer rate": {
+     "value": 0.4878956955449954,
+     "ci": [
+      0.41959015965318525,
+      0.5555019277614687
+     ]
+    },
+    "stale claim-days": {
+     "value": 0.48559543592446885,
+     "ci": [
+      0.417264014758255,
+      0.5525062247846291
+     ]
+    },
+    "checks per claim-month": {
+     "value": 0.970275958015621,
+     "ci": [
+      0.6929822931719544,
+      1.2722570525134895
+     ]
+    },
+    "mean days to detect": {
+     "value": 27.642318111455126,
+     "ci": [
+      16.810264174052087,
+      42.61041311754684
+     ]
+    },
+    "undetected share": {
+     "value": 0.18734684785030079,
+     "ci": [
+      0.10104547172187933,
+      0.2844134547442239
+     ]
+    }
+   },
+   "fixed 30": {
+    "projects": 68,
+    "claims": 1360.0,
+    "stale-answer rate": {
+     "value": 0.3826143918542312,
+     "ci": [
+      0.315614636805524,
+      0.44319868286800856
+     ]
+    },
+    "stale claim-days": {
+     "value": 0.380484461631416,
+     "ci": [
+      0.3131284985535375,
+      0.4410222298867565
+     ]
+    },
+    "checks per claim-month": {
+     "value": 0.9200540750147365,
+     "ci": [
+      0.9171244628701931,
+      0.9223849807301745
+     ]
+    },
+    "mean days to detect": {
+     "value": 14.590422535211268,
+     "ci": [
+      14.439068733902326,
+      14.713656901812362
+     ]
+    },
+    "undetected share": {
+     "value": 0.06962116546328934,
+     "ci": [
+      0.04941114431358762,
+      0.09847521158771351
+     ]
+    }
+   }
+  },
+  "selected minus per-class": {
+   "stale-answer rate": {
+    "value": 0.07785484028523976,
+    "ci": [
+     0.056440136702336385,
+     0.09946423741590943
+    ]
+   },
+   "stale claim-days": {
+    "value": 0.07754468608043841,
+    "ci": [
+     0.056240391884177565,
+     0.09928016032064119
+    ]
+   },
+   "checks per claim-month": {
+    "value": -0.44673373302060126,
+    "ci": [
+     -0.6685469435546822,
+     -0.2569353658932365
+    ]
+   }
+  },
+  "selected minus fixed 30": {
+   "stale-answer rate": {
+    "value": 0.18313614397600397,
+    "ci": [
+     0.13768745492848172,
+     0.22874522325161195
+    ]
+   },
+   "stale claim-days": {
+    "value": 0.18265566037349124,
+    "ci": [
+     0.13752952574509708,
+     0.22680937981473082
+    ]
+   },
+   "checks per claim-month": {
+    "value": -0.39651185001971667,
+    "ci": [
+     -0.5847569565693364,
+     -0.16014007338113923
+    ]
+   }
+  },
+  "on the fixed-N curve": {
+   "value": 0.0787938034718062,
+   "between": [
+    "fixed 60",
+    "fixed 30"
+   ],
+   "ci": [
+    0.04156257118380002,
+    0.11502883922667739
+   ],
+   "resamples outside": 0
+  }
+ },
+ "dev grid": {
+  "adaptive p=0.05 a=0.5 max=180": {
+   "stale-answer rate": 0.5548040843767418,
+   "stale claim-days": 0.5523652900055503,
+   "checks per claim-month": 2.754751444309539
+  },
+  "adaptive p=0.05 a=0.5 max=365": {
+   "stale-answer rate": 0.7576438409690343,
+   "stale claim-days": 0.7563623813009975,
+   "checks per claim-month": 0.00041810578404262395
+  },
+  "adaptive p=0.05 a=1 max=180": {
+   "stale-answer rate": 0.5490579156347506,
+   "stale claim-days": 0.5469102392466881,
+   "checks per claim-month": 2.900719551856185
+  },
+  "adaptive p=0.05 a=1 max=365": {
+   "stale-answer rate": 0.7576438409690343,
+   "stale claim-days": 0.7563623813009975,
+   "checks per claim-month": 0.00041810578404262395
+  },
+  "adaptive p=0.05 a=2 max=180": {
+   "stale-answer rate": 0.048589602882278246,
+   "stale claim-days": 0.04881344037934491,
+   "checks per claim-month": 13.136121306424814
+  },
+  "adaptive p=0.05 a=2 max=365": {
+   "stale-answer rate": 0.048589602882278246,
+   "stale claim-days": 0.04881344037934491,
+   "checks per claim-month": 13.136121306424814
+  },
+  "adaptive p=0.1 a=0.5 max=180": {
+   "stale-answer rate": 0.5765935562463729,
+   "stale claim-days": 0.5744093026077507,
+   "checks per claim-month": 1.68924574536374
+  },
+  "adaptive p=0.1 a=0.5 max=365": {
+   "stale-answer rate": 0.7576438409690343,
+   "stale claim-days": 0.7563623813009975,
+   "checks per claim-month": 0.00041810578404262395
+  },
+  "adaptive p=0.1 a=1 max=180": {
+   "stale-answer rate": 0.5662217216670786,
+   "stale claim-days": 0.5636566056204895,
+   "checks per claim-month": 1.8361484423100103
+  },
+  "adaptive p=0.1 a=1 max=365": {
+   "stale-answer rate": 0.7576438409690343,
+   "stale claim-days": 0.7563623813009975,
+   "checks per claim-month": 0.00041810578404262395
+  },
+  "adaptive p=0.1 a=2 max=180": {
+   "stale-answer rate": 0.11253296864315715,
+   "stale claim-days": 0.11330338821449977,
+   "checks per claim-month": 8.29772739010991
+  },
+  "adaptive p=0.1 a=2 max=365": {
+   "stale-answer rate": 0.11253296864315715,
+   "stale claim-days": 0.11330338821449977,
+   "checks per claim-month": 8.29772739010991
+  },
+  "adaptive p=0.2 a=0.5 max=180": {
+   "stale-answer rate": 0.6185463342316512,
+   "stale claim-days": 0.6158952341679326,
+   "checks per claim-month": 0.6804056773846581
+  },
+  "adaptive p=0.2 a=0.5 max=365": {
+   "stale-answer rate": 0.7576438409690343,
+   "stale claim-days": 0.7563623813009975,
+   "checks per claim-month": 0.00041810578404262395
+  },
+  "adaptive p=0.2 a=1 max=180": {
+   "stale-answer rate": 0.5976245338420608,
+   "stale claim-days": 0.5953695194324912,
+   "checks per claim-month": 0.8911801814579107
+  },
+  "adaptive p=0.2 a=1 max=365": {
+   "stale-answer rate": 0.7576438409690343,
+   "stale claim-days": 0.7563623813009975,
+   "checks per claim-month": 0.00041810578404262395
+  },
+  "adaptive p=0.2 a=2 max=180": {
+   "stale-answer rate": 0.23424831493601647,
+   "stale claim-days": 0.23463850655893212,
+   "checks per claim-month": 4.404178762357691
+  },
+  "adaptive p=0.2 a=2 max=365": {
+   "stale-answer rate": 0.23424831493601647,
+   "stale claim-days": 0.23463850655893212,
+   "checks per claim-month": 4.404178762357691
+  },
+  "adaptive p=0.3 a=0.5 max=180": {
+   "stale-answer rate": 0.6526670842215954,
+   "stale claim-days": 0.6495412723696843,
+   "checks per claim-month": 0.2958467338969837
+  },
+  "adaptive p=0.3 a=0.5 max=365": {
+   "stale-answer rate": 0.7576438409690343,
+   "stale claim-days": 0.7563623813009975,
+   "checks per claim-month": 0.00041810578404262395
+  },
+  "adaptive p=0.3 a=1 max=180": {
+   "stale-answer rate": 0.6237523631118954,
+   "stale claim-days": 0.6212346909747357,
+   "checks per claim-month": 0.5022188300088458
+  },
+  "adaptive p=0.3 a=1 max=365": {
+   "stale-answer rate": 0.7576438409690343,
+   "stale claim-days": 0.7563623813009975,
+   "checks per claim-month": 0.00041810578404262395
+  },
+  "adaptive p=0.3 a=2 max=180": {
+   "stale-answer rate": 0.33775979865424716,
+   "stale claim-days": 0.3368932444762896,
+   "checks per claim-month": 2.696364201290882
+  },
+  "adaptive p=0.3 a=2 max=365": {
+   "stale-answer rate": 0.33775979865424716,
+   "stale claim-days": 0.3368932444762896,
+   "checks per claim-month": 2.696364201290882
+  },
+  "adaptive p=0.5 a=0.5 max=180": {
+   "stale-answer rate": 0.6847019749581964,
+   "stale claim-days": 0.6818411739098714,
+   "checks per claim-month": 0.10064052166484806
+  },
+  "adaptive p=0.5 a=0.5 max=365": {
+   "stale-answer rate": 0.7576438409690343,
+   "stale claim-days": 0.7563623813009975,
+   "checks per claim-month": 0.00041810578404262395
+  },
+  "adaptive p=0.5 a=1 max=180": {
+   "stale-answer rate": 0.6636709973625083,
+   "stale claim-days": 0.6605226978152744,
+   "checks per claim-month": 0.19252541632268586
+  },
+  "adaptive p=0.5 a=1 max=365": {
+   "stale-answer rate": 0.7576438409690343,
+   "stale claim-days": 0.7563623813009975,
+   "checks per claim-month": 0.00041810578404262395
+  },
+  "adaptive p=0.5 a=2 max=180": {
+   "stale-answer rate": 0.4747427152945774,
+   "stale claim-days": 0.47125932642338375,
+   "checks per claim-month": 1.1254915817269737
+  },
+  "adaptive p=0.5 a=2 max=365": {
+   "stale-answer rate": 0.49189502898942145,
+   "stale claim-days": 0.489327235000865,
+   "checks per claim-month": 1.1073654662658317
+  },
+  "adaptive p=0.7 a=0.5 max=180": {
+   "stale-answer rate": 0.6911606686241947,
+   "stale claim-days": 0.6884464254824821,
+   "checks per claim-month": 0.08534276886046498
+  },
+  "adaptive p=0.7 a=0.5 max=365": {
+   "stale-answer rate": 0.7576438409690343,
+   "stale claim-days": 0.7563623813009975,
+   "checks per claim-month": 0.00041810578404262395
+  },
+  "adaptive p=0.7 a=1 max=180": {
+   "stale-answer rate": 0.6812657660504857,
+   "stale claim-days": 0.6780413301666603,
+   "checks per claim-month": 0.11020776578205867
+  },
+  "adaptive p=0.7 a=1 max=365": {
+   "stale-answer rate": 0.7576438409690343,
+   "stale claim-days": 0.7563623813009975,
+   "checks per claim-month": 0.00041810578404262395
+  },
+  "adaptive p=0.7 a=2 max=180": {
+   "stale-answer rate": 0.5657505358302352,
+   "stale claim-days": 0.5631401220049073,
+   "checks per claim-month": 0.5235422249950198
+  },
+  "adaptive p=0.7 a=2 max=365": {
+   "stale-answer rate": 0.5999057628326315,
+   "stale claim-days": 0.598551222467529,
+   "checks per claim-month": 0.4870440494938871
+  },
+  "per-class": {
+   "stale-answer rate": 0.4878956955449954,
+   "stale claim-days": 0.48559543592446885,
+   "checks per claim-month": 0.970275958015621
+  },
+  "fixed 3": {
+   "stale-answer rate": 0.058128242993983774,
+   "stale claim-days": 0.057687120784202475,
+   "checks per claim-month": 9.944818234659001
+  },
+  "fixed 7": {
+   "stale-answer rate": 0.1433151945940045,
+   "stale claim-days": 0.1435914630997051,
+   "checks per claim-month": 4.214949003391577
+  },
+  "fixed 14": {
+   "stale-answer rate": 0.2439995632911756,
+   "stale claim-days": 0.24367615001635537,
+   "checks per claim-month": 2.0665001348596106
+  },
+  "fixed 30": {
+   "stale-answer rate": 0.3826143918542312,
+   "stale claim-days": 0.380484461631416,
+   "checks per claim-month": 0.9200540750147365
+  },
+  "fixed 60": {
+   "stale-answer rate": 0.515310666613036,
+   "stale claim-days": 0.5118869114033846,
+   "checks per claim-month": 0.41840091753724223
+  },
+  "fixed 90": {
+   "stale-answer rate": 0.5864827126513397,
+   "stale claim-days": 0.5832895415347105,
+   "checks per claim-month": 0.252142382235587
+  },
+  "fixed 180": {
+   "stale-answer rate": 0.6911606686241947,
+   "stale claim-days": 0.6884464254824821,
+   "checks per claim-month": 0.08534276886046498
+  }
+ }
+}
