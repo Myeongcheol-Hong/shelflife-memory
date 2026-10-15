@@ -19,7 +19,7 @@ Where the work stands. Each session's last PR overwrites this file (CLAUDE.md); 
 
 ## Next session: start here
 
-1. After D14 is confirmed: `uv run python -m eval.replay.llm_labels` on a clean tree (70 projects × 3 calls through `claude -p`; running again resumes a run cut short), commit its folder under `eval/results/`, and tick the roadmap's LLM-judged policy and volatility-impact boxes. Every table says both label sets use present-day knowledge (D13).
+1. After D14 is confirmed: `uv run python -m eval.replay.llm_labels` on a clean tree (70 projects × 3 calls through `claude -p`; running again resumes a run cut short), commit its folder under `eval/results/`, and tick the roadmap's LLM-judged policy box, and the volatility-impact box if D14's open question says so. Every table says both label sets use present-day knowledge (D13).
 2. After the budget rule is confirmed: build it (it reuses M7b's per-claim rate and `--dev-costs`), set its multiplier on dev by cost alone, and report it on test against fixed 30 and the fixed-N curve.
 3. Then the Pareto figure. Every eval also runs on `eval/data/smoke/` in CI, with a stub model for the model evals. Never fill a label.
 
