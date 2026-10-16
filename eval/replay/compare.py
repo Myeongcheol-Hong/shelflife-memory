@@ -206,77 +206,66 @@ def table(metrics: dict, cfg: dict) -> str:
         "",
     ]
     for split in ("test", "dev"):
-        part = metrics[split]
-        title = "Test" if split == "test" else "Dev, where the tuned per-class and both μ were set"
-        names = [n for n in part["policies"] if n not in CURVE and n not in APART]
-        lines += [f"## {title}", "", "### Scheduled policies", ""]
-        lines += [*adaptive_run._policies({n: part["policies"][n] for n in [*names, "fixed 30"]})]
+        part, found = metrics[split], metrics[split]["policies"]
         rows = [
             [f"{n} minus fixed 30", *adaptive_run._differences(v)]
             for n, v in part["minus fixed 30"].items()
         ]
-        rows += [
+        rows.append(
             ["tuned minus per-class", *adaptive_run._differences(part["tuned minus per-class"])]
-        ]
+        )
         header = ["Paired, on the same claims", "Stale-answer rate", "Stale claim-days"]
-        lines += ["", *run._table([*header, "Checks per claim-month"], rows), ""]
-        lines += [
+        paired = run._table([*header, "Checks per claim-month"], rows)
+        curve = [
             f"- {adaptive_run._curve_line(n, v)}" for n, v in part["on the dense curve"].items()
         ]
-        lines += [
-            "",
-            "### Apart: not scheduled",
-            "",
-            *adaptive_run._policies({n: part["policies"][n] for n in APART}),
-        ]
-        lines += [
-            "",
-            "### The dense fixed-N curve",
-            "",
-            *adaptive_run._policies({n: part["policies"][n] for n in CURVE}),
-        ]
-        lines += ["", "### By observed change rate: stale claim-days (checks per claim-month)", ""]
-        lines += _buckets(part["policies"])
+        ours = [*part["minus fixed 30"], "fixed 30"]
+        sections = {
+            "Scheduled policies": [*_rows(found, ours), "", *paired, "", *curve],
+            "Apart: not scheduled": _rows(found, APART),
+            "The dense fixed-N curve": _rows(found, CURVE),
+            "By observed change rate: stale claim-days (checks per claim-month)": _buckets(found),
+        }
         if "grid" in part:
-            lines += [
-                "",
-                "### The tuned per-class grid (exploratory)",
-                "",
-                *_grid(part["grid"], cfg),
-            ]
-        lines += [""]
+            sections["The tuned per-class grid (exploratory)"] = _grid(part["grid"], cfg)
+        title = "Test" if split == "test" else "Dev, where the tuned per-class and both μ were set"
+        lines += [f"## {title}", ""]
+        for head, body in sections.items():
+            lines += [f"### {head}", "", *body, ""]
     return "\n".join(lines[:-1]) + "\n"
 
 
-def _buckets(policies: dict) -> list[str]:
-    first = next(iter(policies.values()))["buckets"]
+def _rows(found: dict, names) -> list[str]:
+    return adaptive_run._policies({n: found[n] for n in names})
+
+
+def _buckets(found: dict) -> list[str]:
+    first = next(iter(found.values()))["buckets"]
     header = ["Policy", *(f"{b} ({first[b]['projects']} projects)" for b in run.BUCKETS)]
+    cell = "{} ({})".format
     rows = [
         [
             n,
             *(
-                f"{run._pct(m['buckets'][b]['stale claim-days'])} "
-                f"({run._num(m['buckets'][b]['checks per claim-month'], ci=False)})"
-                for b in run.BUCKETS
+                cell(
+                    run._pct(b["stale claim-days"]), run._num(b["checks per claim-month"], ci=False)
+                )
+                for b in m["buckets"].values()
             ),
         ]
-        for n, m in policies.items()
+        for n, m in found.items()
     ]
     return run._table(header, rows)
 
 
 def _grid(grid: dict, cfg: dict) -> list[str]:
-    chosen = tuned_name(*cfg["tuned"])
+    chosen, header = tuned_name(*cfg["tuned"]), ["Policy", "Checks per claim-month"]
     rows = [
-        [
-            n,
-            f"{m['checks per claim-month']:.3f}",
-            f"{100 * m['stale claim-days']:.1f}%",
-            "selected" if n == chosen else "",
-        ]
+        [n, f"{m['checks per claim-month']:.3f}", f"{100 * m['stale claim-days']:.1f}%"]
+        + ["selected" if n == chosen else ""]
         for n, m in grid.items()
     ]
-    return run._table(["Policy", "Checks per claim-month", "Stale claim-days", ""], rows)
+    return run._table([*header, "Stale claim-days", ""], rows)
 
 
 def _labels(data: Path) -> dict[str, str]:
