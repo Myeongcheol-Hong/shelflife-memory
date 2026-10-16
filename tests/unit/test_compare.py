@@ -79,8 +79,7 @@ def test_from_mu_64_both_budget_policies_are_fixed_180():
     truth = Truth((d(1, 20), d(3, 1), d(7, 9)), ("2", "3", "4"), "1")
     fixed = POLICIES["fixed 180"](claim("fast"), truth, RNG)
     assert compare.count_aware(64)(claim("fast"), truth, RNG) == fixed
-    late = claim("fast", end=replay.SPLITS["dev"][1])
-    assert compare.true_rate(64)(late, truth, RNG) == POLICIES["fixed 180"](late, truth, RNG)
+    assert compare.true_rate(64)(claim("fast"), truth, RNG) == fixed
 
 
 def test_the_true_rate_is_a_fixed_interval_from_the_projects_rate_in_the_split():
@@ -95,6 +94,11 @@ def test_the_true_rate_is_a_fixed_interval_from_the_projects_rate_in_the_split()
     assert gaps == {budget.wait(10, lam)}
     quiet = Truth((), (), "1")  # no change in the split: λ = 0, the cap
     assert compare.true_rate(10)(c, quiet, RNG)[0] == c.created + timedelta(budget.CAP)
+    # A dev claim takes dev's rate: the same changes over a shorter split.
+    dev = claim("slow")
+    rate = compare.true_lambda(truth, "dev")
+    assert rate != lam and rate == pytest.approx(18 / 366, rel=1e-12)
+    assert compare.true_rate(10)(dev, truth, RNG)[0] == START + timedelta(budget.wait(10, rate))
 
 
 def test_the_place_on_the_curve_uses_the_dense_points():
@@ -114,11 +118,12 @@ def test_selection_takes_the_least_stale_point_within_fixed_30s_cost():
         return {"p": Counts(claims=1, days=30, checks=checks, stale_days=stale)}
 
     dev = {"fixed 30": counts(1, 10), "a": counts(2, 1), "b": counts(1, 5), "c": counts(0.5, 5)}
-    assert compare.select(dev, ["a", "b", "c"]) == "c"  # a costs too much; c is cheaper than b
+    select = adaptive_run.select
+    assert select(dev, ["a", "b", "c"], "fixed 30") == "c"  # a costs too much; c is cheaper
     dev["b"] = counts(1, 4)
-    assert compare.select(dev, ["a", "b", "c"]) == "b"  # at most fixed 30's cost fits
+    assert select(dev, ["a", "b", "c"], "fixed 30") == "b"  # at most fixed 30's cost fits
     with pytest.raises(ValueError):
-        compare.select(dev, ["a"])
+        select(dev, ["a"], "fixed 30")
 
 
 def smoke(tmp_path):
@@ -155,8 +160,12 @@ def test_the_smoke_corpus_tunes_on_dev_and_then_runs(tmp_path, monkeypatch, caps
         assert compare.main([*argv, "--dev-costs"]) == 0 and not out.exists()
     assert json.loads(capsys.readouterr().out) == json.loads(json.dumps(found))
     for key in ("count-aware", "true-rate"):
-        assert found[key]["grid"][64] == found["fixed 180"]
-        assert found[key]["halvings"][found[key]["μ"]] <= found["fixed 30"]
+        mu, halvings = found[key]["μ"], found[key]["halvings"]
+        assert found[key]["grid"][64] == found[key]["fixed 180"]
+        assert found[key]["fixed 30"] == found["fixed 30"]
+        # μ is the cheapest step at most fixed 30's cost, and a step around it costs more.
+        assert mu == min(m for m, c in halvings.items() if c <= found["fixed 30"])
+        assert any(c > found["fixed 30"] for c in halvings.values())
     # No point of the real grid fits on the smoke corpus, so the selection stops.
     assert compare.main([*argv, "--dev-select"]) == 1
     monkeypatch.setattr(compare, "GRID", [(14, 45, 120), (21, 60, 120), (28, 90, 180)])
@@ -173,8 +182,19 @@ def test_the_smoke_corpus_tunes_on_dev_and_then_runs(tmp_path, monkeypatch, caps
     claude = dict(zip(projects, itertools.cycle(("slow", None, "fast")), strict=False))
     labels.write_text(json.dumps({"agreement": {"labels": claude}}))
     argv += ["--claude-labels", str(labels)]
-    assert compare.main(argv, now=lambda: NOW) == 1 and not out.exists()  # not dev's choice
-    monkeypatch.setattr(compare, "TUNED", tuned)
+    splits, projects = [], compare._projects
+
+    def recorded(timelines, labels, split, *args):
+        splits.append(split)
+        return projects(timelines, labels, split, *args)
+
+    with monkeypatch.context() as patch:  # dev runs first, and its checks stop the run
+        patch.setattr(compare, "_projects", recorded)
+        assert compare.main(argv, now=lambda: NOW) == 1  # not dev's choice
+        monkeypatch.setattr(compare, "TUNED", tuned)
+        patch.setattr(compare, "MU_COUNT", 1.0)  # costs more than fixed 30 on dev
+        assert compare.main(argv, now=lambda: NOW) == 1 and not out.exists()
+    assert splits == ["dev", "dev"]  # test never replayed
     assert compare.main(argv, now=lambda: NOW) == 0
     [folder] = out.iterdir()
     metrics = json.loads((folder / "metrics.json").read_text())

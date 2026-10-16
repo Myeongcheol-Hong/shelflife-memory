@@ -72,13 +72,14 @@ def _projects(timelines, labels, split, seeds, policies) -> dict[str, dict[str, 
     return {name: score.per_project(rows, name) for name in policies}
 
 
-def select(dev: dict[str, dict[str, Counts]], names: list[str]) -> str:
+def select(dev: dict[str, dict[str, Counts]], names: list[str], cap: str = "per-class") -> str:
     """D12's rule on dev: the lowest stale claim-days among the points costing no more
-    checks per claim-month than per-class, ties to the cheaper, then to the grid order."""
-    cap = _cost(dev["per-class"])
-    fits = [name for name in names if _cost(dev[name]) <= cap]
+    checks per claim-month than `cap` (per-class in M7b, fixed 30 in M7e), ties to the
+    cheaper, then to the grid order."""
+    limit = _cost(dev[cap])
+    fits = [name for name in names if _cost(dev[name]) <= limit]
     if not fits:
-        raise ValueError(f"no grid point costs at most per-class's {cap:.3f} on dev")
+        raise ValueError(f"no grid point costs at most {cap}'s {limit:.4f} on dev")
     stale = {name: score.value("stale claim-days", score.total(dev[name])) for name in fits}
     return min(fits, key=lambda name: (stale[name], _cost(dev[name])))
 

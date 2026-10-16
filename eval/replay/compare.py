@@ -24,6 +24,7 @@ from pathlib import Path
 
 from eval.replay import adaptive, adaptive_run, budget, run, score
 from eval.replay.adaptive_run import COST, RATE, _projects
+from eval.replay.llm_labels import MISSING
 from eval.replay.replay import (
     FIXED,
     POLICIES,
@@ -109,39 +110,21 @@ def true_lambda(truth: Truth, split: str) -> float:
 
 
 def dev_costs(data: Path) -> dict:
-    """The grid's dev costs and μ for both budget policies, with no staleness (D12)."""
-    labels, timelines = _labels(data), load_all(data)
-
-    def costs(policies: dict[str, Policy]) -> dict[str, float]:
-        return adaptive_run.dev_costs(timelines, labels, run.SEEDS, policies)
-
-    base = costs({n: POLICIES[n] for n in ("fixed 30", "fixed 180")})
-    grid = costs({tuned_name(*p): per_class(*p) for p in GRID})
-    found = {"fixed 30": base["fixed 30"], "fixed 180": base["fixed 180"], "grid": grid}
+    """The grid's dev costs, and μ for both budget policies by M7d's search, with no
+    staleness computed (D12)."""
+    grid = {tuned_name(*p): per_class(*p) for p in GRID}
+    found = {"grid": adaptive_run.dev_costs(load_all(data), _labels(data), run.SEEDS, grid)}
     for key, make in (("count-aware", count_aware), ("true-rate", true_rate)):
-        mu, steps = budget.search(lambda m, make=make: costs({"x": make(m)})["x"], base["fixed 30"])
-        if steps["grid"][budget.GRID[-1]] != base["fixed 180"]:  # every wait at the cap there
-            raise ValueError(f"{key}: μ = {budget.GRID[-1]} should cost what fixed 180 does")
-        found[key] = {"μ": mu} | steps
-    return found
-
-
-def select(dev: dict, names: list[str]) -> str:
-    """The lowest stale claim-days on dev among the points costing at most fixed 30, ties
-    to the cheaper, then to the grid's order; an error if none fits (D12)."""
-    cap = adaptive_run._cost(dev["fixed 30"])
-    if not (fits := [n for n in names if adaptive_run._cost(dev[n]) <= cap]):
-        raise ValueError(f"no grid point costs at most fixed 30's {cap:.4f} on dev")
-    stale = {n: score.value("stale claim-days", score.total(dev[n])) for n in fits}
-    return min(fits, key=lambda n: (stale[n], adaptive_run._cost(dev[n])))
+        found[key] = budget.dev_costs(data, make)
+    return found | {"fixed 30": found["count-aware"]["fixed 30"]}
 
 
 def dev_select(data: Path) -> tuple[str, dict]:
-    labels, timelines = _labels(data), load_all(data)
+    """The tuned per-class: D12's rule on dev, with fixed 30's dev cost as the cap."""
     grid = {tuned_name(*p): per_class(*p) for p in GRID}
-    dev = _projects(timelines, labels, "dev", run.SEEDS, grid | {"fixed 30": POLICIES["fixed 30"]})
-    shown = {n: {m: score.value(m, score.total(dev[n])) for m in COST} for n in grid}
-    return select(dev, list(grid)), shown
+    base = {"fixed 30": POLICIES["fixed 30"]}
+    dev = _projects(load_all(data), _labels(data), "dev", run.SEEDS, grid | base)
+    return adaptive_run.select(dev, list(grid), "fixed 30"), _values(dev, grid)
 
 
 def scheduled(claude: dict[str, str]) -> dict[str, Policy]:
@@ -153,19 +136,28 @@ def scheduled(claude: dict[str, str]) -> dict[str, Policy]:
         adaptive.name(0.7, 2, 180): adaptive.policy(0.7, 2, 180),  # M7b's selected point
         budget.name(budget.MU): budget.policy(budget.MU),
         f"count-aware μ={MU_COUNT:.4g}": count_aware(MU_COUNT),
-        f"true-rate μ={MU_TRUE:.4g}": true_rate(MU_TRUE),
+        f"true-rate μ={MU_TRUE:.4g} (exploratory)": true_rate(MU_TRUE),
     }
 
 
 def evaluate(timelines, labels, claude, seeds) -> dict:
-    """Per split: every policy's metrics and breakdown; for the scheduled ones, minus fixed
-    30 and the place on the dense curve. Dev also shows the tuned per-class grid."""
+    """Per split, dev first: every policy's metrics and breakdown; for the scheduled ones,
+    minus fixed 30 and the place on the dense curve. Dev also shows the tuned per-class
+    grid, and stops the run unless it selects TUNED and every μ costs at most fixed 30."""
     ours = scheduled(claude)
     policies = CURVE_POLICIES | ours | {n: POLICIES[n] for n in APART}
     out: dict = {}
-    for split in ("test", "dev"):
+    for split in ("dev", "test"):
         grid = {tuned_name(*p): per_class(*p) for p in GRID} if split == "dev" else {}
         projects = _projects(timelines, labels, split, seeds, policies | grid)
+        if grid:
+            if (chosen := adaptive_run.select(projects, list(grid), "fixed 30")) != (
+                tuned := tuned_name(*TUNED)
+            ):
+                raise ValueError(f"dev selects {chosen}, not the recorded {tuned}")
+            cap = adaptive_run._cost(projects["fixed 30"]) * (1 + 1e-9)  # rounding only
+            if over := [n for n in ours if " μ=" in n and adaptive_run._cost(projects[n]) > cap]:
+                raise ValueError(f"{over} cost more than fixed 30 on dev")
         groups = run._groups(timelines, labels, split)
         out[split] = {
             "policies": {n: _with_groups(projects[n], groups) for n in policies},
@@ -176,14 +168,12 @@ def evaluate(timelines, labels, claude, seeds) -> dict:
                 projects[tuned_name(*TUNED)], projects["per-class"], COST
             ),
             "on the dense curve": {n: adaptive_run.place(projects, n, CURVE) for n in ours},
-        }
-        if grid:
-            if (chosen := select(projects, list(grid))) != tuned_name(*TUNED):
-                raise ValueError(f"dev selects {chosen}, not the recorded {tuned_name(*TUNED)}")
-            out[split]["grid"] = {
-                n: {m: score.value(m, score.total(projects[n])) for m in COST} for n in grid
-            }
-    return out
+        } | ({"grid": _values(projects, grid)} if grid else {})
+    return {"test": out["test"], "dev": out["dev"]}
+
+
+def _values(projects: dict, names) -> dict:
+    return {n: {m: score.value(m, score.total(projects[n])) for m in COST} for n in names}
 
 
 def _with_groups(projects: dict, groups: dict[str, set[str]]) -> dict:
@@ -227,7 +217,8 @@ def table(metrics: dict, cfg: dict) -> str:
             "By observed change rate: stale claim-days (checks per claim-month)": _buckets(found),
         }
         if "grid" in part:
-            sections["The tuned per-class grid (exploratory)"] = _grid(part["grid"], cfg)
+            cap = found["fixed 30"]["checks per claim-month"]["value"]
+            sections["The tuned per-class grid (exploratory)"] = _grid(part["grid"], cfg, cap)
         title = "Test" if split == "test" else "Dev, where the tuned per-class and both μ were set"
         lines += [f"## {title}", ""]
         for head, body in sections.items():
@@ -258,11 +249,11 @@ def _buckets(found: dict) -> list[str]:
     return run._table(header, rows)
 
 
-def _grid(grid: dict, cfg: dict) -> list[str]:
+def _grid(grid: dict, cfg: dict, cap: float) -> list[str]:
     chosen, header = tuned_name(*cfg["tuned"]), ["Policy", "Checks per claim-month"]
     rows = [
         [n, f"{m['checks per claim-month']:.3f}", f"{100 * m['stale claim-days']:.1f}%"]
-        + ["selected" if n == chosen else ""]
+        + ["selected" if n == chosen else "within fixed 30's cost" if m[COST[2]] <= cap else ""]
         for n, m in grid.items()
     ]
     return run._table([*header, "Stale claim-days", ""], rows)
@@ -298,7 +289,7 @@ def main(
         return 1
     labels = _labels(args.data)
     claude = json.loads(args.claude_labels.read_text("utf-8"))["agreement"]["labels"]
-    claude = {p: label or "medium" for p, label in claude.items()}  # M7c's MISSING (D14)
+    claude = {p: label or MISSING for p, label in claude.items()}  # D14
     cfg = run.config(args.data, now())
     del cfg["question rates per claim-day"], cfg["session size"]  # M6's other scenarios
     cfg |= {"run": cfg["run"] + "-compare", "decision": "D12 (M7e, after M7's results)"}
