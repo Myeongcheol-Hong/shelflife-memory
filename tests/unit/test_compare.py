@@ -310,6 +310,13 @@ def test_the_smoke_corpus_tunes_on_dev_and_then_runs(tmp_path, monkeypatch, caps
     table = (folder / "table.md").read_text()
     assert "not pre-registered" in table and "### Apart: not scheduled" in table
     assert "7 scheduled policies, each read on its own at 95% with no correction" in table
+    for name in ours:  # each place names its policy, in both splits
+        assert table.count(f"- {name}: On the fixed-N curve") == 2
+    (folder / "table.md").unlink()  # --table writes it again from the run's files alone
+    with monkeypatch.context() as patch:
+        patch.setattr(compare, "_projects", None)  # no replay
+        assert compare.main(["--table", str(folder)]) == 0
+    assert (folder / "table.md").read_text() == table
     assert ("it is fixed 30." in table) == (tuned == (30, 30, 30))
     assert config["scheduled"] == ours and config["grid"] == [list(p) for p in compare.GRID]
     for block in table.split("\n\n"):

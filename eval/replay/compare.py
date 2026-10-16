@@ -47,6 +47,7 @@ CURVE = [f"fixed {n}" for n in DENSE]
 CURVE_POLICIES = {name: interval(n) for name, n in zip(CURVE, DENSE, strict=True)}
 CLAUDE = Path("eval/results/f7b6974-llm-labels-claude-opus-5-5-bf48e181/metrics.json")
 APART = ("every read", "oracle")  # not scheduled: reported apart (D12)
+RUN_FILES = ("metrics.json", "config.json")
 # Set on dev and recorded in D12 before the test run.
 TUNED: tuple[int, int, int] | None = (30, 30, 30)  # selected again on the widened grid
 MU_COUNT: float | None = 4.92012052554465
@@ -224,7 +225,8 @@ def table(metrics: dict, cfg: dict) -> str:
         header = ["Paired, on the same claims", "Stale-answer rate", "Stale claim-days"]
         paired = run._table([*header, "Checks per claim-month"], rows)
         curve = [
-            f"- {adaptive_run._curve_line(n, v)}" for n, v in part["on the dense curve"].items()
+            f"- {n}: {adaptive_run._curve_line(n, v)}"
+            for n, v in part["on the dense curve"].items()
         ]
         curve += _bonferroni_lines(part)
         ours = [*part["minus fixed 30"], "fixed 30"]
@@ -316,7 +318,12 @@ def main(
     parser.add_argument("--claude-labels", type=Path, default=CLAUDE, help="M7c's metrics.json")
     parser.add_argument("--dev-costs", action="store_true", help="costs and μ; no staleness")
     parser.add_argument("--dev-select", action="store_true", help="the tuned per-class on dev")
+    parser.add_argument("--table", type=Path, help="write a run's table.md again; no replay")
     args = parser.parse_args(argv)
+    if args.table:  # from the run's own metrics.json and config.json
+        metrics, cfg = (json.loads((args.table / f).read_text()) for f in RUN_FILES)
+        (args.table / "table.md").write_text(table(metrics, cfg))
+        return 0
     try:
         if args.dev_costs:
             print(json.dumps(dev_costs(args.data), indent=1))
