@@ -171,6 +171,8 @@ def test_the_smoke_corpus_tunes_on_dev_and_then_runs(tmp_path, monkeypatch, caps
     monkeypatch.setattr(compare, "GRID", [(14, 45, 120), (21, 60, 120), (28, 90, 180)])
     chosen, shown = compare.dev_select(data)
     assert set(shown) == {compare.tuned_name(*p) for p in compare.GRID}
+    for name in ("TUNED", "MU_COUNT", "MU_TRUE"):
+        monkeypatch.setattr(compare, name, None)
     assert compare.main(argv) == 1  # nothing set yet: no run before D12 records it
     tuned = compare.GRID[[compare.tuned_name(*p) for p in compare.GRID].index(chosen)]
     other = next(p for p in compare.GRID if p != tuned)

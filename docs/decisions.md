@@ -265,7 +265,15 @@ One entry per decision: the options, the option chosen, why, and when to revisit
     - For each scheduled policy: the metrics, minus fixed 30 paired, its place on the dense curve and the breakdown. The tuned per-class also minus per-class.
     - Apart: every read and the oracle, with the breakdown.
     - The run checks again that dev selects the recorded tuned point and that both μ cost at most fixed 30 on dev, and stops otherwise.
-  - Order: this record was committed and pushed before any staleness (9ca1e98). Then the cost pass and the dev selection below ran and were recorded. This record was then reworded at Claude's review: the maintainer's words restored in rule 2, the options and both questions added, the true-rate bound called a reference; nothing that ran changed. Then the maintainer's OK, then the test run.
+  - Order: this record was committed and pushed before any staleness (9ca1e98). Then the cost pass and the dev selection below ran and were recorded. This record was then reworded at Claude's review: the maintainer's words restored in rule 2, the options and the questions added, the true-rate bound called a reference; nothing that ran changed. Then the maintainer's OK, then the test run.
+  - The dev passes, uniform scenario, 1 question a week, 5 seeds, recorded before any test staleness of these policies:
+    - The cost pass, `uv run python -m eval.replay.compare --dev-costs` at 06053e9 on a clean tree (2 min 24 s, no staleness computed), and again at 03020aa after the review, with identical numbers. Fixed 30 costs 0.9201 checks per claim-month on dev, fixed 180 0.0853.
+      - The per-class grid: 16 of the 80 points cost at most fixed 30's: 7/45/90 and 7/45/120; 10/30/90, 10/30/120 and 10/45 with any slow; 14/30 and 14/45 with any slow. The other 64 cost 0.936 to 2.408.
+      - Count-aware: μ = 1, 2, 4, 8, 16, 32 and 64 days cost 2.864, 1.861, 1.097, 0.585, 0.272, 0.133 and 0.0853, fixed 180's. 20 halvings between 4 and 8 days end at μ = 4.92012052554465 days, costing 0.9201, fixed 30's.
+      - True-rate: 3.635, 2.258, 1.285, 0.652, 0.283, 0.123 and 0.0853; μ = 5.911261617681446 days, costing 0.9179.
+    - The dev selection, `--dev-select` at 6bf8d37 in a clean checkout (30 s; dev staleness of the 80 points only), and again at 03020aa with the same result: `per-class tuned 14/30/45`, 39.6% stale claim-days on dev at 0.918 checks per claim-month; the next, 14/30/60, 42.0% at 0.848.
+    - `compare.TUNED`, `MU_COUNT` and `MU_TRUE` hold these values.
+  - A question for the maintainer: the selected point sits at a corner of the grid, the longest fast interval and the shortest slow one, so a wider grid could select outside it. Options: (i) keep it, the rule as written (Claude's recommendation: the grid was set before any staleness); (ii) widen the grid on dev (for example fast 21 and 30, slow 30) and select again, before any test run.
 - Revisit if: the results move more with the number of claims or the question rate than with the policy, or the claim-days share and the stale-answer rate disagree beyond question noise.
 
 ## D13: The shared model runner (M7)

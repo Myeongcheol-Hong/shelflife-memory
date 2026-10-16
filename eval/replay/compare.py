@@ -46,10 +46,11 @@ CURVE = [f"fixed {n}" for n in DENSE]
 CURVE_POLICIES = {name: interval(n) for name, n in zip(CURVE, DENSE, strict=True)}
 CLAUDE = Path("eval/results/f7b6974-llm-labels-claude-opus-5-5-bf48e181/metrics.json")
 APART = ("every read", "oracle")  # not scheduled: reported apart (D12)
-# Set on dev and recorded in D12 before the test run.
-TUNED: tuple[int, int, int] | None = None
-MU_COUNT: float | None = None
-MU_TRUE: float | None = None
+# Set on dev (--dev-select, --dev-costs at 06053e9, 6bf8d37 and 03020aa) and recorded in
+# D12 before the test run.
+TUNED: tuple[int, int, int] | None = (14, 30, 45)
+MU_COUNT: float | None = 4.92012052554465
+MU_TRUE: float | None = 5.911261617681446
 
 
 def tuned_name(fast: int, medium: int, slow: int) -> str:
