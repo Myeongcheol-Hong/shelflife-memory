@@ -29,7 +29,10 @@ def claim(label, created=START, end=END, project="x"):
 
 def test_the_dense_curve_adds_four_points():
     assert compare.DENSE == [3, 7, 14, 20, 25, 30, 40, 45, 60, 90, 180]
-    assert len(compare.GRID) == 80 and (7, 30, 90) in compare.GRID
+    # Widened at #37's review: fast 21 and 30, slow 30, so the uniform 30/30/30 is in it.
+    assert len(compare.GRID) == 7 * 4 * 5 and (30, 30, 30) in compare.GRID
+    assert {p[0] for p in compare.GRID} == {3, 5, 7, 10, 14, 21, 30}
+    assert {p[2] for p in compare.GRID} == {30, 45, 60, 90, 120}
 
 
 @pytest.mark.parametrize("label", ["fast", "medium", "slow"])
@@ -113,6 +116,35 @@ def test_the_place_on_the_curve_uses_the_dense_points():
     assert found["value"] == pytest.approx(0.1 - 0.1125)
 
 
+def test_percentiles_take_bonferronis_level():
+    values = list(range(2000))
+    assert score.percentiles(values) == (49, 1949)  # 2.5th and 97.5th, as before
+    assert score.percentiles(values, 0.05 / 7) == (7, 1992)  # ceil(7.14) and ceil(1992.86)
+
+
+def test_bonferroni_is_reported_only_below_the_curve():
+    units = [f"p{i}" for i in range(40)]
+    projects = {
+        f"fixed {n}": {
+            p: Counts(claims=1, days=30, checks=30 / n, stale_days=30 * n / 200) for p in units
+        }
+        for n in compare.DENSE
+    }
+    # x lies below the curve (3.375 stale days at its cost) on every project, by varying
+    # amounts; y lies above it.
+    projects["x"] = {
+        p: Counts(claims=1, days=30, checks=1.35, stale_days=3 + 0.009 * i)
+        for i, p in enumerate(units)
+    }
+    projects["y"] = {p: Counts(claims=1, days=30, checks=1.35, stale_days=4) for p in units}
+    places = {n: adaptive_run.place(projects, n, compare.CURVE) for n in ("x", "y")}
+    found = compare.bonferroni(projects, places)
+    assert list(found) == ["x"]
+    assert found["x"] == adaptive_run.place(projects, "x", compare.CURVE, 0.05 / 2)["ci"]
+    # 97.5% each for two policies: wider than the 95% interval at both ends.
+    assert found["x"][0] < places["x"]["ci"][0] and found["x"][1] > places["x"]["ci"][1]
+
+
 def test_selection_takes_the_least_stale_point_within_fixed_30s_cost():
     def counts(checks, stale):  # one project, 30 claim-days
         return {"p": Counts(claims=1, days=30, checks=checks, stale_days=stale)}
@@ -166,8 +198,9 @@ def test_the_smoke_corpus_tunes_on_dev_and_then_runs(tmp_path, monkeypatch, caps
         # μ is the cheapest step at most fixed 30's cost, and a step around it costs more.
         assert mu == min(m for m, c in halvings.items() if c <= found["fixed 30"])
         assert any(c > found["fixed 30"] for c in halvings.values())
-    # No point of the real grid fits on the smoke corpus, so the selection stops.
-    assert compare.main([*argv, "--dev-select"]) == 1
+    assert compare.main([*argv, "--dev-select"]) == 0  # the real grid, on the smoke corpus
+    printed = json.loads(capsys.readouterr().out)
+    assert printed["selected"] in printed["grid"] and len(printed["grid"]) == len(compare.GRID)
     monkeypatch.setattr(compare, "GRID", [(14, 45, 120), (21, 60, 120), (28, 90, 180)])
     chosen, shown = compare.dev_select(data)
     assert set(shown) == {compare.tuned_name(*p) for p in compare.GRID}
@@ -235,6 +268,10 @@ def test_the_smoke_corpus_tunes_on_dev_and_then_runs(tmp_path, monkeypatch, caps
     found = adaptive_run._projects(load_all(data), compare._labels(data), "test", [0], base)
     place = adaptive_run.place(found, "per-class", compare.CURVE)
     assert metrics["test"]["on the dense curve"]["per-class"] == json.loads(json.dumps(place))
+    for split in ("test", "dev"):  # Bonferroni only for places whose interval is below 0
+        part = metrics[split]
+        below = [n for n, v in part["on the dense curve"].items() if v["ci"] and v["ci"][1] < 0]
+        assert list(part["below the curve, Bonferroni"]) == below
     table = (folder / "table.md").read_text()
     assert "not pre-registered" in table and "### Apart: not scheduled" in table
     for block in table.split("\n\n"):

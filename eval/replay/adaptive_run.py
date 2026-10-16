@@ -125,13 +125,15 @@ def _mark(cost: float, cap: float) -> str:
     return f"{cost:.3f}" + (" *" if cost <= cap else "")
 
 
-def place(projects: dict[str, dict[str, Counts]], name: str, curve: list[str] = CURVE) -> dict:
+def place(
+    projects: dict[str, dict[str, Counts]], name: str, curve: list[str] = CURVE, alpha=0.05
+) -> dict:
     """Where a policy sits against the fixed-N curve (D12): the curve's stale
     claim-days at the policy's checks per claim-month, linear between the two fixed N
     whose costs bracket it, and the policy minus that, with its 95% interval over the
     same project resamples as every other interval. Below 0 is below the curve. If the
     policy falls outside the curve in any resample, no interval is given and "resamples
-    outside" counts them. M7e passes the dense curve (D12)."""
+    outside" counts them. M7e passes the dense curve, and alpha for Bonferroni (D12)."""
     units = sorted(projects[name])
     rows = {n: [projects[n][u] for u in units] for n in (name, *curve)}
     found = _gap(rows, name, range(len(units)), curve)
@@ -140,7 +142,7 @@ def place(projects: dict[str, dict[str, Counts]], name: str, curve: list[str] = 
     picks = score._resamples(len(units))
     gaps = [g[0] for pick in picks if (g := _gap(rows, name, pick, curve))]
     outside = len(picks) - len(gaps)
-    ci = None if outside else score.percentiles(gaps)
+    ci = None if outside else score.percentiles(gaps, alpha)
     return {"value": found[0], "between": found[1], "ci": ci, "resamples outside": outside}
 
 

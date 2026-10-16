@@ -40,7 +40,8 @@ from eval.replay.timelines import LABELS, load_all, load_projects
 from shelflife.models import Volatility
 from shelflife.scheduler import DEFAULT_INTERVAL_DAYS
 
-GRID = list(itertools.product((3, 5, 7, 10, 14), (14, 21, 30, 45), (45, 60, 90, 120)))
+# Widened at #37's review so that 30/30/30 is in it (D12).
+GRID = list(itertools.product((3, 5, 7, 10, 14, 21, 30), (14, 21, 30, 45), (30, 45, 60, 90, 120)))
 DENSE = sorted({*FIXED, 20, 25, 40, 45})
 CURVE = [f"fixed {n}" for n in DENSE]
 CURVE_POLICIES = {name: interval(n) for name, n in zip(CURVE, DENSE, strict=True)}
@@ -48,7 +49,7 @@ CLAUDE = Path("eval/results/f7b6974-llm-labels-claude-opus-5-5-bf48e181/metrics.
 APART = ("every read", "oracle")  # not scheduled: reported apart (D12)
 # Set on dev (--dev-select, --dev-costs at 06053e9, 6bf8d37 and 03020aa) and recorded in
 # D12 before the test run.
-TUNED: tuple[int, int, int] | None = (14, 30, 45)
+TUNED: tuple[int, int, int] | None = None  # selected again on the widened grid
 MU_COUNT: float | None = 4.92012052554465
 MU_TRUE: float | None = 5.911261617681446
 
@@ -160,6 +161,7 @@ def evaluate(timelines, labels, claude, seeds) -> dict:
             if over := [n for n in ours if " μ=" in n and adaptive_run._cost(projects[n]) > cap]:
                 raise ValueError(f"{over} cost more than fixed 30 on dev")
         groups = run._groups(timelines, labels, split)
+        places = {n: adaptive_run.place(projects, n, CURVE) for n in ours}
         out[split] = {
             "policies": {n: _with_groups(projects[n], groups) for n in policies},
             "minus fixed 30": {
@@ -168,9 +170,18 @@ def evaluate(timelines, labels, claude, seeds) -> dict:
             "tuned minus per-class": run._paired(
                 projects[tuned_name(*TUNED)], projects["per-class"], COST
             ),
-            "on the dense curve": {n: adaptive_run.place(projects, n, CURVE) for n in ours},
+            "on the dense curve": places,
+            "below the curve, Bonferroni": bonferroni(projects, places),
         } | ({"grid": _values(projects, grid)} if grid else {})
     return {"test": out["test"], "dev": out["dev"]}
+
+
+def bonferroni(projects: dict, places: dict) -> dict:
+    """For each policy whose 95% place interval lies below 0, its interval under Bonferroni
+    over the scheduled policies (D12, #37's review)."""
+    alpha = 0.05 / len(places)
+    below = [n for n, p in places.items() if p["ci"] and p["ci"][1] < 0]
+    return {n: adaptive_run.place(projects, n, CURVE, alpha)["ci"] for n in below}
 
 
 def _values(projects: dict, names) -> dict:
@@ -210,6 +221,7 @@ def table(metrics: dict, cfg: dict) -> str:
         curve = [
             f"- {adaptive_run._curve_line(n, v)}" for n, v in part["on the dense curve"].items()
         ]
+        curve += _bonferroni_lines(part)
         ours = [*part["minus fixed 30"], "fixed 30"]
         sections = {
             "Scheduled policies": [*_rows(found, ours), "", *paired, "", *curve],
@@ -225,6 +237,22 @@ def table(metrics: dict, cfg: dict) -> str:
         for head, body in sections.items():
             lines += [f"### {head}", "", *body, ""]
     return "\n".join(lines[:-1]) + "\n"
+
+
+def _bonferroni_lines(part: dict) -> list[str]:
+    found, k = part["below the curve, Bonferroni"], len(part["on the dense curve"])
+    if not found:
+        return ["", "No scheduled policy's 95% interval lies below the dense curve."]
+    out = [""]
+    for n, (lo, hi) in found.items():
+        diff = part["minus fixed 30"][n]["stale claim-days"]
+        out.append(
+            f"- {n} lies below the curve at 95%. Under Bonferroni over the {k} scheduled"
+            f" policies ({100 * (1 - 0.05 / k):.2f}%): {100 * lo:.1f} to {100 * hi:.1f} points,"
+            f" {'still below 0' if hi < 0 else 'not below 0'}. Minus fixed 30, stale"
+            f" claim-days: {run._pct(diff)}."
+        )
+    return out
 
 
 def _rows(found: dict, names) -> list[str]:
