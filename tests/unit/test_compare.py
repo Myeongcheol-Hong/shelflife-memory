@@ -32,6 +32,7 @@ def test_the_dense_curve_adds_four_points():
     # Widened at #37's review: fast 21 and 30, slow 30, so the uniform 30/30/30 is in it.
     assert len(compare.GRID) == 7 * 4 * 5 and (30, 30, 30) in compare.GRID
     assert {p[0] for p in compare.GRID} == {3, 5, 7, 10, 14, 21, 30}
+    assert {p[1] for p in compare.GRID} == {14, 21, 30, 45}
     assert {p[2] for p in compare.GRID} == {30, 45, 60, 90, 120}
 
 
@@ -138,11 +139,43 @@ def test_bonferroni_is_reported_only_below_the_curve():
     }
     projects["y"] = {p: Counts(claims=1, days=30, checks=1.35, stale_days=4) for p in units}
     places = {n: adaptive_run.place(projects, n, compare.CURVE) for n in ("x", "y")}
-    found = compare.bonferroni(projects, places)
+    report = compare.bonferroni(projects, places)
+    assert report["policies"] == 2 and report["level"] == 1 - 0.05 / 2
+    found = report["below 0 at 95%"]
     assert list(found) == ["x"]
     assert found["x"] == adaptive_run.place(projects, "x", compare.CURVE, 0.05 / 2)["ci"]
     # 97.5% each for two policies: wider than the 95% interval at both ends.
     assert found["x"][0] < places["x"]["ci"][0] and found["x"][1] > places["x"]["ci"][1]
+
+
+@pytest.mark.parametrize(
+    ("found", "says"),
+    [
+        ({}, "None of the 7 scheduled policies' 95% intervals lies below the curve."),
+        ({"x": (-0.02, -0.001)}, "(99.29% each): -2.0 to -0.1 points, still below 0."),
+        ({"x": (-0.02, 0.001)}, "(99.29% each): -2.0 to 0.1 points, not below 0."),
+    ],
+)
+def test_the_bonferroni_lines_say_the_level_and_the_difference_from_fixed_30(found, says):
+    diff = {"stale claim-days": {"value": -0.03, "ci": (-0.05, -0.01)}}
+    diff["checks per claim-month"] = {"value": 0.02, "ci": (-0.01, 0.05)}
+    part = {
+        "below the curve, Bonferroni": {
+            "policies": 7,
+            "level": 1 - 0.05 / 7,
+            "below 0 at 95%": found,
+        },
+        "minus fixed 30": {"x": diff},
+    }
+    text = "\n".join(compare._bonferroni_lines(part))
+    assert says in text
+    if found:
+        assert "stale claim-days -3.0% (-5.0 to -1.0), checks per claim-month 0.02" in text
+
+
+def test_a_uniform_tuned_point_is_named_as_the_fixed_interval_it_is():
+    assert compare._uniform((30, 30, 30))[0].endswith("whatever the label: it is fixed 30.")
+    assert compare._uniform((14, 30, 45)) == [] and compare._uniform((30, 30, 45)) == []
 
 
 def test_selection_takes_the_least_stale_point_within_fixed_30s_cost():
@@ -201,7 +234,7 @@ def test_the_smoke_corpus_tunes_on_dev_and_then_runs(tmp_path, monkeypatch, caps
     assert compare.main([*argv, "--dev-select"]) == 0  # the real grid, on the smoke corpus
     printed = json.loads(capsys.readouterr().out)
     assert printed["selected"] in printed["grid"] and len(printed["grid"]) == len(compare.GRID)
-    monkeypatch.setattr(compare, "GRID", [(14, 45, 120), (21, 60, 120), (28, 90, 180)])
+    monkeypatch.setattr(compare, "GRID", [(14, 45, 120), (21, 60, 120), (28, 90, 180), (30,) * 3])
     chosen, shown = compare.dev_select(data)
     assert set(shown) == {compare.tuned_name(*p) for p in compare.GRID}
     for name in ("TUNED", "MU_COUNT", "MU_TRUE"):
@@ -270,10 +303,15 @@ def test_the_smoke_corpus_tunes_on_dev_and_then_runs(tmp_path, monkeypatch, caps
     assert metrics["test"]["on the dense curve"]["per-class"] == json.loads(json.dumps(place))
     for split in ("test", "dev"):  # Bonferroni only for places whose interval is below 0
         part = metrics[split]
+        assert set(part["on the dense curve"]) == set(ours)  # the Bonferroni family: seven
         below = [n for n, v in part["on the dense curve"].items() if v["ci"] and v["ci"][1] < 0]
-        assert list(part["below the curve, Bonferroni"]) == below
+        report = part["below the curve, Bonferroni"]
+        assert report["policies"] == 7 and list(report["below 0 at 95%"]) == below
     table = (folder / "table.md").read_text()
     assert "not pre-registered" in table and "### Apart: not scheduled" in table
+    assert "7 scheduled policies, each read on its own at 95% with no correction" in table
+    assert ("it is fixed 30." in table) == (tuned == (30, 30, 30))
+    assert config["scheduled"] == ours and config["grid"] == [list(p) for p in compare.GRID]
     for block in table.split("\n\n"):
         rows = [line for line in block.splitlines() if line.startswith("|")]
         assert len({row.count("|") for row in rows}) <= 1, block

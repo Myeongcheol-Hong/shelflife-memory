@@ -126,14 +126,18 @@ def _mark(cost: float, cap: float) -> str:
 
 
 def place(
-    projects: dict[str, dict[str, Counts]], name: str, curve: list[str] = CURVE, alpha=0.05
+    projects: dict[str, dict[str, Counts]],
+    name: str,
+    curve: list[str] = CURVE,
+    alpha: float = 0.05,
 ) -> dict:
     """Where a policy sits against the fixed-N curve (D12): the curve's stale
     claim-days at the policy's checks per claim-month, linear between the two fixed N
-    whose costs bracket it, and the policy minus that, with its 95% interval over the
-    same project resamples as every other interval. Below 0 is below the curve. If the
-    policy falls outside the curve in any resample, no interval is given and "resamples
-    outside" counts them. M7e passes the dense curve, and alpha for Bonferroni (D12)."""
+    whose costs bracket it, and the policy minus that, with its 1 - alpha interval (95%
+    by default) over the same project resamples as every other interval. Below 0 is
+    below the curve. If the policy falls outside the curve in any resample, no interval
+    is given and "resamples outside" counts them. M7e passes the dense curve, and alpha
+    for Bonferroni (D12)."""
     units = sorted(projects[name])
     rows = {n: [projects[n][u] for u in units] for n in (name, *curve)}
     found = _gap(rows, name, range(len(units)), curve)

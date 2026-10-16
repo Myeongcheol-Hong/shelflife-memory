@@ -5,7 +5,7 @@ policy on one run against the dense fixed-N curve, with the change-rate breakdow
     uv run python -m eval.replay.compare --dev-select  # the tuned per-class, on dev
     uv run python -m eval.replay.compare [--out eval/results]  # the run, once all are set
 
-Per-class tuned checks each label at its own interval from an 80-point dev grid. The
+Per-class tuned checks each label at its own interval from a 140-point dev grid. The
 count-aware rate sees how many times the latest changed since the last check, and the
 true-rate bound knows each project's rate in the split; both wait by M7d's budget rule.
 """
@@ -47,8 +47,7 @@ CURVE = [f"fixed {n}" for n in DENSE]
 CURVE_POLICIES = {name: interval(n) for name, n in zip(CURVE, DENSE, strict=True)}
 CLAUDE = Path("eval/results/f7b6974-llm-labels-claude-opus-5-5-bf48e181/metrics.json")
 APART = ("every read", "oracle")  # not scheduled: reported apart (D12)
-# Set on dev (--dev-costs and --dev-select at 06053e9, 6bf8d37, 03020aa and 1fb54c9) and recorded in
-# D12 before the test run.
+# Set on dev and recorded in D12 before the test run.
 TUNED: tuple[int, int, int] | None = (30, 30, 30)  # selected again on the widened grid
 MU_COUNT: float | None = 4.92012052554465
 MU_TRUE: float | None = 5.911261617681446
@@ -178,10 +177,11 @@ def evaluate(timelines, labels, claude, seeds) -> dict:
 
 def bonferroni(projects: dict, places: dict) -> dict:
     """For each policy whose 95% place interval lies below 0, its interval under Bonferroni
-    over the scheduled policies (D12, #37's review)."""
+    over the scheduled policies, `places` (D12, #37's review)."""
     alpha = 0.05 / len(places)
     below = [n for n, p in places.items() if p["ci"] and p["ci"][1] < 0]
-    return {n: adaptive_run.place(projects, n, CURVE, alpha)["ci"] for n in below}
+    found = {n: adaptive_run.place(projects, n, CURVE, alpha)["ci"] for n in below}
+    return {"policies": len(places), "level": 1 - alpha, "below 0 at 95%": found}
 
 
 def _values(projects: dict, names) -> dict:
@@ -206,7 +206,12 @@ def table(metrics: dict, cfg: dict) -> str:
         " construction) and the oracle are apart. The true-rate bound knows the future and is"
         " exploratory.",
         "",
+        f"{len(cfg['scheduled'])} scheduled policies, each read on its own at 95% with no"
+        " correction for multiplicity; four of them, budget-aware (M7d) and M7e's three, were"
+        " added after results and are not pre-registered (D12).",
+        "",
     ]
+    lines += _uniform(cfg["tuned"])
     for split in ("test", "dev"):
         part, found = metrics[split], metrics[split]["policies"]
         rows = [
@@ -240,19 +245,29 @@ def table(metrics: dict, cfg: dict) -> str:
 
 
 def _bonferroni_lines(part: dict) -> list[str]:
-    found, k = part["below the curve, Bonferroni"], len(part["on the dense curve"])
-    if not found:
-        return ["", "No scheduled policy's 95% interval lies below the dense curve."]
+    report = part["below the curve, Bonferroni"]
+    k, level = report["policies"], f"{100 * report['level']:.2f}%"
+    if not (found := report["below 0 at 95%"]):
+        return ["", f"None of the {k} scheduled policies' 95% intervals lies below the curve."]
     out = [""]
     for n, (lo, hi) in found.items():
-        diff = part["minus fixed 30"][n]["stale claim-days"]
+        diff = part["minus fixed 30"][n]
         out.append(
             f"- {n} lies below the curve at 95%. Under Bonferroni over the {k} scheduled"
-            f" policies ({100 * (1 - 0.05 / k):.2f}%): {100 * lo:.1f} to {100 * hi:.1f} points,"
-            f" {'still below 0' if hi < 0 else 'not below 0'}. Minus fixed 30, stale"
-            f" claim-days: {run._pct(diff)}."
+            f" policies ({level} each): {100 * lo:.1f} to {100 * hi:.1f} points,"
+            f" {'still below 0' if hi < 0 else 'not below 0'}. Minus fixed 30: stale claim-days"
+            f" {run._pct(diff['stale claim-days'])}, checks per claim-month"
+            f" {run._num(diff['checks per claim-month'])}."
         )
     return out
+
+
+def _uniform(tuned) -> list[str]:
+    """A sentence when the dev selection chose one interval for every label."""
+    if len(set(tuned)) > 1:
+        return []
+    n = tuned[0]
+    return [f"The tuned per-class checks every {n} days whatever the label: it is fixed {n}.", ""]
 
 
 def _rows(found: dict, names) -> list[str]:
@@ -325,7 +340,8 @@ def main(
     cfg |= {"scenario": "uniform", "question rate per claim-day": {RATE: QUESTION_RATES[RATE]}}
     cfg |= {"tuned": TUNED, "μ count-aware": MU_COUNT, "μ true-rate": MU_TRUE}
     cfg |= {"budget-aware μ": budget.MU, "claude labels": str(args.claude_labels)}
-    cfg["policies"] = [*CURVE, *scheduled(claude), *APART]
+    cfg |= {"scheduled": list(scheduled(claude)), "grid": GRID}
+    cfg["policies"] = [*CURVE, *cfg["scheduled"], *APART]
     folder = args.out / cfg["run"]
     if folder.exists():
         print(f"error: {folder} exists; a run never overwrites another", file=sys.stderr)
@@ -335,10 +351,11 @@ def main(
     except ValueError as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
+    text = table(metrics, cfg)  # before any file, so a failure leaves no partial folder
     folder.mkdir(parents=True)
     (folder / "config.json").write_text(json.dumps(cfg, indent=1) + "\n")
     (folder / "metrics.json").write_text(json.dumps(metrics, indent=1) + "\n")
-    (folder / "table.md").write_text(table(metrics, cfg))
+    (folder / "table.md").write_text(text)
     print(f"wrote {folder}")
     return 0
 
