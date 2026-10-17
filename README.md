@@ -19,7 +19,7 @@ The project's main contribution is an evaluation: replaying real release histori
 
 ![Stale claim-days against checks per claim-month on the test split, for the fixed-interval curve, every scheduled policy, the true-rate bound, every read and the oracle](eval/results/2026-10-16-45ee09a-compare/pareto.svg)
 
-Among scheduled policies without future knowledge, none beat a fixed interval at the same cost on 70 release histories (PyPI and GitHub, the held-out test split, January 2025 to September 2026). Even knowing each project's future change rate gained about 2.6 points of stale claim-days. Most of the gain comes from re-checking at all (claims never re-checked are stale 83.5% of their days, 38% when re-checked every 30 days) and from checking at read time, which gives no stale answers at about 4.3 checks per claim-month with one question a week (in the tools with M4, `recall(verify=auto)`).
+Among scheduled policies without future knowledge, none beat a fixed interval at the same cost on 70 release histories (PyPI and GitHub, the held-out test split, January 2025 to September 2026). Even knowing each project's future change rate gained about 2.6 points of stale claim-days. Most of the gain comes from re-checking at all (claims never re-checked are stale 83.5% of their days, 38% when re-checked every 30 days) and from checking at read time, which gives no stale answers at about 4.3 checks per claim-month with one question a week (not in the tools yet: `recall`'s `verify` setting comes with M4, off by default).
 
 Limits:
 
@@ -27,7 +27,7 @@ Limits:
 - The verifier is assumed right: a check always sees the true latest release.
 - Four policies were added after the first results, not pre-registered: budget-aware, count-aware, per-class with tuned intervals and the true-rate bound (D12).
 
-Every number with its 95% interval (5 seeds, resampled over projects): [`table.md`](eval/results/2026-10-16-45ee09a-compare/table.md). The rules: D12 in [`docs/decisions.md`](docs/decisions.md).
+Every number with its 95% interval (5 seeds, resampled over projects): [M7e's table](eval/results/2026-10-16-45ee09a-compare/table.md), and [M6's](eval/results/2026-10-14-369cb77/table.md) for never re-checked. The rules: D12 in [`docs/decisions.md`](docs/decisions.md).
 
 ## Quick start (from source)
 

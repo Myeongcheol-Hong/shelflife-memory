@@ -1,7 +1,7 @@
 """The Pareto figure (M7, D12): stale claim-days against checks per claim-month on test,
 from M7e's run of every policy, written as an SVG with the standard library.
 
-    uv run python -m eval.replay.figure [run folder]   # writes <folder>/pareto.svg
+    uv run python -m eval.replay.figure   # writes pareto.svg into M7e's run folder
 
 Left: the dense fixed-N curve, every policy, never re-checked (M6's run, the same
 claims), every read and the oracle set apart. Right: the scheduled policies near fixed
@@ -20,11 +20,7 @@ from xml.sax.saxutils import escape
 
 RUN = Path("eval/results/2026-10-16-45ee09a-compare")
 NEVER = Path("eval/results/2026-10-14-369cb77/metrics.json")  # M6: the same claims
-COST, STALE = "checks per claim-month", "stale claim-days"
-APART = {
-    "every read": ("every read", "0% stale answers"),
-    "oracle": ("oracle: checks each change",),
-}
+COST, STALE, ANSWERS = "checks per claim-month", "stale claim-days", "stale-answer rate"
 # Curve labels, offset from the point; a negative dx puts the label to the left.
 CURVE_LABELS = {
     "fixed 180": (5, -5),
@@ -102,11 +98,11 @@ def svg(metrics: dict, never: float | None = None) -> str:
         out.append(_poly(p, _chords(curve)))
         out += [_dot(p, x, y, 2.5, "knot") for x, y in curve]
         if p is FULL:
-            out += _full_extras(p, found, point, never)
+            out += _full_extras(p, point, never)
         for n in places:
             out += _point(p, n, point[n], found[n], places[n], bars=p is ZOOM)
         out.append("</g>")
-    out += _apart(FULL, point)  # unclipped: the oracle sits on the axis
+    out += _apart(FULL, found)  # unclipped: the oracle sits on the axis
     out += _labels(ZOOM, {n: point[n] for n in places})
     out += _legend()
     return "\n".join([*out, "</svg>"]) + "\n"
@@ -129,7 +125,7 @@ def _axes(p: Panel, title: str) -> list[str]:
     return out
 
 
-def _full_extras(p: Panel, found: dict, point: dict, never: float | None) -> list[str]:
+def _full_extras(p: Panel, point: dict, never: float | None) -> list[str]:
     out = [  # fixed 3 sits at the right edge, so its label goes left
         _text(p.x(c) + dx, p.y(s) + dy, n.split()[1] + " d", "end" if dx < 0 else "start", "muted")
         for n, (dx, dy) in CURVE_LABELS.items()
@@ -149,15 +145,24 @@ def _full_extras(p: Panel, found: dict, point: dict, never: float | None) -> lis
     return out
 
 
-def _apart(p: Panel, point: dict) -> list[str]:
+def _apart(p: Panel, found: dict) -> list[str]:
+    """Every read, labeled to its right and upward (clear of the curve) with both its
+    rates, since its stale claim-days (between reads) put it above the curve while it
+    gives no stale answers; the oracle, on the axis, labeled above."""
     out = []
-    for n, lines in APART.items():  # every read to the right, the oracle above
-        x, y = p.x(point[n][0]), p.y(point[n][1])
+    for n in ("every read", "oracle"):
+        m = found[n]
+        x, y = p.x(m[COST]["value"]), p.y(m[STALE]["value"])
         out.append(f'<rect class="apart" x="{x - 4:.1f}" y="{y - 4:.1f}" width="8" height="8"/>')
-        for i, line in enumerate(lines):
-            right = n == "every read"
-            at = (x + 8, y + 4 + 14 * i) if right else (x, y - 10)
-            out.append(_text(*at, line, "start" if right else "middle", "muted"))
+        if n == "oracle":
+            out.append(_text(x, y - 10, "oracle: checks each change", "middle", "muted"))
+            continue
+        lines = (
+            "every read",
+            f"{m[ANSWERS]['value']:.0%} stale answers,",
+            f"{m[STALE]['value']:.1%} stale claim-days",
+        )
+        out += [_text(x + 8, y - 24 + 14 * i, s, cls="muted") for i, s in enumerate(lines)]
     return out
 
 
@@ -243,13 +248,14 @@ def _text(x, y, s: str, anchor: str = "start", cls: str = "") -> str:
     return f'<text x="{x:.1f}" y="{y:.1f}" text-anchor="{anchor}"{c}>{escape(s)}</text>'
 
 
-def main(argv: list[str] | None = None) -> int:
-    args = sys.argv[1:] if argv is None else argv
-    folder = Path(args[0]) if args else RUN
-    metrics = json.loads((folder / "metrics.json").read_text())
-    never = json.loads(NEVER.read_text())["test / uniform / 1 a week"]["never"][STALE]["value"]
-    (folder / "pareto.svg").write_text(svg(metrics, never))
-    print(f"wrote {folder / 'pareto.svg'}")
+def never_rechecked() -> float:
+    return json.loads(NEVER.read_text())["test / uniform / 1 a week"]["never"][STALE]["value"]
+
+
+def main() -> int:
+    metrics = json.loads((RUN / "metrics.json").read_text())
+    (RUN / "pareto.svg").write_text(svg(metrics, never_rechecked()))
+    print(f"wrote {RUN / 'pareto.svg'}")
     return 0
 
 

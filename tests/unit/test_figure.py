@@ -45,29 +45,52 @@ def test_the_right_panel_labels_each_policy_once(drawn):
 
 
 def test_never_re_checked_is_a_line_with_its_value(drawn, metrics):
+    y = round(figure.FULL.y(0.8352), 1)
+    (line,) = marks(drawn, "line", "ref")
+    assert [float(line.get(k)) for k in ("x1", "y1", "x2", "y2")] == [
+        figure.FULL.x0,
+        y,
+        figure.FULL.x1,
+        y,
+    ]
     texts = [t.text for t in drawn.iter(f"{{{NS['s']}}}text")]
     assert "never re-checked: 83.5%" in texts
-    assert "every read" in texts and "oracle: checks each change" in texts
     assert "never re-checked" not in figure.svg(metrics)  # no value, no line
 
 
-def test_the_gap_bar_is_centered_on_the_curve_drawn(drawn, metrics):
-    """The true-rate bound's paired interval lies below the curve at its cost, and its
-    center, the curve's value there, is on the line drawn in the right panel."""
-    test = metrics["test"]
-    name = next(n for n in test["on the dense curve"] if n.startswith("true-rate"))
-    cost, stale = (test["policies"][name][k]["value"] for k in (figure.COST, figure.STALE))
-    place = test["on the dense curve"][name]
-    x = round(figure.ZOOM.x(cost), 1)
-    bars = marks(drawn, "line", "bar b")
-    (bar,) = [b for b in bars if float(b.get("x1")) == x == float(b.get("x2"))]
-    curve_y = _y_at(marks(drawn, "polyline", "curve")[1], x)
-    ends = sorted(float(bar.get(k)) for k in ("y1", "y2"))
-    assert ends[0] > curve_y  # below the curve: less stale, lower on the page
-    assert ends == pytest.approx(
-        sorted(figure.ZOOM.y(stale - place["value"] + c) for c in place["ci"]), abs=0.05
-    )
-    assert figure.ZOOM.y(stale - place["value"]) == pytest.approx(curve_y, abs=0.5)
+def test_every_read_shows_both_its_rates_and_the_oracle_its_rule(drawn):
+    texts = [t.text for t in drawn.iter(f"{{{NS['s']}}}text")]
+    assert ["every read", "0% stale answers,", "20.6% stale claim-days"] == [
+        t for t in texts if t.startswith(("every read", "0% stale", "20.6%"))
+    ]
+    assert "oracle: checks each change" in texts
+
+
+def test_each_policys_bars_are_its_cost_and_its_gap_around_the_curve_drawn(drawn, metrics):
+    """The horizontal bar is the cost interval at the policy's staleness. The vertical bar
+    is the paired gap interval drawn around the curve's value at that cost, and that value
+    is on the line drawn in the right panel, so a bar wholly below the line is a policy
+    below the curve. Only the true-rate bound's is."""
+    test, z = metrics["test"], figure.ZOOM
+    curve = marks(drawn, "polyline", "curve")[1]
+    lines = [
+        {k: float(b.get(k)) for k in ("x1", "y1", "x2", "y2")}
+        for cls in ("bar p", "bar b")
+        for b in marks(drawn, "line", cls)
+    ]
+    assert len(lines) == 2 * 7
+    for name, place in test["on the dense curve"].items():
+        m = test["policies"][name]
+        cost, stale = m[figure.COST]["value"], m[figure.STALE]["value"]
+        x, y, on_curve = round(z.x(cost), 1), round(z.y(stale), 1), stale - place["value"]
+        (cost_bar,) = [b for b in lines if b["y1"] == y == b["y2"] and b["x1"] != b["x2"]]
+        assert [cost_bar["x1"], cost_bar["x2"]] == [round(z.x(c), 1) for c in m[figure.COST]["ci"]]
+        (gap_bar,) = [b for b in lines if b["x1"] == x == b["x2"]]
+        ends = sorted([gap_bar["y1"], gap_bar["y2"]])
+        assert ends == pytest.approx(sorted(z.y(on_curve + c) for c in place["ci"]), abs=0.05)
+        assert z.y(on_curve) == pytest.approx(_y_at(curve, x), abs=0.5)
+        below = ends[0] > _y_at(curve, x)  # less stale is lower on the page
+        assert below == name.startswith("true-rate")
 
 
 def _y_at(polyline, x):
@@ -105,6 +128,7 @@ def test_labels_take_the_first_matching_prefix(name, shown):
 
 def test_main_writes_the_committed_figure_again(tmp_path, monkeypatch):
     shutil.copy(RUN / "metrics.json", tmp_path / "metrics.json")
+    monkeypatch.setattr(figure, "RUN", tmp_path)
     monkeypatch.chdir(ROOT)  # the M6 run is read from the repository
-    assert figure.main([str(tmp_path)]) == 0
+    assert figure.main() == 0
     assert (tmp_path / "pareto.svg").read_text() == (RUN / "pareto.svg").read_text()
