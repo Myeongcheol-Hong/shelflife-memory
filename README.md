@@ -1,6 +1,6 @@
 # Shelf Life
 
-**Memory with an expiry date.** Shelf Life is a small MCP memory server for Claude Desktop and Claude Code. It remembers facts together with where they came from and how fast they go stale, tells you which ones are due for a check, and re-checks them against the source when you ask, so a fact that has changed is marked instead of repeated.
+**Memory with an expiry date.** Shelf Life is a small MCP memory server for Claude Desktop and Claude Code. It remembers facts together with where they came from and when they were last checked, tells you which ones are due for a check, and re-checks them against the source when you ask, so a fact that has changed is marked instead of repeated.
 
 ## The problem
 
@@ -8,12 +8,37 @@ Memory systems for AI assistants change a memory when new information arrives th
 
 ## What Shelf Life does
 
-- **Every memory carries its shelf life.** A claim stores its source, the date it was observed, a volatility class (fast, medium, slow or none) and how to check it: the PyPI project, the GitHub repository, or the web page it came from.
+- **Every memory carries its shelf life.** A claim stores its source, the date it was observed, a volatility class (fast, medium, slow or none) and how to check it: the PyPI project, the GitHub repository, or the web page it came from. The class sets the re-check interval today; the results below show that one fixed interval does as well, and M4 moves to a single interval.
 - **Claims can be re-checked when they are due.** `due` lists the claims past their check date, and `verify` re-checks one; nothing is re-checked automatically yet (a daily run is on the roadmap, M4). Version claims are compared with PyPI and GitHub releases by code. For a web page, the server fetches the page and picks out the relevant section; Claude judges it in the conversation, and a `same` or `changed` judgment is stored only if its quote appears word for word on the page. A changed claim keeps its old value and is marked `changed`, so you decide what happens next.
 - **Decisions remember their grounds.** A decision can point to the claims it rests on. Flagging the decision for review when one of them changes is on the roadmap (M4).
 - **It is light.** One SQLite file on your machine, no Docker, no services, no API keys. Search works in English and Korean.
 
-The project's main contribution is an evaluation, still in progress: replaying real release histories to measure *when* re-checking pays off (fewer stale answers for the same number of checks), and measuring how accurate the write and verify steps are. See [`docs/design.md`](docs/design.md).
+The project's main contribution is an evaluation: replaying real release histories to measure *when* re-checking pays off (fewer stale answers for the same number of checks), and measuring how accurate the write and verify steps are (still to come, milestone M8). See [`docs/design.md`](docs/design.md).
+
+## Results: when to re-check
+
+Re-checking at all matters a lot; how cleverly it is scheduled barely did.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="eval/results/2026-10-16-45ee09a-compare/pareto-dark.svg">
+  <img alt="Stale claim-days against checks per claim-month on the test split, for the fixed-interval curve, every scheduled policy, the true-rate bound, every read and the oracle" src="eval/results/2026-10-16-45ee09a-compare/pareto.svg">
+</picture>
+
+The replay measures *stale claim-days*, the share of days a stored value is wrong, against *checks per claim-month*, how often each claim is re-checked. It replays the release histories of 70 projects (52 PyPI, 18 GitHub) over the held-out test split, January 2025 to September 2026.
+
+- Claims never re-checked were stale 83.5% of days; re-checked every 30 days, 38%.
+- Of the six scheduled policies without future knowledge, three were worse than a fixed interval at the same cost (per-class, per-class with Claude's labels, adaptive), two matched it (budget-aware, count-aware), and per-class with dev-tuned intervals became fixed 30 itself.
+- A policy told each project's average future change rate (exploratory) was about 2.6 percentage points fresher than a fixed interval at the same cost.
+- Checking at read time, by construction, never serves a stale answer. It costs one check per question, and between reads the value is stale 20.6% of days. It is not in the tools yet: `recall`'s `verify` setting comes with M4, off by default.
+
+Limits:
+
+- Release histories only; whether this holds for prices, policies or web pages is not measured (M5b's Wayback pairs test the verifier, not timing).
+- The verifier is assumed right: a check always sees the true latest release.
+- Four policies were added after the first results, not pre-registered: budget-aware, count-aware, per-class with tuned intervals and the true-rate bound (D12).
+- Claims live to the split's end, projects weigh equally, one question a week, and the volatility labels were assigned in 2026 with present-day knowledge.
+
+Every number with its 95% interval (5 seeds, resampled over projects): [M7e's table](eval/results/2026-10-16-45ee09a-compare/table.md), and [M6's](eval/results/2026-10-14-369cb77/table.md) for never re-checked. The rules: D12 in [`docs/decisions.md`](docs/decisions.md).
 
 ## Quick start (from source)
 
@@ -58,7 +83,7 @@ The database lives at `~/.shelflife/shelflife.db`, or wherever `SHELFLIFE_DB` po
 
 ## Status
 
-Early and in active development. The store, the six tools, the PyPI, GitHub and web page checks, and the write checks are done (milestones M1-M3). Next come the evaluation data and the re-check policy replay; the scheduler, weekly digest and decision review follow. See [`docs/roadmap.md`](docs/roadmap.md).
+Early and in active development. Done: the store, the six tools, the PyPI, GitHub and web page checks, and the write checks (milestones M1-M3); the release histories, the replay and the re-check policies above (M5a-M7). Next: the daily due run, weekly digest and decision review (M4), the Wayback snapshots and labeled write items (M5b), and the verifier and write-quality results (M8). See [`docs/roadmap.md`](docs/roadmap.md).
 
 ## Prior art
 

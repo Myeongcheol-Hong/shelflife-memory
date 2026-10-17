@@ -49,7 +49,7 @@ Items marked **(maintainer)** are done by the maintainer by hand: ground-truth l
 - [x] Shared model runner (`claude -p --model`, repeats, run artifacts; `eval/runner.py`, D13). It starts `claude -p` outside the repository, so the project's Stop hook and `CLAUDE.md` stay out of eval runs. M5b and M8 reuse it
 - [x] Adaptive per-claim policy, tuned on dev split only: `eval/results/2026-10-15-e2d0e3d-adaptive/table.md` (D12)
 - [x] LLM-judged volatility policy (D14): primary condition `eval/results/f7b6974-llm-labels-claude-opus-5-5-bf48e181/table.md`, with three secondary conditions next to it
-- [ ] Pareto figure (5 seeds and bootstrap intervals moved to M6, D12)
+- [x] Pareto figure (5 seeds and bootstrap intervals moved to M6, D12): `eval/results/2026-10-16-45ee09a-compare/pareto.svg`, drawn by `eval/replay/figure.py` from M7e's run
 - [ ] Volatility impact: maintainer labels vs Claude labels in the replay (design 6.0-3)
 - [x] Budget-aware allocation, added after M7b's results, not pre-registered (D12): `eval/results/2026-10-15-6f7b4e9-budget/table.md`
 - [x] M7e, added after M7's results, not pre-registered (D12): per-class with dev-tuned intervals, a count-aware rate, the true-rate bound, the dense fixed-N curve and the change-rate breakdown for every policy, the headline scoped to scheduled policies: `eval/results/2026-10-16-45ee09a-compare/table.md`
