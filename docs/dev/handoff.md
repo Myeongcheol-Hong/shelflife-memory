@@ -5,8 +5,8 @@ Where the work stands. Each session's last PR overwrites this file (CLAUDE.md); 
 ## State
 
 - `main` has M1-M3, M5a, M6 and M7 up to M7e (#37). Schema v2 (#21) is a one-way door; the rollback steps are in design 5.1.
-- 6.1 is done, and no new policies come after M7e (the maintainer). M7e's run, `eval/results/2026-10-16-45ee09a-compare/`, places every policy on the dense fixed-N curve on test. No scheduled policy without future knowledge lies below it; the true-rate bound (exploratory) lies 2.6 points below (-3.7 to -1.7). No class interval or policy changes because of a test result (D12).
-- Open, waiting for merge: the Pareto figure and README results PR (`feat/pareto-readme`), which carries this file. `eval/replay/figure.py` draws `pareto.svg` into M7e's folder from its `metrics.json`, plus M6's never-re-checked line (the same claims), with the standard library.
+- 6.1 is done, and no new policies come after M7e (the maintainer). M7e's run, `eval/results/2026-10-16-45ee09a-compare/`, places every policy on the dense fixed-N curve on test. No scheduled policy without future knowledge lies below it; the true-rate bound (exploratory) lies 2.6 percentage points below (-3.7 to -1.7). Claude changes no class interval or policy because of a test result (D12); the maintainer's single-interval plan for M4 is under "Next session".
+- Open, waiting for merge: the Pareto figure and README results PR (#38, `feat/pareto-readme`), which carries this file. `eval/replay/figure.py` draws `pareto.svg` and `pareto-dark.svg` into M7e's folder from its `metrics.json`, plus M6's never-re-checked line (the same claims), with the standard library; the README picks one by GitHub's theme with `<picture>`.
 - M7's "volatility impact" item (design 6.0-3) stays open: it waits for M8's write-eval labels (D14).
 - Build order (roadmap): M1-M3, M5a, M6, M7, M4, M5b, M8, M9.
 
@@ -18,6 +18,7 @@ Where the work stands. Each session's last PR overwrites this file (CLAUDE.md); 
 ## Next session: start here
 
 1. M4: `depends_on` links and decision review, `recall(verify=auto)` behind its setting (D9, D10), the daily due run, the weekly digest, `supersede`. Show the plan first; any change to the schema or a tool interface is the maintainer's to decide.
+   - The README (#38, the maintainer's wording) says M4 moves to a single re-check interval, since one fixed interval did as well as the classes. Design 4.2 and `scheduler.DEFAULT_INTERVAL_DAYS` still set 7/30/180 days by class. Propose the decision (the interval, what happens to the volatility field) and the design edit; do not decide them.
 2. Every eval also runs on `eval/data/smoke/` in CI, with a stub model for the model evals. Never fill a label.
 
 ## Notes for later milestones
