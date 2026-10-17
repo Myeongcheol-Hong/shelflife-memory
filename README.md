@@ -13,7 +13,21 @@ Memory systems for AI assistants change a memory when new information arrives th
 - **Decisions remember their grounds.** A decision can point to the claims it rests on. Flagging the decision for review when one of them changes is on the roadmap (M4).
 - **It is light.** One SQLite file on your machine, no Docker, no services, no API keys. Search works in English and Korean.
 
-The project's main contribution is an evaluation, still in progress: replaying real release histories to measure *when* re-checking pays off (fewer stale answers for the same number of checks), and measuring how accurate the write and verify steps are. See [`docs/design.md`](docs/design.md).
+The project's main contribution is an evaluation: replaying real release histories to measure *when* re-checking pays off (fewer stale answers for the same number of checks), and measuring how accurate the write and verify steps are (still to come, milestone M8). See [`docs/design.md`](docs/design.md).
+
+## Results: when to re-check
+
+![Stale claim-days against checks per claim-month on the test split, for the fixed-interval curve, every scheduled policy, the true-rate bound, every read and the oracle](eval/results/2026-10-16-45ee09a-compare/pareto.svg)
+
+Among scheduled policies without future knowledge, none beat a fixed interval at the same cost on 70 release histories (PyPI and GitHub, the held-out test split, January 2025 to September 2026). Even knowing each project's future change rate gained about 2.6 points of stale claim-days. Most of the gain comes from re-checking at all (claims never re-checked are stale 83.5% of their days, 38% when re-checked every 30 days) and from checking at read time, which gives no stale answers at about 4.3 checks per claim-month with one question a week (in the tools with M4, `recall(verify=auto)`).
+
+Limits:
+
+- Release histories only; web pages come with the Wayback snapshots (M5b).
+- The verifier is assumed right: a check always sees the true latest release.
+- Four policies were added after the first results, not pre-registered: budget-aware, count-aware, per-class with tuned intervals and the true-rate bound (D12).
+
+Every number with its 95% interval (5 seeds, resampled over projects): [`table.md`](eval/results/2026-10-16-45ee09a-compare/table.md). The rules: D12 in [`docs/decisions.md`](docs/decisions.md).
 
 ## Quick start (from source)
 
@@ -58,7 +72,7 @@ The database lives at `~/.shelflife/shelflife.db`, or wherever `SHELFLIFE_DB` po
 
 ## Status
 
-Early and in active development. The store, the six tools, the PyPI, GitHub and web page checks, and the write checks are done (milestones M1-M3). Next come the evaluation data and the re-check policy replay; the scheduler, weekly digest and decision review follow. See [`docs/roadmap.md`](docs/roadmap.md).
+Early and in active development. Done: the store, the six tools, the PyPI, GitHub and web page checks, and the write checks (milestones M1-M3); the release histories, the replay and the re-check policies above (M5a-M7). Next: the daily due run, weekly digest and decision review (M4), the Wayback snapshots and labeled write items (M5b), and the verifier and write-quality results (M8). See [`docs/roadmap.md`](docs/roadmap.md).
 
 ## Prior art
 
