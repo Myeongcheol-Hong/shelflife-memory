@@ -66,10 +66,11 @@ def ci(
     return percentiles(found) if found else None
 
 
-def percentiles(values: list[float]) -> tuple[float, float]:
-    """The 2.5th and 97.5th percentiles by nearest rank."""
-    values = sorted(values)
-    return values[math.ceil(0.025 * len(values)) - 1], values[math.ceil(0.975 * len(values)) - 1]
+def percentiles(values: list[float], alpha: float = 0.05) -> tuple[float, float]:
+    """The alpha / 2 and 1 - alpha / 2 quantiles by nearest rank: 2.5th and 97.5th by
+    default."""
+    values, n = sorted(values), len(values)
+    return values[math.ceil(alpha / 2 * n) - 1], values[math.ceil((1 - alpha / 2) * n) - 1]
 
 
 def peak(rows: list[Row], policy: str, split: str) -> tuple[float, float]:

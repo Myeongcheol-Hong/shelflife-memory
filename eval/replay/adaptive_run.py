@@ -72,13 +72,14 @@ def _projects(timelines, labels, split, seeds, policies) -> dict[str, dict[str, 
     return {name: score.per_project(rows, name) for name in policies}
 
 
-def select(dev: dict[str, dict[str, Counts]], names: list[str]) -> str:
+def select(dev: dict[str, dict[str, Counts]], names: list[str], cap: str = "per-class") -> str:
     """D12's rule on dev: the lowest stale claim-days among the points costing no more
-    checks per claim-month than per-class, ties to the cheaper, then to the grid order."""
-    cap = _cost(dev["per-class"])
-    fits = [name for name in names if _cost(dev[name]) <= cap]
+    checks per claim-month than `cap` (per-class in M7b, fixed 30 in M7e), ties to the
+    cheaper, then to the grid order."""
+    limit = _cost(dev[cap])
+    fits = [name for name in names if _cost(dev[name]) <= limit]
     if not fits:
-        raise ValueError(f"no grid point costs at most per-class's {cap:.3f} on dev")
+        raise ValueError(f"no grid point costs at most {cap}'s {limit:.4f} on dev")
     stale = {name: score.value("stale claim-days", score.total(dev[name])) for name in fits}
     return min(fits, key=lambda name: (stale[name], _cost(dev[name])))
 
@@ -124,33 +125,39 @@ def _mark(cost: float, cap: float) -> str:
     return f"{cost:.3f}" + (" *" if cost <= cap else "")
 
 
-def place(projects: dict[str, dict[str, Counts]], name: str) -> dict:
+def place(
+    projects: dict[str, dict[str, Counts]],
+    name: str,
+    curve: list[str] = CURVE,
+    alpha: float = 0.05,
+) -> dict:
     """Where a policy sits against the fixed-N curve (D12): the curve's stale
     claim-days at the policy's checks per claim-month, linear between the two fixed N
-    whose costs bracket it, and the policy minus that, with its 95% interval over the
-    same project resamples as every other interval. Below 0 is below the curve. If the
-    policy falls outside the curve in any resample, no interval is given and "resamples
-    outside" counts them."""
+    whose costs bracket it, and the policy minus that, with its 1 - alpha interval (95%
+    by default) over the same project resamples as every other interval. Below 0 is
+    below the curve. If the policy falls outside the curve in any resample, no interval
+    is given and "resamples outside" counts them. M7e passes the dense curve, and alpha
+    for Bonferroni (D12)."""
     units = sorted(projects[name])
-    rows = {n: [projects[n][u] for u in units] for n in (name, *CURVE)}
-    found = _gap(rows, name, range(len(units)))
+    rows = {n: [projects[n][u] for u in units] for n in (name, *curve)}
+    found = _gap(rows, name, range(len(units)), curve)
     if found is None:
         return {"value": None, "between": None, "ci": None, "resamples outside": None}
     picks = score._resamples(len(units))
-    gaps = [g[0] for pick in picks if (g := _gap(rows, name, pick))]
+    gaps = [g[0] for pick in picks if (g := _gap(rows, name, pick, curve))]
     outside = len(picks) - len(gaps)
-    ci = None if outside else score.percentiles(gaps)
+    ci = None if outside else score.percentiles(gaps, alpha)
     return {"value": found[0], "between": found[1], "ci": ci, "resamples outside": outside}
 
 
-def _gap(rows: dict[str, list[Counts]], name: str, pick) -> tuple[float, list[str]] | None:
+def _gap(rows: dict[str, list[Counts]], name: str, pick, curve) -> tuple[float, list[str]] | None:
     """The policy's stale claim-days minus the curve's at its cost, over the projects in
     `pick`, with the two fixed N around it; None outside the curve."""
     sums = {n: sum((counts[i] for i in pick), Counts()) for n, counts in rows.items()}
     cost = {n: score.value("checks per claim-month", s) for n, s in sums.items()}
     stale = {n: score.value("stale claim-days", s) for n, s in sums.items()}
-    curve = sorted((cost[n], stale[n], n) for n in CURVE)
-    for (x0, y0, n0), (x1, y1, n1) in zip(curve, curve[1:], strict=False):
+    points = sorted((cost[n], stale[n], n) for n in curve)
+    for (x0, y0, n0), (x1, y1, n1) in zip(points, points[1:], strict=False):
         if x0 <= cost[name] <= x1 and x1 > x0:
             line = y0 + (y1 - y0) * (cost[name] - x0) / (x1 - x0)
             return stale[name] - line, [n0, n1]

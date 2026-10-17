@@ -74,8 +74,9 @@ def search(cost: Callable[[float], float], target: float) -> tuple[float, dict]:
     return 2**hi, {"grid": grid, "halvings": steps}
 
 
-def dev_costs(data: Path) -> dict:
-    """The grid's dev costs, the search and μ, with no staleness computed (D12)."""
+def dev_costs(data: Path, make: Callable[[float], Policy] = policy) -> dict:
+    """The grid's dev costs, the search and μ for the policy `make(μ)`, with no staleness
+    computed (D12). M7e sets its two budget policies' μ with it."""
     labels = {p.name: p.volatility for p in load_projects(data / "projects.toml")}
     timelines = load_all(data)
 
@@ -83,7 +84,7 @@ def dev_costs(data: Path) -> dict:
         return adaptive_run.dev_costs(timelines, labels, run.SEEDS, policies)
 
     base = costs({n: POLICIES[n] for n in ("fixed 30", "fixed 180")})
-    mu, found = search(lambda m: costs({name(m): policy(m)})[name(m)], base["fixed 30"])
+    mu, found = search(lambda m: costs({name(m): make(m)})[name(m)], base["fixed 30"])
     if found["grid"][GRID[-1]] != base["fixed 180"]:  # every wait at the cap there
         raise ValueError(f"μ = {GRID[-1]} should cost what fixed 180 does")
     return {"fixed 30": base["fixed 30"], "fixed 180": base["fixed 180"], "μ": mu} | found

@@ -52,6 +52,7 @@ Items marked **(maintainer)** are done by the maintainer by hand: ground-truth l
 - [ ] Pareto figure (5 seeds and bootstrap intervals moved to M6, D12)
 - [ ] Volatility impact: maintainer labels vs Claude labels in the replay (design 6.0-3)
 - [x] Budget-aware allocation, added after M7b's results, not pre-registered (D12): `eval/results/2026-10-15-6f7b4e9-budget/table.md`
+- [x] M7e, added after M7's results, not pre-registered (D12): per-class with dev-tuned intervals, a count-aware rate, the true-rate bound, the dense fixed-N curve and the change-rate breakdown for every policy, the headline scoped to scheduled policies: `eval/results/2026-10-16-45ee09a-compare/table.md`
 
 ## M4: Decisions, scheduler, digest
 - [ ] `depends_on` links; a changed claim flags dependent decisions for review
